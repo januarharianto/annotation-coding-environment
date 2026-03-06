@@ -1,0 +1,26 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ace-coder"
+version = "0.1.0"
+description = "Lightweight qualitative coding tool with inter-coder reliability"
+requires-python = ">=3.11"
+dependencies = [
+    "nicegui>=3.0",
+    "pandas>=2.0",
+    "openpyxl>=3.1",
+    "irrCAC>=0.3",
+    "scikit-learn>=1.0",
+]
+
+[project.scripts]
+ace = "ace.__main__:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ace"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
