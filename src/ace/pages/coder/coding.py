@@ -536,6 +536,56 @@ def build(conn: sqlite3.Connection) -> None:
     _load_notes(conn, current_source_id(), coder_id, notes_area)
     _auto_transition()
 
+    # ── Onboarding overlay (first time only per session) ─────────
+    session_key = f"onboarding_shown_{coder_id}"
+    if not app.storage.tab.get(session_key):
+        app.storage.tab[session_key] = True
+        with ui.dialog(value=True) as onboarding_dialog:
+            with ui.card().classes("q-pa-lg").style("max-width: 500px;"):
+                ui.label("Welcome to ACE").classes("text-h5 text-weight-bold q-mb-sm")
+                ui.label(
+                    "Read the text below. Highlight passages and click a code to annotate them."
+                ).classes("text-body1 q-mb-md")
+
+                if project and project["instructions"]:
+                    ui.separator()
+                    ui.label("Coding instructions:").classes(
+                        "text-subtitle2 text-weight-medium q-mt-sm"
+                    )
+                    ui.label(project["instructions"]).classes(
+                        "text-body2 text-grey-8 q-mb-sm"
+                    ).style("white-space: pre-wrap;")
+
+                if codes:
+                    ui.separator()
+                    ui.label("Your codes:").classes(
+                        "text-subtitle2 text-weight-medium q-mt-sm q-mb-xs"
+                    )
+                    for i, code in enumerate(codes):
+                        colour = code["colour"] or "#999999"
+                        shortcut = str(i + 1) if i < 9 else ""
+                        with ui.row().classes("items-center q-py-xs").style("gap: 8px;"):
+                            ui.element("div").classes("ace-code-dot").style(
+                                f"background-color: {colour};"
+                            )
+                            ui.label(code["name"]).classes("text-body2")
+                            if code["description"]:
+                                ui.label(f"- {code['description']}").classes(
+                                    "text-caption text-grey-7"
+                                )
+                            if shortcut:
+                                ui.label(f"[{shortcut}]").classes(
+                                    "text-caption text-grey-5"
+                                ).style("font-family: monospace;")
+
+                ui.separator().classes("q-mt-md")
+                ui.label("Shortcuts: 1-9 apply code, Ctrl+Z undo, Alt+Arrow navigate").classes(
+                    "text-caption text-grey-6 q-mb-sm"
+                )
+                ui.button("Got it!", on_click=onboarding_dialog.close).props(
+                    "unelevated color=primary"
+                ).classes("full-width")
+
 
 # ---------------------------------------------------------------------------
 # Navigation
