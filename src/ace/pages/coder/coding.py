@@ -485,6 +485,52 @@ def build(conn: sqlite3.Connection) -> None:
     ui.on("text_selected", _on_text_selected)
     ui.on("annotation_clicked", _on_annotation_clicked)
 
+    # ── Keyboard shortcut handlers ───────────────────────────────────
+    def _on_shortcut_undo(_e):
+        _do_undo(conn, coder_id, codes_by_id, text_container, annotation_list_display, undo_mgr, current_source_id())
+
+    def _on_shortcut_redo(_e):
+        _do_redo(conn, coder_id, codes_by_id, text_container, annotation_list_display, undo_mgr, current_source_id())
+
+    def _on_shortcut_mark_complete(_e):
+        _toggle_complete(conn, coder_id, state, assignments, source_header, bottom_bar, source_list)
+
+    def _on_shortcut_escape(_e):
+        state["pending_selection"] = None
+        code_picker_dialog.close()
+        annotation_info_dialog.close()
+
+    def _on_shortcut_prev(_e):
+        idx = state["current_index"]
+        if idx > 0:
+            _navigate_to(idx - 1, state, conn, coder_id, codes_by_id,
+                         text_container, annotation_list_display, notes_area,
+                         source_header, bottom_bar, source_list)
+
+    def _on_shortcut_next(_e):
+        idx = state["current_index"]
+        if idx < len(assignments) - 1:
+            _navigate_to(idx + 1, state, conn, coder_id, codes_by_id,
+                         text_container, annotation_list_display, notes_area,
+                         source_header, bottom_bar, source_list)
+
+    def _on_shortcut_apply_code(e):
+        code_idx = e.args.get("index", -1)
+        if 0 <= code_idx < len(codes):
+            sel = state.get("pending_selection")
+            if sel:
+                code = codes[code_idx]
+                _apply_code(code, state, conn, coder_id, codes_by_id,
+                            text_container, annotation_list_display, undo_mgr)
+
+    ui.on("shortcut_undo", _on_shortcut_undo)
+    ui.on("shortcut_redo", _on_shortcut_redo)
+    ui.on("shortcut_mark_complete", _on_shortcut_mark_complete)
+    ui.on("shortcut_escape", _on_shortcut_escape)
+    ui.on("shortcut_prev_source", _on_shortcut_prev)
+    ui.on("shortcut_next_source", _on_shortcut_next)
+    ui.on("shortcut_apply_code", _on_shortcut_apply_code)
+
     # ── Initial render ────────────────────────────────────────────────
     _render_text(conn, current_source_id(), coder_id, codes_by_id, text_container)
     _load_notes(conn, current_source_id(), coder_id, notes_area)

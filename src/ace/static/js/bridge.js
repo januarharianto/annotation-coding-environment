@@ -128,14 +128,71 @@
     });
   }
 
+  function setupKeyboardShortcuts() {
+    document.addEventListener("keydown", function (e) {
+      // Don't capture when typing in input/textarea fields
+      var tag = (e.target.tagName || "").toLowerCase();
+      if (tag === "input" || tag === "textarea" || tag === "select") return;
+      if (e.target.isContentEditable) return;
+
+      // Ctrl/Cmd+Z = undo, Ctrl/Cmd+Shift+Z = redo
+      if ((e.ctrlKey || e.metaKey) && e.key === "z") {
+        e.preventDefault();
+        if (e.shiftKey) {
+          emitEvent("shortcut_redo", {});
+        } else {
+          emitEvent("shortcut_undo", {});
+        }
+        return;
+      }
+
+      // Ctrl/Cmd+Enter = mark complete
+      if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+        e.preventDefault();
+        emitEvent("shortcut_mark_complete", {});
+        return;
+      }
+
+      // Escape = dismiss (clear selection)
+      if (e.key === "Escape") {
+        emitEvent("shortcut_escape", {});
+        return;
+      }
+
+      // Alt+ArrowLeft / Alt+ArrowRight = prev/next source
+      if (e.altKey && e.key === "ArrowLeft") {
+        e.preventDefault();
+        emitEvent("shortcut_prev_source", {});
+        return;
+      }
+      if (e.altKey && e.key === "ArrowRight") {
+        e.preventDefault();
+        emitEvent("shortcut_next_source", {});
+        return;
+      }
+
+      // 1-9 = apply code (only when there is an active text selection)
+      if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key >= "1" && e.key <= "9") {
+        var sel = window.getSelection();
+        if (sel && !sel.isCollapsed) {
+          e.preventDefault();
+          emitEvent("shortcut_apply_code", { index: parseInt(e.key) - 1 });
+        }
+        return;
+      }
+    });
+  }
+
   // Initialize once DOM is ready
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", function () {
       setupSelectionListener();
       setupAnnotationClickListener();
+      setupKeyboardShortcuts();
     });
   } else {
     setupSelectionListener();
     setupAnnotationClickListener();
+    setupKeyboardShortcuts();
   }
 })();
