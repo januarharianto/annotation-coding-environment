@@ -1,9 +1,19 @@
 from nicegui import ui
 
-def run():
-    @ui.page("/")
-    def landing():
-        ui.label("ACE — Annotation Coding Environment").classes("text-h4")
-        ui.label("Drop an .ace file here or create a new project")
+from ace.pages import landing
 
-    ui.run(host="127.0.0.1", port=8080, title="ACE")
+
+def run():
+    landing.register()
+
+    @ui.page("/manager")
+    def manager_page():
+        ui.label("Manager").classes("text-h4")
+        ui.label("This page is under construction.")
+
+    @ui.page("/coder")
+    def coder_page():
+        ui.label("Coder").classes("text-h4")
+        ui.label("This page is under construction.")
+
+    ui.run(host="127.0.0.1", port=8080, title="ACE", storage_secret="ace-local")
