@@ -5,6 +5,7 @@ from ace.models.annotation import (
     delete_annotation,
     get_annotations_for_source,
     list_annotations,
+    undelete_annotation,
 )
 from ace.models.coder import add_coder
 from ace.models.codebook import add_code
@@ -85,3 +86,15 @@ def test_get_annotations_for_source_filters_by_coder(tmp_db):
     rows = get_annotations_for_source(conn, source_id, coder_id=coder_id)
     assert len(rows) == 1
     assert rows[0]["coder_id"] == coder_id
+
+
+def test_undelete_annotation(tmp_db):
+    conn = create_project(tmp_db, "Test")
+    source_id, coder_id, code_id = _setup(conn)
+    aid = add_annotation(conn, source_id, coder_id, code_id, 0, 4, "Some")
+    delete_annotation(conn, aid)
+    assert len(get_annotations_for_source(conn, source_id)) == 0
+    undelete_annotation(conn, aid)
+    rows = get_annotations_for_source(conn, source_id)
+    assert len(rows) == 1
+    assert rows[0]["id"] == aid
