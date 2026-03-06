@@ -4,7 +4,7 @@ from nicegui import app, ui
 
 from ace.db.connection import checkpoint_and_close, open_project
 from ace.models.project import get_project
-from ace.pages.manager import assign, codebook, import_data
+from ace.pages.manager import assign, codebook, import_data, results
 
 
 def register() -> None:
@@ -47,9 +47,7 @@ def register() -> None:
                 assign.build(conn, stepper)
 
             with ui.step("Results"):
-                ui.label("Results and analysis will go here.").classes("text-body2 text-grey-7")
-                with ui.row().classes("q-mt-md gap-2"):
-                    ui.button("Back", on_click=stepper.previous).props("flat")
+                results.build(conn, stepper)
 
 
 def _go_home(conn):
