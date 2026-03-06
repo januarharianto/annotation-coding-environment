@@ -669,8 +669,6 @@ def _open_annotation_info(
     ann_ids, conn, coder_id, codes_by_id,
     text_container, annotation_list_display, dialog,
 ):
-    source_id = get_annotations_for_source(conn, ann_ids[0]) if False else None
-    # Fetch annotation details
     anns = []
     for aid in ann_ids:
         row = conn.execute(
