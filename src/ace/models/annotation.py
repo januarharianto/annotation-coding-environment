@@ -59,6 +59,14 @@ def delete_annotation(conn: sqlite3.Connection, annotation_id: str) -> None:
     conn.commit()
 
 
+def undelete_annotation(conn: sqlite3.Connection, annotation_id: str) -> None:
+    conn.execute(
+        "UPDATE annotation SET deleted_at = NULL WHERE id = ?",
+        (annotation_id,),
+    )
+    conn.commit()
+
+
 def compact_deleted(conn: sqlite3.Connection) -> int:
     cursor = conn.execute("DELETE FROM annotation WHERE deleted_at IS NOT NULL")
     conn.commit()
