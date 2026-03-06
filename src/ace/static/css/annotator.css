@@ -1,0 +1,45 @@
+.ace-annotation {
+    cursor: pointer;
+    border-radius: 2px;
+    transition: opacity 0.15s;
+    padding: 1px 0;
+}
+.ace-annotation:hover {
+    filter: brightness(0.85);
+}
+
+#ace-text-content {
+    font-size: 1rem;
+    line-height: 1.8;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    padding: 16px;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+    background: #fafafa;
+    min-height: 200px;
+    user-select: text;
+    -webkit-user-select: text;
+}
+
+.ace-code-dot {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.ace-source-item {
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 4px;
+    transition: background 0.1s;
+}
+.ace-source-item:hover {
+    background: #e8eaf6;
+}
+.ace-source-item.active {
+    background: #c5cae9;
+    font-weight: 500;
+}
