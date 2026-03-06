@@ -85,8 +85,9 @@ async def _open_new_dialog() -> None:
         name_input = ui.input("Project name").props("autofocus")
         desc_input = ui.input("Description (optional)")
         with ui.row().classes("items-center full-width gap-2"):
-            path_input = ui.input("Save location").props("readonly").classes("col")
-            path_input.value = str(Path.home())
+            path_input = ui.input("Save location", placeholder="Choose a folder...").props(
+                "readonly"
+            ).classes("col")
 
             async def _browse_save_location() -> None:
                 if not _IS_MACOS:
@@ -97,7 +98,7 @@ async def _open_new_dialog() -> None:
                 if chosen:
                     path_input.value = chosen.rstrip("/")
 
-            ui.button(icon="folder_open", on_click=_browse_save_location).props(
+            ui.button("Browse", icon="folder_open", on_click=_browse_save_location).props(
                 "flat dense"
             )
 
@@ -112,7 +113,11 @@ async def _open_new_dialog() -> None:
                     error_label.text = "Project name is required."
                     return
 
-                save_dir = Path(path_input.value.strip())
+                raw_path = path_input.value.strip()
+                if not raw_path:
+                    error_label.text = "Please choose a save location."
+                    return
+                save_dir = Path(raw_path)
                 if not save_dir.is_dir():
                     error_label.text = "Save location is not a valid directory."
                     return
