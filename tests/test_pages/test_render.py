@@ -72,6 +72,12 @@ def test_html_escaping():
     assert "<b>" not in result
 
 
+def test_aria_label_on_annotation():
+    anns = [_ann("a1", "c1", 0, 5)]
+    result = render_annotated_text("Hello world", anns, _codes())
+    assert 'aria-label="Red"' in result
+
+
 def test_annotation_at_end_of_text():
     anns = [_ann("a1", "c1", 6, 11)]
     result = render_annotated_text("Hello world", anns, _codes())
