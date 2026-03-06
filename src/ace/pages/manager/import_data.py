@@ -1,6 +1,5 @@
 """Import step component for the manager wizard."""
 
-import shutil
 import tempfile
 from pathlib import Path
 
@@ -76,9 +75,9 @@ def build(conn, stepper) -> None:
     _build_column_ui(state, conn, stepper, column_container, import_container, preview_container)
 
 
-def _handle_file_upload(e: events.UploadEventArguments, state, preview_container, column_container, import_container):
+async def _handle_file_upload(e: events.UploadEventArguments, state, preview_container, column_container, import_container):
     """Handle uploaded CSV/Excel file."""
-    name = e.name
+    name = e.file.name
     suffix = Path(name).suffix.lower()
     if suffix not in (".csv", ".xlsx", ".xls"):
         ui.notify("Please upload a CSV or Excel file.", type="warning")
@@ -87,8 +86,8 @@ def _handle_file_upload(e: events.UploadEventArguments, state, preview_container
     # Save to temp file
     tmp_dir = Path(tempfile.mkdtemp())
     dest = tmp_dir / name
-    with open(dest, "wb") as f:
-        shutil.copyfileobj(e.content, f)
+    content = await e.file.read()
+    dest.write_bytes(content)
 
     # Read with pandas
     try:
