@@ -111,6 +111,7 @@ def render_annotated_text(text: str, annotations: list, codes_by_id: dict) -> st
                 f'<span class="ace-annotation" '
                 f'data-annotation-id="{html.escape(data["id"])}" '
                 f'title="{html.escape(data["code_name"])}" '
+                f'aria-label="{html.escape(data["code_name"])}" '
                 f'style="background-color: rgba({r},{g},{b},0.3);">'
             )
             open_stack.append(data)
@@ -145,6 +146,7 @@ def render_annotated_text(text: str, annotations: list, codes_by_id: dict) -> st
                         f'<span class="ace-annotation" '
                         f'data-annotation-id="{html.escape(item["id"])}" '
                         f'title="{html.escape(item["code_name"])}" '
+                        f'aria-label="{html.escape(item["code_name"])}" '
                         f'style="background-color: rgba({r},{g},{b},0.3);">'
                     )
 
