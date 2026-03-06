@@ -13,7 +13,9 @@ from ace.models.annotation import (
     add_annotation,
     delete_annotation,
     get_annotations_for_source,
+    undelete_annotation,
 )
+from ace.services.undo import UndoManager
 from ace.models.assignment import get_assignments_for_coder, update_assignment_status
 from ace.models.codebook import list_codes
 from ace.models.coder import list_coders
@@ -197,6 +199,7 @@ def build(conn: sqlite3.Connection) -> None:
         "current_index": 0,
         "pending_selection": None,  # {start, end, text}
     }
+    undo_mgr = UndoManager()
 
     # Find first pending/in_progress source, or first source
     for i, a in enumerate(assignments):
@@ -268,7 +271,7 @@ def build(conn: sqlite3.Connection) -> None:
                     "gap: 8px;"
                 ).on(
                     "click",
-                    lambda _e, c=code: _apply_code(c, state, conn, coder_id, codes_by_id, text_container, annotation_list_display),
+                    lambda _e, c=code: _apply_code(c, state, conn, coder_id, codes_by_id, text_container, annotation_list_display, undo_mgr),
                 ):
                     ui.element("div").classes("ace-code-dot").style(
                         f"background-color: {colour};"
@@ -374,7 +377,7 @@ def build(conn: sqlite3.Connection) -> None:
                             ui.button(
                                 icon="close",
                                 on_click=lambda _e, a=ann: _delete_annotation(
-                                    a, conn, coder_id, codes_by_id, text_container, annotation_list_display
+                                    a, conn, coder_id, codes_by_id, text_container, annotation_list_display, undo_mgr
                                 ),
                             ).props("flat round dense size=sm color=negative")
 
@@ -467,7 +470,7 @@ def build(conn: sqlite3.Connection) -> None:
         }
         _open_code_picker(
             state, conn, coder_id, codes, codes_by_id,
-            text_container, annotation_list_display, code_picker_dialog,
+            text_container, annotation_list_display, code_picker_dialog, undo_mgr,
         )
 
     def _on_annotation_clicked(e):
@@ -476,7 +479,7 @@ def build(conn: sqlite3.Connection) -> None:
         if ann_ids:
             _open_annotation_info(
                 ann_ids, conn, coder_id, codes_by_id,
-                text_container, annotation_list_display, annotation_info_dialog,
+                text_container, annotation_list_display, annotation_info_dialog, undo_mgr,
             )
 
     ui.on("text_selected", _on_text_selected)
@@ -554,7 +557,7 @@ def _load_notes(conn, source_id, coder_id, notes_area):
 
 def _open_code_picker(
     state, conn, coder_id, codes, codes_by_id,
-    text_container, annotation_list_display, dialog,
+    text_container, annotation_list_display, dialog, undo_mgr,
 ):
     sel = state.get("pending_selection")
     if not sel:
@@ -575,7 +578,7 @@ def _open_code_picker(
                 "click",
                 lambda _e, c=code: _do_apply_code(
                     c, sel, state, conn, coder_id, codes_by_id,
-                    text_container, annotation_list_display, dialog,
+                    text_container, annotation_list_display, dialog, undo_mgr,
                 ),
             ):
                 ui.element("div").classes("ace-code-dot").style(
@@ -596,7 +599,7 @@ def _open_code_picker(
 
 def _do_apply_code(
     code, sel, state, conn, coder_id, codes_by_id,
-    text_container, annotation_list_display, dialog,
+    text_container, annotation_list_display, dialog, undo_mgr,
 ):
     source_id = get_assignments_for_coder(conn, coder_id)[state["current_index"]]["source_id"]
 
@@ -611,7 +614,7 @@ def _do_apply_code(
 
     selected_text = text[start_cp:end_cp]
 
-    add_annotation(
+    ann_id = add_annotation(
         conn,
         source_id=source_id,
         coder_id=coder_id,
@@ -620,6 +623,7 @@ def _do_apply_code(
         end_offset=end_cp,
         selected_text=selected_text,
     )
+    undo_mgr.record_add(source_id, ann_id)
 
     state["pending_selection"] = None
     dialog.close()
@@ -629,7 +633,7 @@ def _do_apply_code(
     ui.notify(f"Applied: {code['name']}", type="positive", position="bottom", timeout=1500)
 
 
-def _apply_code(code, state, conn, coder_id, codes_by_id, text_container, annotation_list_display):
+def _apply_code(code, state, conn, coder_id, codes_by_id, text_container, annotation_list_display, undo_mgr):
     """Apply code from sidebar click (only if there's a pending selection)."""
     sel = state.get("pending_selection")
     if not sel:
@@ -645,7 +649,7 @@ def _apply_code(code, state, conn, coder_id, codes_by_id, text_container, annota
     end_cp = utf16_to_codepoint(text, sel["end"])
     selected_text = text[start_cp:end_cp]
 
-    add_annotation(
+    ann_id = add_annotation(
         conn,
         source_id=source_id,
         coder_id=coder_id,
@@ -654,6 +658,7 @@ def _apply_code(code, state, conn, coder_id, codes_by_id, text_container, annota
         end_offset=end_cp,
         selected_text=selected_text,
     )
+    undo_mgr.record_add(source_id, ann_id)
 
     state["pending_selection"] = None
     _render_text(conn, source_id, coder_id, codes_by_id, text_container)
@@ -667,7 +672,7 @@ def _apply_code(code, state, conn, coder_id, codes_by_id, text_container, annota
 
 def _open_annotation_info(
     ann_ids, conn, coder_id, codes_by_id,
-    text_container, annotation_list_display, dialog,
+    text_container, annotation_list_display, dialog, undo_mgr,
 ):
     anns = []
     for aid in ann_ids:
@@ -702,7 +707,7 @@ def _open_annotation_info(
                     icon="delete",
                     on_click=lambda _e, a=ann: _delete_annotation_from_dialog(
                         a, conn, coder_id, codes_by_id,
-                        text_container, annotation_list_display, dialog,
+                        text_container, annotation_list_display, dialog, undo_mgr,
                     ),
                 ).props("flat round dense size=sm color=negative")
 
@@ -713,9 +718,10 @@ def _open_annotation_info(
 
 def _delete_annotation_from_dialog(
     ann, conn, coder_id, codes_by_id,
-    text_container, annotation_list_display, dialog,
+    text_container, annotation_list_display, dialog, undo_mgr,
 ):
     source_id = ann["source_id"]
+    undo_mgr.record_delete(source_id, ann["id"])
     delete_annotation(conn, ann["id"])
     dialog.close()
     _render_text(conn, source_id, coder_id, codes_by_id, text_container)
@@ -723,12 +729,47 @@ def _delete_annotation_from_dialog(
     ui.notify("Annotation removed.", type="info", position="bottom", timeout=1500)
 
 
-def _delete_annotation(ann, conn, coder_id, codes_by_id, text_container, annotation_list_display):
+def _delete_annotation(ann, conn, coder_id, codes_by_id, text_container, annotation_list_display, undo_mgr):
     source_id = ann["source_id"]
+    undo_mgr.record_delete(source_id, ann["id"])
     delete_annotation(conn, ann["id"])
     _render_text(conn, source_id, coder_id, codes_by_id, text_container)
     annotation_list_display.refresh()
     ui.notify("Annotation removed.", type="info", position="bottom", timeout=1500)
+
+
+# ---------------------------------------------------------------------------
+# Undo / redo
+# ---------------------------------------------------------------------------
+
+def _do_undo(conn, coder_id, codes_by_id, text_container, annotation_list_display, undo_mgr, source_id):
+    action = undo_mgr.undo(source_id)
+    if action is None:
+        ui.notify("Nothing to undo.", type="info", position="bottom", timeout=1000)
+        return
+    ann_id = action["annotation_id"]
+    if action["type"] == "undo_add":
+        delete_annotation(conn, ann_id)
+    elif action["type"] == "undo_delete":
+        undelete_annotation(conn, ann_id)
+    _render_text(conn, source_id, coder_id, codes_by_id, text_container)
+    annotation_list_display.refresh()
+    ui.notify("Undone.", type="info", position="bottom", timeout=1000)
+
+
+def _do_redo(conn, coder_id, codes_by_id, text_container, annotation_list_display, undo_mgr, source_id):
+    action = undo_mgr.redo(source_id)
+    if action is None:
+        ui.notify("Nothing to redo.", type="info", position="bottom", timeout=1000)
+        return
+    ann_id = action["annotation_id"]
+    if action["type"] == "redo_add":
+        undelete_annotation(conn, ann_id)
+    elif action["type"] == "redo_delete":
+        delete_annotation(conn, ann_id)
+    _render_text(conn, source_id, coder_id, codes_by_id, text_container)
+    annotation_list_display.refresh()
+    ui.notify("Redone.", type="info", position="bottom", timeout=1000)
 
 
 # ---------------------------------------------------------------------------
