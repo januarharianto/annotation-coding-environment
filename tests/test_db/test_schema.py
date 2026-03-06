@@ -55,8 +55,8 @@ def test_annotation_check_constraints(schema_conn):
         "INSERT INTO coder (id, name) VALUES ('c1', 'Alice')"
     )
     schema_conn.execute(
-        "INSERT INTO codebook_code (id, name, sort_order, created_at) "
-        "VALUES ('code1', 'Theme A', 1, '2024-01-01T00:00:00Z')"
+        "INSERT INTO codebook_code (id, name, colour, sort_order, created_at) "
+        "VALUES ('code1', 'Theme A', '#FF0000', 1, '2024-01-01T00:00:00Z')"
     )
 
     # Negative start_offset should fail
@@ -97,13 +97,13 @@ def test_assignment_status_check_constraint(schema_conn):
 
 def test_codebook_code_name_unique(schema_conn):
     schema_conn.execute(
-        "INSERT INTO codebook_code (id, name, sort_order, created_at) "
-        "VALUES ('code1', 'Theme A', 1, '2024-01-01T00:00:00Z')"
+        "INSERT INTO codebook_code (id, name, colour, sort_order, created_at) "
+        "VALUES ('code1', 'Theme A', '#FF0000', 1, '2024-01-01T00:00:00Z')"
     )
     with pytest.raises(sqlite3.IntegrityError):
         schema_conn.execute(
-            "INSERT INTO codebook_code (id, name, sort_order, created_at) "
-            "VALUES ('code2', 'Theme A', 2, '2024-01-01T00:00:00Z')"
+            "INSERT INTO codebook_code (id, name, colour, sort_order, created_at) "
+            "VALUES ('code2', 'Theme A', '#00FF00', 2, '2024-01-01T00:00:00Z')"
         )
 
 

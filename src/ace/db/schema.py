@@ -31,15 +31,15 @@ CREATE TABLE IF NOT EXISTS source (
 
 CREATE TABLE IF NOT EXISTS source_content (
     source_id    TEXT PRIMARY KEY REFERENCES source(id),
-    content_text TEXT,
-    content_hash TEXT
+    content_text TEXT NOT NULL,
+    content_hash TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS codebook_code (
     id          TEXT PRIMARY KEY,
     name        TEXT NOT NULL UNIQUE,
     description TEXT,
-    colour      TEXT,
+    colour      TEXT NOT NULL,
     sort_order  INTEGER NOT NULL,
     created_at  TEXT NOT NULL
 );
@@ -67,7 +67,7 @@ CREATE TABLE IF NOT EXISTS annotation (
     code_id           TEXT NOT NULL REFERENCES codebook_code(id),
     start_offset      INTEGER NOT NULL CHECK (start_offset >= 0),
     end_offset        INTEGER NOT NULL CHECK (end_offset > start_offset),
-    selected_text     TEXT,
+    selected_text     TEXT NOT NULL,
     memo              TEXT,
     w3c_selector_json TEXT,
     created_at        TEXT NOT NULL,
@@ -79,7 +79,7 @@ CREATE TABLE IF NOT EXISTS source_note (
     id         TEXT PRIMARY KEY,
     source_id  TEXT NOT NULL REFERENCES source(id),
     coder_id   TEXT NOT NULL REFERENCES coder(id),
-    note_text  TEXT,
+    note_text  TEXT NOT NULL,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     UNIQUE(source_id, coder_id)
