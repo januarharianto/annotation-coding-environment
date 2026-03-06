@@ -1,15 +1,12 @@
 from nicegui import ui
 
 from ace.pages import landing
+from ace.pages import manager
 
 
 def run():
     landing.register()
-
-    @ui.page("/manager")
-    def manager_page():
-        ui.label("Manager").classes("text-h4")
-        ui.label("This page is under construction.")
+    manager.register()
 
     @ui.page("/coder")
     def coder_page():
