@@ -1,6 +1,5 @@
 .ace-annotation {
     cursor: pointer;
-    border-radius: 2px;
     transition: opacity 0.15s;
     padding: 1px 0;
 }
@@ -15,7 +14,6 @@
     word-wrap: break-word;
     padding: 16px;
     border: 1px solid #e0e0e0;
-    border-radius: 4px;
     background: #fafafa;
     min-height: 200px;
     user-select: text;
@@ -33,7 +31,6 @@
 .ace-source-item {
     cursor: pointer;
     padding: 4px 8px;
-    border-radius: 4px;
     transition: background 0.1s;
 }
 .ace-source-item:hover {
