@@ -295,8 +295,7 @@ def _colour_picker(state):
                 on_click=lambda _e, h=hex_colour: _select_colour(state, h, row),
             ).style(
                 f"background-color: {hex_colour} !important; "
-                f"min-width: 32px; width: 32px; height: 32px; padding: 0; "
-                f"border-radius: 4px;"
+                f"min-width: 32px; width: 32px; height: 32px; padding: 0;"
             ).props("unelevated dense")
             btn.tooltip(label)
             # Mark currently selected
@@ -315,12 +314,10 @@ def _select_colour(state, hex_colour, row):
                 child.style(
                     f"background-color: {palette_hex} !important; "
                     f"min-width: 32px; width: 32px; height: 32px; padding: 0; "
-                    f"border-radius: 4px; "
                     f"outline: 3px solid #333; outline-offset: 2px;"
                 )
             else:
                 child.style(
                     f"background-color: {palette_hex} !important; "
-                    f"min-width: 32px; width: 32px; height: 32px; padding: 0; "
-                    f"border-radius: 4px;"
+                    f"min-width: 32px; width: 32px; height: 32px; padding: 0;"
                 )
