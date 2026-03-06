@@ -1,0 +1,44 @@
+/* ACE minimalist theme — high contrast, no shadows, sharp corners */
+
+/* Strip shadows and rounded corners from all Quasar components */
+.q-card,
+.q-dialog__inner > div,
+.q-btn,
+.q-field__control,
+.q-field__native,
+.q-input,
+.q-select,
+.q-textarea,
+.q-tab-panel,
+.q-stepper,
+.q-stepper__tab,
+.q-item,
+.q-chip,
+.q-badge,
+.q-banner,
+.q-toolbar,
+.q-notification {
+    border-radius: 0 !important;
+    box-shadow: none !important;
+}
+
+/* Cards get a border for definition */
+.q-card {
+    border: 1px solid #d0d0d0;
+}
+
+/* Stepper remove default shadow */
+.q-stepper {
+    border: 1px solid #d0d0d0;
+}
+
+/* Upload area */
+.q-uploader {
+    border-radius: 0 !important;
+    box-shadow: none !important;
+}
+
+/* Dialog backdrop — slightly darker for contrast */
+.q-dialog__backdrop {
+    background: rgba(0, 0, 0, 0.5);
+}

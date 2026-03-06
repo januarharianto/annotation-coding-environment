@@ -278,7 +278,7 @@ def build(conn: sqlite3.Connection) -> None:
                         ui.label(shortcut).classes(
                             "text-caption text-grey-5"
                         ).style(
-                            "background: #eee; border-radius: 3px; padding: 0 5px; font-family: monospace;"
+                            "background: #eee; padding: 0 5px; font-family: monospace;"
                         )
 
             ui.separator().classes("q-my-sm")
@@ -334,7 +334,7 @@ def build(conn: sqlite3.Connection) -> None:
                             for k, v in meta.items():
                                 ui.label(f"{k}: {v}").classes(
                                     "text-caption text-grey-7 bg-grey-2 q-px-xs"
-                                ).style("border-radius: 3px;")
+                                )
                     except (json.JSONDecodeError, TypeError):
                         pass
 
@@ -690,7 +690,7 @@ def _open_code_picker(
                     ui.label(shortcut).classes(
                         "text-caption text-grey-5"
                     ).style(
-                        "background: #eee; border-radius: 3px; padding: 0 5px; font-family: monospace;"
+                        "background: #eee; padding: 0 5px; font-family: monospace;"
                     )
 
         ui.button("Cancel", on_click=dialog.close).props("flat dense").classes("q-mt-xs")
