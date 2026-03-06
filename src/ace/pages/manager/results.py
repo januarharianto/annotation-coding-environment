@@ -29,8 +29,8 @@ def build(conn, stepper) -> None:
 
     import_results_container = ui.column().classes("full-width")
 
-    def _handle_upload(e: events.UploadEventArguments):
-        name = e.name
+    async def _handle_upload(e: events.UploadEventArguments):
+        name = e.file.name
         suffix = Path(name).suffix.lower()
         if suffix != ".ace":
             ui.notify("Please upload an .ace coder package.", type="warning")
@@ -39,8 +39,8 @@ def build(conn, stepper) -> None:
         # Save uploaded file to temp location
         tmp_dir = Path(tempfile.mkdtemp())
         dest = tmp_dir / name
-        with open(dest, "wb") as f:
-            shutil.copyfileobj(e.content, f)
+        content = await e.file.read()
+        dest.write_bytes(content)
 
         # Auto-backup the main project file before merge
         project_path = app.storage.general.get("project_path", "")
