@@ -1,6 +1,5 @@
 """Landing page for ACE."""
 
-import shutil
 import tempfile
 from pathlib import Path
 
@@ -161,15 +160,15 @@ async def _open_file_picker() -> None:
     dialog.open()
 
 
-def _handle_upload(e: events.UploadEventArguments) -> None:
+async def _handle_upload(e: events.UploadEventArguments) -> None:
     """Handle drag-and-drop upload of an .ace file."""
-    if not e.name.endswith(".ace"):
+    if not e.file.name.endswith(".ace"):
         ui.notify("Please upload an .ace file.", type="warning")
         return
 
     tmp_dir = Path(tempfile.mkdtemp())
-    dest = tmp_dir / e.name
-    with open(dest, "wb") as f:
-        shutil.copyfileobj(e.content, f)
+    dest = tmp_dir / e.file.name
+    content = await e.file.read()
+    dest.write_bytes(content)
 
     _store_and_route(dest)
