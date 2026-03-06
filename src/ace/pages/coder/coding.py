@@ -64,6 +64,22 @@ def _upsert_note(
 # Annotation rendering
 # ---------------------------------------------------------------------------
 
+def _annotation_span(data: dict) -> str:
+    """Build an opening <span> tag for an annotation."""
+    hex_c = data["colour"].lstrip("#")
+    if len(hex_c) == 6:
+        r, g, b = int(hex_c[0:2], 16), int(hex_c[2:4], 16), int(hex_c[4:6], 16)
+    else:
+        r, g, b = 153, 153, 153
+    return (
+        f'<span class="ace-annotation" '
+        f'data-annotation-id="{html.escape(data["id"])}" '
+        f'title="{html.escape(data["code_name"])}" '
+        f'aria-label="{html.escape(data["code_name"])}" '
+        f'style="background-color: rgba({r},{g},{b},0.3);">'
+    )
+
+
 def render_annotated_text(text: str, annotations: list, codes_by_id: dict) -> str:
     """Build HTML from plain text + annotations with coloured spans.
 
@@ -101,19 +117,7 @@ def render_annotated_text(text: str, annotations: list, codes_by_id: dict) -> st
             pos = offset
 
         if kind == "open":
-            # Convert colour to rgba with transparency
-            hex_c = data["colour"].lstrip("#")
-            if len(hex_c) == 6:
-                r, g, b = int(hex_c[0:2], 16), int(hex_c[2:4], 16), int(hex_c[4:6], 16)
-            else:
-                r, g, b = 153, 153, 153
-            parts.append(
-                f'<span class="ace-annotation" '
-                f'data-annotation-id="{html.escape(data["id"])}" '
-                f'title="{html.escape(data["code_name"])}" '
-                f'aria-label="{html.escape(data["code_name"])}" '
-                f'style="background-color: rgba({r},{g},{b},0.3);">'
-            )
+            parts.append(_annotation_span(data))
             open_stack.append(data)
         else:
             # Close — find and close the matching span
@@ -137,18 +141,7 @@ def render_annotated_text(text: str, annotations: list, codes_by_id: dict) -> st
                 open_stack.pop(idx)
                 # Re-open the ones above
                 for item in reversed(to_reopen):
-                    hex_c = item["colour"].lstrip("#")
-                    if len(hex_c) == 6:
-                        r, g, b = int(hex_c[0:2], 16), int(hex_c[2:4], 16), int(hex_c[4:6], 16)
-                    else:
-                        r, g, b = 153, 153, 153
-                    parts.append(
-                        f'<span class="ace-annotation" '
-                        f'data-annotation-id="{html.escape(item["id"])}" '
-                        f'title="{html.escape(item["code_name"])}" '
-                        f'aria-label="{html.escape(item["code_name"])}" '
-                        f'style="background-color: rgba({r},{g},{b},0.3);">'
-                    )
+                    parts.append(_annotation_span(item))
 
     # Remaining text
     if pos < len(text):
@@ -538,55 +531,65 @@ def build(conn: sqlite3.Connection) -> None:
     _load_notes(conn, current_source_id(), coder_id, notes_area)
     _auto_transition()
 
-    # ── Onboarding overlay (first time only per session) ─────────
+    _show_onboarding_dialog(coder_id, project, codes)
+
+
+# ---------------------------------------------------------------------------
+# Onboarding
+# ---------------------------------------------------------------------------
+
+def _show_onboarding_dialog(coder_id, project, codes):
+    """Show a one-time onboarding overlay for the current tab session."""
     session_key = f"onboarding_shown_{coder_id}"
-    if not app.storage.tab.get(session_key):
-        app.storage.tab[session_key] = True
-        with ui.dialog(value=True) as onboarding_dialog:
-            with ui.card().classes("q-pa-lg").style("max-width: 500px;"):
-                ui.label("Welcome to ACE").classes("text-h5 text-weight-bold q-mb-sm")
-                ui.label(
-                    "Read the text below. Highlight passages and click a code to annotate them."
-                ).classes("text-body1 q-mb-md")
+    if app.storage.tab.get(session_key):
+        return
+    app.storage.tab[session_key] = True
 
-                if project and project["instructions"]:
-                    ui.separator()
-                    ui.label("Coding instructions:").classes(
-                        "text-subtitle2 text-weight-medium q-mt-sm"
-                    )
-                    ui.label(project["instructions"]).classes(
-                        "text-body2 text-grey-8 q-mb-sm"
-                    ).style("white-space: pre-wrap;")
+    with ui.dialog(value=True) as onboarding_dialog:
+        with ui.card().classes("q-pa-lg").style("max-width: 500px;"):
+            ui.label("Welcome to ACE").classes("text-h5 text-weight-bold q-mb-sm")
+            ui.label(
+                "Read the text below. Highlight passages and click a code to annotate them."
+            ).classes("text-body1 q-mb-md")
 
-                if codes:
-                    ui.separator()
-                    ui.label("Your codes:").classes(
-                        "text-subtitle2 text-weight-medium q-mt-sm q-mb-xs"
-                    )
-                    for i, code in enumerate(codes):
-                        colour = code["colour"] or "#999999"
-                        shortcut = str(i + 1) if i < 9 else ""
-                        with ui.row().classes("items-center q-py-xs").style("gap: 8px;"):
-                            ui.element("div").classes("ace-code-dot").style(
-                                f"background-color: {colour};"
-                            )
-                            ui.label(code["name"]).classes("text-body2")
-                            if code["description"]:
-                                ui.label(f"- {code['description']}").classes(
-                                    "text-caption text-grey-7"
-                                )
-                            if shortcut:
-                                ui.label(f"[{shortcut}]").classes(
-                                    "text-caption text-grey-5"
-                                ).style("font-family: monospace;")
-
-                ui.separator().classes("q-mt-md")
-                ui.label("Shortcuts: 1-9 apply code, Ctrl+Z undo, Alt+Arrow navigate").classes(
-                    "text-caption text-grey-6 q-mb-sm"
+            if project and project["instructions"]:
+                ui.separator()
+                ui.label("Coding instructions:").classes(
+                    "text-subtitle2 text-weight-medium q-mt-sm"
                 )
-                ui.button("Got it!", on_click=onboarding_dialog.close).props(
-                    "unelevated color=primary"
-                ).classes("full-width")
+                ui.label(project["instructions"]).classes(
+                    "text-body2 text-grey-8 q-mb-sm"
+                ).style("white-space: pre-wrap;")
+
+            if codes:
+                ui.separator()
+                ui.label("Your codes:").classes(
+                    "text-subtitle2 text-weight-medium q-mt-sm q-mb-xs"
+                )
+                for i, code in enumerate(codes):
+                    colour = code["colour"] or "#999999"
+                    shortcut = str(i + 1) if i < 9 else ""
+                    with ui.row().classes("items-center q-py-xs").style("gap: 8px;"):
+                        ui.element("div").classes("ace-code-dot").style(
+                            f"background-color: {colour};"
+                        )
+                        ui.label(code["name"]).classes("text-body2")
+                        if code["description"]:
+                            ui.label(f"- {code['description']}").classes(
+                                "text-caption text-grey-7"
+                            )
+                        if shortcut:
+                            ui.label(f"[{shortcut}]").classes(
+                                "text-caption text-grey-5"
+                            ).style("font-family: monospace;")
+
+            ui.separator().classes("q-mt-md")
+            ui.label("Shortcuts: 1-9 apply code, Ctrl+Z undo, Alt+Arrow navigate").classes(
+                "text-caption text-grey-6 q-mb-sm"
+            )
+            ui.button("Got it!", on_click=onboarding_dialog.close).props(
+                "unelevated color=primary"
+            ).classes("full-width")
 
 
 # ---------------------------------------------------------------------------
@@ -674,9 +677,9 @@ def _open_code_picker(
                 "items-center q-py-xs cursor-pointer full-width"
             ).style("gap: 8px;").on(
                 "click",
-                lambda _e, c=code: _do_apply_code(
-                    c, sel, state, conn, coder_id, codes_by_id,
-                    text_container, annotation_list_display, dialog, undo_mgr,
+                lambda _e, c=code: _apply_code(
+                    c, state, conn, coder_id, codes_by_id,
+                    text_container, annotation_list_display, undo_mgr, dialog,
                 ),
             ):
                 ui.element("div").classes("ace-code-dot").style(
@@ -695,44 +698,8 @@ def _open_code_picker(
     dialog.open()
 
 
-def _do_apply_code(
-    code, sel, state, conn, coder_id, codes_by_id,
-    text_container, annotation_list_display, dialog, undo_mgr,
-):
-    source_id = get_assignments_for_coder(conn, coder_id)[state["current_index"]]["source_id"]
-
-    # Get the text content for offset conversion
-    content_row = get_source_content(conn, source_id)
-    text = content_row["content_text"] if content_row else ""
-
-    # JavaScript gives us character offsets (UTF-16 code units in the browser).
-    # Convert to Python codepoint offsets if there are surrogate pairs.
-    start_cp = utf16_to_codepoint(text, sel["start"])
-    end_cp = utf16_to_codepoint(text, sel["end"])
-
-    selected_text = text[start_cp:end_cp]
-
-    ann_id = add_annotation(
-        conn,
-        source_id=source_id,
-        coder_id=coder_id,
-        code_id=code["id"],
-        start_offset=start_cp,
-        end_offset=end_cp,
-        selected_text=selected_text,
-    )
-    undo_mgr.record_add(source_id, ann_id)
-
-    state["pending_selection"] = None
-    dialog.close()
-
-    _render_text(conn, source_id, coder_id, codes_by_id, text_container)
-    annotation_list_display.refresh()
-    ui.notify(f"Applied: {code['name']}", type="positive", position="bottom", timeout=1500)
-
-
-def _apply_code(code, state, conn, coder_id, codes_by_id, text_container, annotation_list_display, undo_mgr):
-    """Apply code from sidebar click (only if there's a pending selection)."""
+def _apply_code(code, state, conn, coder_id, codes_by_id, text_container, annotation_list_display, undo_mgr, dialog=None):
+    """Apply a code to the pending text selection."""
     sel = state.get("pending_selection")
     if not sel:
         ui.notify("Select text first, then click a code.", type="info", position="bottom", timeout=2000)
@@ -743,6 +710,7 @@ def _apply_code(code, state, conn, coder_id, codes_by_id, text_container, annota
     content_row = get_source_content(conn, source_id)
     text = content_row["content_text"] if content_row else ""
 
+    # JavaScript gives us UTF-16 code unit offsets; convert to Python codepoints.
     start_cp = utf16_to_codepoint(text, sel["start"])
     end_cp = utf16_to_codepoint(text, sel["end"])
     selected_text = text[start_cp:end_cp]
@@ -759,6 +727,8 @@ def _apply_code(code, state, conn, coder_id, codes_by_id, text_container, annota
     undo_mgr.record_add(source_id, ann_id)
 
     state["pending_selection"] = None
+    if dialog:
+        dialog.close()
     _render_text(conn, source_id, coder_id, codes_by_id, text_container)
     annotation_list_display.refresh()
     ui.notify(f"Applied: {code['name']}", type="positive", position="bottom", timeout=1500)
@@ -803,9 +773,9 @@ def _open_annotation_info(
                     ui.label(f'"{truncated}"').classes("text-caption text-grey-7 ellipsis")
                 ui.button(
                     icon="delete",
-                    on_click=lambda _e, a=ann: _delete_annotation_from_dialog(
+                    on_click=lambda _e, a=ann: _delete_annotation(
                         a, conn, coder_id, codes_by_id,
-                        text_container, annotation_list_display, dialog, undo_mgr,
+                        text_container, annotation_list_display, undo_mgr, dialog,
                     ),
                 ).props("flat round dense size=sm color=negative")
 
@@ -814,23 +784,12 @@ def _open_annotation_info(
     dialog.open()
 
 
-def _delete_annotation_from_dialog(
-    ann, conn, coder_id, codes_by_id,
-    text_container, annotation_list_display, dialog, undo_mgr,
-):
+def _delete_annotation(ann, conn, coder_id, codes_by_id, text_container, annotation_list_display, undo_mgr, dialog=None):
     source_id = ann["source_id"]
     undo_mgr.record_delete(source_id, ann["id"])
     delete_annotation(conn, ann["id"])
-    dialog.close()
-    _render_text(conn, source_id, coder_id, codes_by_id, text_container)
-    annotation_list_display.refresh()
-    ui.notify("Annotation removed.", type="info", position="bottom", timeout=1500)
-
-
-def _delete_annotation(ann, conn, coder_id, codes_by_id, text_container, annotation_list_display, undo_mgr):
-    source_id = ann["source_id"]
-    undo_mgr.record_delete(source_id, ann["id"])
-    delete_annotation(conn, ann["id"])
+    if dialog:
+        dialog.close()
     _render_text(conn, source_id, coder_id, codes_by_id, text_container)
     annotation_list_display.refresh()
     ui.notify("Annotation removed.", type="info", position="bottom", timeout=1500)
