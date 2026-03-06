@@ -12,6 +12,7 @@ from ace.db.connection import (
     open_project,
 )
 from ace.models.project import get_project
+from ace.services.cloud_detect import is_cloud_sync_path
 
 
 def _store_and_route(file_path: Path) -> None:
@@ -27,6 +28,14 @@ def _store_and_route(file_path: Path) -> None:
     checkpoint_and_close(conn)
 
     app.storage.general["project_path"] = str(file_path)
+
+    if is_cloud_sync_path(file_path):
+        ui.notify(
+            "Warning: This file is in a cloud-sync folder (Dropbox, OneDrive, iCloud, or Google Drive). "
+            "SQLite WAL files may not sync correctly. Consider moving the .ace file to a local directory.",
+            type="warning",
+            timeout=10000,
+        )
 
     if role == "manager":
         ui.navigate.to("/manager")
