@@ -4,7 +4,7 @@ from nicegui import app, ui
 
 from ace.db.connection import checkpoint_and_close, open_project
 from ace.models.project import get_project
-from ace.pages.manager import import_data
+from ace.pages.manager import codebook, import_data
 
 
 def register() -> None:
@@ -41,10 +41,7 @@ def register() -> None:
                 import_data.build(conn, stepper)
 
             with ui.step("Codebook"):
-                ui.label("Codebook configuration will go here.").classes("text-body2 text-grey-7")
-                with ui.row().classes("q-mt-md gap-2"):
-                    ui.button("Back", on_click=stepper.previous).props("flat")
-                    ui.button("Next: Assign & Export", icon="arrow_forward", on_click=stepper.next).props("unelevated")
+                codebook.build(conn, stepper)
 
             with ui.step("Assign & Export"):
                 ui.label("Assignment and export options will go here.").classes("text-body2 text-grey-7")
