@@ -395,23 +395,22 @@ def build(conn: sqlite3.Connection) -> None:
                             colour = code["colour"] if code else "#999999"
                             code_name = code["name"] if code else "Unknown"
                             selected = ann["selected_text"] or ""
-                            with ui.column().classes(
-                                "full-width ace-annot-row"
+                            with ui.row().classes(
+                                "items-center full-width ace-annot-row"
                             ).style(
-                                f"padding: 4px 6px; min-height: 0;"
+                                f"gap: 6px; padding: 2px 6px; min-height: 0;"
                                 f" border-left: 3px solid {colour};"
                             ):
-                                with ui.row().classes("items-center justify-between").style("gap: 4px;"):
-                                    ui.label(code_name).classes(
-                                        "text-caption text-weight-medium"
-                                    )
-                                    ui.button(
-                                        icon="close",
-                                        on_click=lambda _e, a=ann: _delete_annotation(a),
-                                    ).props("flat round dense size=xs color=grey-5").classes("ace-annot-del")
+                                ui.label(code_name).classes(
+                                    "text-caption text-weight-medium"
+                                ).style("flex-shrink: 0;")
                                 ui.label(f'"{selected}"').classes(
-                                    "text-caption text-grey-6"
-                                ).style("word-break: break-word;")
+                                    "text-caption text-grey-6 ellipsis"
+                                ).style("min-width: 0; flex: 1;")
+                                ui.button(
+                                    icon="close",
+                                    on_click=lambda _e, a=ann: _delete_annotation(a),
+                                ).props("flat round dense size=xs color=grey-5").classes("ace-annot-del")
 
             annotation_list_display()
 

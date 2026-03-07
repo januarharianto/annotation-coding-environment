@@ -1,4 +1,3 @@
-import asyncio
 from pathlib import Path
 
 from nicegui import app, ui
@@ -13,13 +12,6 @@ app.add_static_files("/static", str(static_dir))
 @app.on_connect
 def _inject_theme():
     ui.add_head_html('<link rel="stylesheet" href="/static/css/theme.css">')
-
-
-@app.on_disconnect
-async def _shutdown_on_close():
-    """Shut down server shortly after the browser window is closed."""
-    await asyncio.sleep(2)
-    app.shutdown()
 
 
 # Register all page routes at import time (required by NiceGUI multiprocessing)
