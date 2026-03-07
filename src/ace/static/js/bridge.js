@@ -165,14 +165,24 @@
         return;
       }
 
-      // 1-9 = apply code (only when there is an active text selection)
-      if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key >= "1" && e.key <= "9") {
-        var sel = window.getSelection();
-        if (sel && !sel.isCollapsed) {
-          e.preventDefault();
-          emitEvent("shortcut_apply_code", { index: parseInt(e.key) - 1 });
+      // 1-9, 0, a-z = apply code (only when there is an active text selection)
+      if (!e.ctrlKey && !e.metaKey && !e.altKey) {
+        var codeIndex = -1;
+        if (e.key >= "1" && e.key <= "9") {
+          codeIndex = parseInt(e.key) - 1; // 1-9 → indices 0-8
+        } else if (e.key === "0") {
+          codeIndex = 9; // 0 → index 9
+        } else if (e.key >= "a" && e.key <= "z") {
+          codeIndex = 10 + (e.key.charCodeAt(0) - 97); // a-z → indices 10-35
         }
-        return;
+        if (codeIndex >= 0) {
+          var sel = window.getSelection();
+          if (sel && !sel.isCollapsed) {
+            e.preventDefault();
+            emitEvent("shortcut_apply_code", { index: codeIndex });
+          }
+          return;
+        }
       }
     });
   }
