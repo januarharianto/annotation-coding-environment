@@ -166,14 +166,9 @@
       }
 
       // Alt+ArrowLeft / Alt+ArrowRight = prev/next source
-      if (e.altKey && e.key === "ArrowLeft") {
+      if (e.altKey && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
         e.preventDefault();
-        emitEvent("shortcut_prev_source", {});
-        return;
-      }
-      if (e.altKey && e.key === "ArrowRight") {
-        e.preventDefault();
-        emitEvent("shortcut_next_source", {});
+        emitEvent(e.key === "ArrowLeft" ? "shortcut_prev_source" : "shortcut_next_source", {});
         return;
       }
 
