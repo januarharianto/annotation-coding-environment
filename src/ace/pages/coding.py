@@ -332,9 +332,9 @@ def build(conn: sqlite3.Connection) -> None:
                     ):
                         # Name (clickable to apply code)
                         lbl = ui.label(code["name"]).classes(
-                            "text-caption col cursor-pointer"
+                            "text-body2 col cursor-pointer"
                         ).style(
-                            "min-width: 0; word-break: break-word; line-height: 1.3;"
+                            "min-width: 0; word-break: break-word; line-height: 1.4;"
                         ).on("click", _click_apply)
                         if code["description"]:
                             lbl.tooltip(code["description"])
