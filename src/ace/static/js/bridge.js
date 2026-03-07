@@ -134,6 +134,44 @@
     });
   }
 
+  function setupCodeListSortable() {
+    var _currentContainer = null;
+    var _sortable = null;
+
+    function initSortable() {
+      var container = document.querySelector(".ace-code-list");
+      if (!container || container === _currentContainer) return;
+
+      if (_sortable) {
+        _sortable.destroy();
+        _sortable = null;
+      }
+      _currentContainer = container;
+
+      // Only init if drag handles are present (not in sort-by-name mode)
+      if (!container.querySelector(".ace-drag-handle")) return;
+
+      _sortable = Sortable.create(container, {
+        animation: 150,
+        handle: ".ace-drag-handle",
+        ghostClass: "ace-drag-ghost",
+        onEnd: function () {
+          var items = container.querySelectorAll("[data-code-id]");
+          var ids = [];
+          for (var i = 0; i < items.length; i++) {
+            ids.push(items[i].dataset.codeId);
+          }
+          emitEvent("codes_reordered", { code_ids: ids });
+        },
+      });
+    }
+
+    new MutationObserver(initSortable).observe(document.body, {
+      childList: true,
+      subtree: true,
+    });
+  }
+
   function setupKeyboardShortcuts() {
     document.addEventListener("keydown", function (e) {
       // Don't capture when typing in input/textarea fields
@@ -193,10 +231,12 @@
       setupSelectionListener();
       setupAnnotationClickListener();
       setupKeyboardShortcuts();
+      setupCodeListSortable();
     });
   } else {
     setupSelectionListener();
     setupAnnotationClickListener();
     setupKeyboardShortcuts();
+    setupCodeListSortable();
   }
 })();

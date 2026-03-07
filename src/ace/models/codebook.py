@@ -61,6 +61,15 @@ def update_code(
     conn.commit()
 
 
+def reorder_codes(conn: sqlite3.Connection, code_ids: list[str]) -> None:
+    for i, code_id in enumerate(code_ids):
+        conn.execute(
+            "UPDATE codebook_code SET sort_order = ? WHERE id = ?",
+            (i, code_id),
+        )
+    conn.commit()
+
+
 def delete_code(conn: sqlite3.Connection, code_id: str) -> None:
     conn.execute("DELETE FROM codebook_code WHERE id = ?", (code_id,))
     conn.commit()
