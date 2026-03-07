@@ -6,6 +6,13 @@
 .ace-annotation:hover {
     filter: brightness(0.85);
 }
+.ace-annotation-flash {
+    animation: ace-flash 1s ease-out;
+}
+@keyframes ace-flash {
+    0%, 20% { outline: 2px solid #1976d2; outline-offset: 1px; }
+    100% { outline: 2px solid transparent; outline-offset: 1px; }
+}
 
 .ace-text-content {
     font-size: 1rem;

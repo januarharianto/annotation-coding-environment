@@ -400,11 +400,27 @@ def build(conn: sqlite3.Connection) -> None:
                             colour = code["colour"] if code else "#999999"
                             code_name = code["name"] if code else "Unknown"
                             selected = ann["selected_text"] or ""
+                            ann_id = ann["id"]
                             with ui.row().classes(
-                                "items-center full-width ace-hover-row"
+                                "items-center full-width ace-hover-row cursor-pointer"
                             ).style(
                                 f"gap: 6px; padding: 2px 6px; min-height: 0;"
                                 f" border-left: 3px solid {colour};"
+                            ).on(
+                                "click",
+                                lambda _e, aid=ann_id: ui.run_javascript(
+                                    f'(function() {{'
+                                    f'  var el = document.querySelector("[data-annotation-id=\\"{aid}\\"]");'
+                                    f'  if (!el) return;'
+                                    f'  el.scrollIntoView({{behavior: "smooth", block: "center"}});'
+                                    f'  el.classList.remove("ace-annotation-flash");'
+                                    f'  void el.offsetWidth;'
+                                    f'  el.classList.add("ace-annotation-flash");'
+                                    f'  el.addEventListener("animationend", function() {{'
+                                    f'    el.classList.remove("ace-annotation-flash");'
+                                    f'  }}, {{once: true}});'
+                                    f'}})();'
+                                ),
                             ):
                                 ui.label(code_name).classes(
                                     "text-caption text-weight-medium"
