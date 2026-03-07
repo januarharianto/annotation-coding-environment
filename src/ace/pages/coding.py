@@ -301,7 +301,7 @@ def build(conn: sqlite3.Connection) -> None:
                             "items-center full-width ace-hover-row ace-code-row"
                         ).style(
                             f"gap: 4px; padding: 2px 4px; flex-shrink: 0;"
-                            f" background: rgba({r},{g},{b},0.12); border-radius: 4px;"
+                            f" background: rgba({r},{g},{b},0.12);"
                         ) as row:
                             row.props(f'data-code-id={code["id"]}')
                             # Drag handle (hidden when sorting by name)
