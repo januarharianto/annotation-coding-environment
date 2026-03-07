@@ -576,7 +576,6 @@ def build(conn: sqlite3.Connection) -> None:
         state["pending_selection"] = None
         _render_text(conn, source_id, coder_id, codes_by_id, text_container)
         annotation_list_display.refresh()
-        ui.notify(f"Applied: {code['name']}", type="positive", position="bottom", timeout=1500)
 
     # ── Delete annotation ────────────────────────────────────────────
 
