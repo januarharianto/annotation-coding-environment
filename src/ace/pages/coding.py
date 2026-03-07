@@ -263,11 +263,11 @@ def build(conn: sqlite3.Connection) -> None:
         # ── Left Panel (280px) ───────────────────────────────────────
         with ui.column().classes("q-pa-md").style(
             "width: 280px; min-width: 280px; overflow-y: auto; "
-            "border-right: 1px solid #e0e0e0;"
+            "border-right: 1px solid #e0e0e0; height: 100%;"
         ):
             # Back button + app name
             with ui.row().classes("items-center gap-2"):
-                ui.button(icon="arrow_back", on_click=lambda: _go_home(conn)).props(
+                ui.button(icon="arrow_back", on_click=lambda: _go_home()).props(
                     "flat round dense"
                 ).tooltip("Back to home")
                 ui.label("ACE").classes("text-subtitle2 text-weight-bold text-grey-7")
@@ -298,38 +298,43 @@ def build(conn: sqlite3.Connection) -> None:
             @ui.refreshable
             def code_list():
                 for i, code in enumerate(codes):
-                    shortcut = str(i + 1) if i < 9 else ""
+                    if i < 9:
+                        shortcut = str(i + 1)
+                    elif i == 9:
+                        shortcut = "0"
+                    elif i < 36:
+                        shortcut = chr(ord("a") + i - 10)
+                    else:
+                        shortcut = ""
                     colour = code["colour"] or "#999999"
-                    with ui.row().classes(
-                        "items-center q-py-xs full-width"
-                    ).style("gap: 8px;"):
-                        # Colour dot + name (clickable to apply code)
-                        async def _click_apply(_e, c=code):
-                            await _apply_code(c)
 
-                        with ui.row().classes(
-                            "items-center col cursor-pointer"
-                        ).style("gap: 8px; min-width: 0;").on(
-                            "click", _click_apply,
-                        ):
-                            ui.element("div").classes("ace-code-dot").style(
-                                f"background-color: {colour};"
-                            )
-                            lbl = ui.label(code["name"]).classes(
-                                "text-body2"
-                            ).style("min-width: 0; word-break: break-word;")
-                            if code["description"]:
-                                lbl.tooltip(code["description"])
+                    async def _click_apply(_e, c=code):
+                        await _apply_code(c)
+
+                    with ui.row().classes(
+                        "items-center full-width ace-hover-row"
+                    ).style(
+                        f"gap: 4px; padding: 1px 2px 1px 0; min-height: 0;"
+                        f" border-left: 3px solid {colour}; padding-left: 6px;"
+                    ):
                         if shortcut:
                             ui.label(shortcut).classes(
                                 "text-caption text-grey-5"
                             ).style(
-                                "background: #eee; padding: 0 5px; font-family: monospace;"
+                                "font-family: monospace; width: 12px; text-align: center; flex-shrink: 0;"
                             )
-                        # "..." menu
+                        # Name (clickable to apply code)
+                        lbl = ui.label(code["name"]).classes(
+                            "text-caption col cursor-pointer"
+                        ).style(
+                            "min-width: 0; word-break: break-word; line-height: 1.3;"
+                        ).on("click", _click_apply)
+                        if code["description"]:
+                            lbl.tooltip(code["description"])
+                        # "..." menu (visible on hover)
                         with ui.button(icon="more_horiz").props(
-                            "flat round dense size=sm"
-                        ):
+                            "flat round dense size=xs"
+                        ).classes("ace-hover-action"):
                             with ui.menu():
                                 ui.menu_item(
                                     "Rename",
@@ -398,21 +403,21 @@ def build(conn: sqlite3.Connection) -> None:
                             code_name = code["name"] if code else "Unknown"
                             selected = ann["selected_text"] or ""
                             with ui.row().classes(
-                                "items-center full-width ace-annot-row"
-                            ).style("gap: 6px; padding: 2px 4px; min-height: 0;"):
-                                ui.element("div").classes("ace-code-dot").style(
-                                    f"background-color: {colour}; width: 10px; height: 10px;"
-                                )
+                                "items-center full-width ace-hover-row"
+                            ).style(
+                                f"gap: 6px; padding: 2px 6px; min-height: 0;"
+                                f" border-left: 3px solid {colour};"
+                            ):
                                 ui.label(code_name).classes(
                                     "text-caption text-weight-medium"
                                 ).style("flex-shrink: 0;")
                                 ui.label(f'"{selected}"').classes(
                                     "text-caption text-grey-6 ellipsis"
-                                ).style("min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;")
+                                ).style("min-width: 0; flex: 1;")
                                 ui.button(
                                     icon="close",
                                     on_click=lambda _e, a=ann: _delete_annotation(a),
-                                ).props("flat round dense size=xs color=grey-5").classes("ace-annot-del")
+                                ).props("flat round dense size=xs color=grey-5").classes("ace-hover-action")
 
             annotation_list_display()
 
@@ -753,11 +758,7 @@ def _load_notes(conn, source_id, coder_id, notes_area):
 # Navigation helper
 # ---------------------------------------------------------------------------
 
-def _go_home(conn):
-    try:
-        checkpoint_and_close(conn)
-    except Exception:
-        pass
+def _go_home():
     ui.navigate.to("/")
 
 
@@ -812,4 +813,12 @@ def register() -> None:
             ui.notify(str(exc), type="negative")
             ui.navigate.to("/")
             return
+
+        def _cleanup():
+            try:
+                checkpoint_and_close(conn)
+            except Exception:
+                pass
+
+        ui.context.client.on_disconnect(_cleanup)
         build(conn)

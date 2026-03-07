@@ -13,6 +13,7 @@ app.add_static_files("/static", str(static_dir))
 def _inject_theme():
     ui.add_head_html('<link rel="stylesheet" href="/static/css/theme.css">')
 
+
 # Register all page routes at import time (required by NiceGUI multiprocessing)
 landing.register()
 import_page.register()
