@@ -3,10 +3,9 @@
 import asyncio
 import platform
 import subprocess
-import tempfile
 from pathlib import Path
 
-from nicegui import app, events, ui
+from nicegui import app, ui
 
 from ace.db.connection import (
     checkpoint_and_close,
@@ -15,6 +14,17 @@ from ace.db.connection import (
 )
 from ace.models.source import list_sources
 from ace.services.cloud_detect import is_cloud_sync_path
+
+
+def _update_recent(file_path: Path) -> None:
+    """Add file_path to the recent files list (most recent first, max 3)."""
+    str_path = str(file_path)
+    app.storage.general["project_path"] = str_path
+    recents = list(app.storage.general.get("recent_files", []))
+    if str_path in recents:
+        recents.remove(str_path)
+    recents.insert(0, str_path)
+    app.storage.general["recent_files"] = recents[:3]
 
 
 def _store_and_route(file_path: Path) -> None:
@@ -28,7 +38,7 @@ def _store_and_route(file_path: Path) -> None:
     sources = list_sources(conn)
     checkpoint_and_close(conn)
 
-    app.storage.general["project_path"] = str(file_path)
+    _update_recent(file_path)
 
     if is_cloud_sync_path(file_path):
         ui.notify(
@@ -63,16 +73,40 @@ def register() -> None:
                     "Open Project", icon="folder_open", on_click=_open_file_picker
                 ).props("outline")
 
-            ui.separator().classes("q-my-sm").style("width: 300px")
+            # Recent files
+            recents: list = app.storage.general.get("recent_files", [])
+            # Filter to files that still exist
+            recents = [r for r in recents if Path(r).is_file()]
+            if recents:
+                ui.separator().classes("q-my-sm").style("width: 300px")
+                with ui.row().classes("items-center full-width justify-between").style("width: 300px"):
+                    ui.label("Recent").classes("text-caption text-grey-6")
 
-            ui.label("or drop an .ace file below").classes("text-caption text-grey-6")
-            ui.upload(
-                label="Drop .ace file here",
-                auto_upload=True,
-                on_upload=_handle_upload,
-            ).props('accept=".ace" flat bordered').classes("q-mt-xs").style(
-                "width: 300px"
-            )
+                    def _clear_recents():
+                        app.storage.general["recent_files"] = []
+                        ui.navigate.reload()
+
+                    ui.button("Clear", on_click=_clear_recents).props(
+                        "flat dense no-caps"
+                    ).classes("text-caption text-grey-5")
+                with ui.column().classes("gap-0").style("width: 300px"):
+                    for rpath in recents:
+                        p = Path(rpath)
+
+                        def _open_recent(_e, fp=p):
+                            _store_and_route(fp)
+
+                        with ui.row().classes(
+                            "items-center full-width cursor-pointer q-py-xs q-px-sm ace-recent-item"
+                        ).style(
+                            "gap: 8px; border-radius: 4px;"
+                        ).on("click", _open_recent):
+                            ui.icon("description", size="xs").classes("text-grey-6")
+                            with ui.column().classes("gap-0").style("min-width: 0;"):
+                                ui.label(p.stem).classes("text-body2 ellipsis")
+                                ui.label(str(p.parent)).classes(
+                                    "text-caption text-grey-5 ellipsis"
+                                )
 
 
 async def _open_new_dialog() -> None:
@@ -134,7 +168,7 @@ async def _open_new_dialog() -> None:
                     error_label.text = str(exc)
                     return
 
-                app.storage.general["project_path"] = str(file_path)
+                _update_recent(file_path)
                 dialog.close()
                 ui.navigate.to("/import")
 
@@ -179,15 +213,3 @@ async def _open_file_picker() -> None:
         _store_and_route(Path(chosen))
 
 
-async def _handle_upload(e: events.UploadEventArguments) -> None:
-    """Handle drag-and-drop upload of an .ace file."""
-    if not e.file.name.endswith(".ace"):
-        ui.notify("Please upload an .ace file.", type="warning")
-        return
-
-    tmp_dir = Path(tempfile.mkdtemp())
-    dest = tmp_dir / e.file.name
-    content = await e.file.read()
-    dest.write_bytes(content)
-
-    _store_and_route(dest)

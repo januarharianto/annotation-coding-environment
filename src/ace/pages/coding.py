@@ -19,7 +19,7 @@ from ace.models.annotation import (
 )
 from ace.models.assignment import get_assignments_for_coder, update_assignment_status
 from ace.models.codebook import add_code, delete_code, list_codes, update_code
-from ace.models.coder import list_coders
+from ace.models.coder import add_coder, list_coders
 from ace.models.project import get_project
 from ace.models.source import get_source, get_source_content, list_sources
 from ace.services.offset import utf16_to_codepoint
@@ -185,11 +185,9 @@ def build(conn: sqlite3.Connection) -> None:
     project = get_project(conn)
     coders = list_coders(conn)
     if not coders:
-        ui.label("No coder found in this project file.").classes("text-h6 q-pa-md")
-        return
-
-    coder = coders[0]
-    coder_id = coder["id"]
+        coder_id = add_coder(conn, "default")
+    else:
+        coder_id = coders[0]["id"]
 
     sources = list_sources(conn)
     if not sources:
