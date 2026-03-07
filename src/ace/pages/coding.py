@@ -1,10 +1,12 @@
 """New two-pane coding interface with inline code creation."""
 
+import hashlib
 import html
 import json
 import sqlite3
 import uuid
 from datetime import datetime, timezone
+from pathlib import Path
 
 from nicegui import app, events, ui
 
@@ -23,6 +25,9 @@ from ace.models.source import get_source, get_source_content, list_sources
 from ace.services.offset import utf16_to_codepoint
 from ace.services.palette import COLOUR_PALETTE, next_colour
 from ace.services.undo import UndoManager
+
+_STATIC_DIR = Path(__file__).parent.parent / "static"
+_BRIDGE_HASH = hashlib.md5((_STATIC_DIR / "js" / "bridge.js").read_bytes()).hexdigest()[:8]
 
 
 # ---------------------------------------------------------------------------
@@ -241,7 +246,7 @@ def build(conn: sqlite3.Connection) -> None:
 
     # ── Layout ────────────────────────────────────────────────────────
     ui.add_head_html('<link rel="stylesheet" href="/static/css/annotator.css">')
-    ui.add_head_html('<script src="/static/js/bridge.js" defer></script>')
+    ui.add_head_html(f'<script src="/static/js/bridge.js?v={_BRIDGE_HASH}" defer></script>')
 
     annotation_info_dialog = ui.dialog()
 
@@ -292,11 +297,13 @@ def build(conn: sqlite3.Connection) -> None:
                         "items-center q-py-xs full-width"
                     ).style("gap: 8px;"):
                         # Colour dot + name (clickable to apply code)
+                        async def _click_apply(_e, c=code):
+                            await _apply_code(c)
+
                         with ui.row().classes(
                             "items-center col cursor-pointer"
                         ).style("gap: 8px; min-width: 0;").on(
-                            "click",
-                            lambda _e, c=code: _apply_code(c),
+                            "click", _click_apply,
                         ):
                             ui.element("div").classes("ace-code-dot").style(
                                 f"background-color: {colour};"
@@ -362,7 +369,7 @@ def build(conn: sqlite3.Connection) -> None:
             source_header()
 
             # Text content area
-            text_container = ui.html("").classes("full-width")
+            text_container = ui.html("", sanitize=False).classes("full-width ace-text-content")
 
             ui.separator().classes("q-my-sm")
 
@@ -538,8 +545,13 @@ def build(conn: sqlite3.Connection) -> None:
 
     # ── Apply code (no dialog) ───────────────────────────────────────
 
-    def _apply_code(code):
+    async def _apply_code(code):
         sel = state.get("pending_selection")
+        if not sel:
+            # Fallback: read snapshot captured on last mousedown
+            sel = await ui.run_javascript("window.__aceLastSelection")
+            if sel:
+                state["pending_selection"] = sel
         if not sel:
             ui.notify("Select text first, then click a code.", type="info", position="bottom", timeout=2000)
             return
@@ -705,12 +717,10 @@ def build(conn: sqlite3.Connection) -> None:
         if idx < len(assignments) - 1:
             _navigate_to(idx + 1)
 
-    def _on_shortcut_apply_code(e):
+    async def _on_shortcut_apply_code(e):
         code_idx = e.args.get("index", -1)
         if 0 <= code_idx < len(codes):
-            sel = state.get("pending_selection")
-            if sel:
-                _apply_code(codes[code_idx])
+            await _apply_code(codes[code_idx])
 
     ui.on("shortcut_undo", _on_shortcut_undo)
     ui.on("shortcut_redo", _on_shortcut_redo)
@@ -735,7 +745,7 @@ def _render_text(conn, source_id, coder_id, codes_by_id, text_container):
     text = content_row["content_text"] if content_row else ""
     annotations = get_annotations_for_source(conn, source_id, coder_id)
     rendered = render_annotated_text(text, annotations, codes_by_id)
-    text_container.content = f'<div id="ace-text-content">{rendered}</div>'
+    text_container.content = rendered
 
 
 def _load_notes(conn, source_id, coder_id, notes_area):
