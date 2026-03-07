@@ -14,20 +14,7 @@ from ace.models.codebook import (
     update_code,
 )
 from ace.models.project import get_project, update_instructions
-
-# Colour-blind accessible palette
-COLOUR_PALETTE = [
-    ("#E69F00", "Orange"),
-    ("#56B4E9", "Sky blue"),
-    ("#009E73", "Teal"),
-    ("#F0E442", "Yellow"),
-    ("#0072B2", "Blue"),
-    ("#D55E00", "Red-orange"),
-    ("#CC79A7", "Pink"),
-    ("#999999", "Grey"),
-    ("#332288", "Indigo"),
-    ("#44AA99", "Cyan"),
-]
+from ace.services.palette import COLOUR_PALETTE
 
 
 def build(conn, stepper) -> None:
