@@ -296,11 +296,13 @@ def build(conn: sqlite3.Connection) -> None:
                     async def _click_apply(_e, c=code):
                         await _apply_code(c)
 
+                    hex_c = colour.lstrip("#")
+                    r, g, b = int(hex_c[:2], 16), int(hex_c[2:4], 16), int(hex_c[4:6], 16)
                     with ui.row().classes(
                         "items-center full-width ace-hover-row"
                     ).style(
-                        f"gap: 4px; padding: 1px 2px 1px 0; min-height: 0;"
-                        f" border-left: 3px solid {colour}; padding-left: 6px;"
+                        f"gap: 4px; padding: 2px 4px; min-height: 0; margin-bottom: 2px;"
+                        f" background: rgba({r},{g},{b},0.12); border-radius: 4px;"
                     ):
                         # Name (clickable to apply code)
                         lbl = ui.label(code["name"]).classes(
