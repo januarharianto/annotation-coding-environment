@@ -530,7 +530,7 @@ def build(conn: sqlite3.Connection) -> None:
                     ui.element("div").classes("ace-code-dot cursor-pointer").style(
                         f"background-color: {hex_colour}; width: 28px; height: 28px; "
                         f"border: {'3px solid #333' if is_current else '2px solid transparent'};"
-                    ).tooltip(colour_name).on("click", _pick)
+                    ).tooltip(hex_colour).on("click", _pick)
 
             with ui.row().classes("q-mt-md justify-end full-width"):
                 ui.button("Cancel", on_click=dlg.close).props("flat")
