@@ -267,7 +267,7 @@ def build(conn: sqlite3.Connection) -> None:
         ):
             # Back button + app name
             with ui.row().classes("items-center gap-2"):
-                ui.button(icon="arrow_back", on_click=lambda: _go_home(conn)).props(
+                ui.button(icon="arrow_back", on_click=lambda: _go_home()).props(
                     "flat round dense"
                 ).tooltip("Back to home")
                 ui.label("ACE").classes("text-subtitle2 text-weight-bold text-grey-7")
@@ -312,7 +312,7 @@ def build(conn: sqlite3.Connection) -> None:
                         await _apply_code(c)
 
                     with ui.row().classes(
-                        "items-center full-width ace-code-row"
+                        "items-center full-width ace-hover-row"
                     ).style(
                         f"gap: 4px; padding: 1px 2px 1px 0; min-height: 0;"
                         f" border-left: 3px solid {colour}; padding-left: 6px;"
@@ -334,7 +334,7 @@ def build(conn: sqlite3.Connection) -> None:
                         # "..." menu (visible on hover)
                         with ui.button(icon="more_horiz").props(
                             "flat round dense size=xs"
-                        ).classes("ace-code-menu"):
+                        ).classes("ace-hover-action"):
                             with ui.menu():
                                 ui.menu_item(
                                     "Rename",
@@ -403,7 +403,7 @@ def build(conn: sqlite3.Connection) -> None:
                             code_name = code["name"] if code else "Unknown"
                             selected = ann["selected_text"] or ""
                             with ui.row().classes(
-                                "items-center full-width ace-annot-row"
+                                "items-center full-width ace-hover-row"
                             ).style(
                                 f"gap: 6px; padding: 2px 6px; min-height: 0;"
                                 f" border-left: 3px solid {colour};"
@@ -417,7 +417,7 @@ def build(conn: sqlite3.Connection) -> None:
                                 ui.button(
                                     icon="close",
                                     on_click=lambda _e, a=ann: _delete_annotation(a),
-                                ).props("flat round dense size=xs color=grey-5").classes("ace-annot-del")
+                                ).props("flat round dense size=xs color=grey-5").classes("ace-hover-action")
 
             annotation_list_display()
 
@@ -758,11 +758,7 @@ def _load_notes(conn, source_id, coder_id, notes_area):
 # Navigation helper
 # ---------------------------------------------------------------------------
 
-def _go_home(conn):
-    try:
-        checkpoint_and_close(conn)
-    except Exception:
-        pass
+def _go_home():
     ui.navigate.to("/")
 
 
