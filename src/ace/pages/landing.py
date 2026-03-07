@@ -65,6 +65,22 @@ def register() -> None:
                 "text-subtitle1 text-grey-7"
             )
 
+            # Resume button if there's an active project with sources
+            current = app.storage.general.get("project_path")
+            if current and Path(current).is_file():
+                try:
+                    _conn = open_project(current)
+                    _has_sources = bool(list_sources(_conn))
+                    _conn.close()
+                except (ValueError, FileNotFoundError):
+                    _has_sources = False
+                if _has_sources:
+                    ui.button(
+                        "Resume Coding",
+                        icon="play_arrow",
+                        on_click=lambda: ui.navigate.to("/code"),
+                    ).props("unelevated color=primary").classes("q-mt-md").style("min-width: 200px;")
+
             with ui.row().classes("gap-4 q-mt-md"):
                 ui.button("New Project", icon="add", on_click=_open_new_dialog).props(
                     "unelevated"
