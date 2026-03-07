@@ -36,7 +36,7 @@ def _store_and_route(file_path: Path) -> None:
         return
 
     sources = list_sources(conn)
-    checkpoint_and_close(conn)
+    conn.close()
 
     _update_recent(file_path)
 
