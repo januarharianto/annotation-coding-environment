@@ -35,37 +35,6 @@ _CSS_HASH = hashlib.md5((_STATIC_DIR / "css" / "annotator.css").read_bytes()).he
 # Source note helpers
 # ---------------------------------------------------------------------------
 
-def _get_note(conn: sqlite3.Connection, source_id: str, coder_id: str) -> str:
-    row = conn.execute(
-        "SELECT note_text FROM source_note WHERE source_id = ? AND coder_id = ?",
-        (source_id, coder_id),
-    ).fetchone()
-    return row["note_text"] if row else ""
-
-
-def _upsert_note(
-    conn: sqlite3.Connection, source_id: str, coder_id: str, text: str
-) -> None:
-    now = datetime.now(timezone.utc).isoformat()
-    existing = conn.execute(
-        "SELECT id FROM source_note WHERE source_id = ? AND coder_id = ?",
-        (source_id, coder_id),
-    ).fetchone()
-    if existing:
-        conn.execute(
-            "UPDATE source_note SET note_text = ?, updated_at = ? "
-            "WHERE source_id = ? AND coder_id = ?",
-            (text, now, source_id, coder_id),
-        )
-    else:
-        note_id = uuid.uuid4().hex
-        conn.execute(
-            "INSERT INTO source_note (id, source_id, coder_id, note_text, created_at, updated_at) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
-            (note_id, source_id, coder_id, text, now, now),
-        )
-    conn.commit()
-
 
 # ---------------------------------------------------------------------------
 # Annotation rendering
@@ -266,15 +235,13 @@ def build(conn: sqlite3.Connection) -> None:
             "width: 280px; min-width: 280px; overflow-y: auto; "
             "border-right: 1px solid #e0e0e0; height: 100%;"
         ):
-            # Back button + app name
-            with ui.row().classes("items-center gap-2"):
+            # Back button + app name + sort toggle
+            with ui.row().classes("items-center full-width"):
                 ui.button(icon="arrow_back", on_click=lambda: _go_home()).props(
                     "flat round dense"
                 ).tooltip("Back to home")
                 ui.label("ACE").classes("text-subtitle2 text-weight-bold text-grey-7")
-
-            with ui.row().classes("items-center justify-between full-width q-mt-sm"):
-                ui.label("Codes").classes("text-subtitle1 text-weight-medium")
+                ui.space()
 
                 def _toggle_sort():
                     state["sort_codes"] = not state.get("sort_codes", False)
@@ -287,7 +254,9 @@ def build(conn: sqlite3.Connection) -> None:
                 ui.button(
                     icon="sort_by_alpha",
                     on_click=_toggle_sort,
-                ).props("flat round dense size=xs").tooltip("Sort by name")
+                ).props("flat round dense size=sm").tooltip("Sort codes by name")
+
+            ui.label("Codes").classes("text-subtitle1 text-weight-medium q-mt-sm")
 
             # ── Inline code creation ─────────────────────────────────
             new_code_input = ui.input(placeholder="+ New code...").props(
@@ -430,18 +399,6 @@ def build(conn: sqlite3.Connection) -> None:
 
             annotation_list_display()
 
-            ui.separator().classes("q-my-sm")
-
-            # Notes field
-            ui.label("Notes").classes("text-subtitle2 text-weight-medium")
-            notes_area = ui.textarea(placeholder="Add notes for this source...").props(
-                "outlined autogrow"
-            ).classes("full-width")
-
-            def _save_notes():
-                _upsert_note(conn, current_source_id(), coder_id, notes_area.value or "")
-
-            notes_area.on("blur", lambda _e: _save_notes())
 
     # ── Bottom Bar ────────────────────────────────────────────────────
     @ui.refreshable
@@ -672,7 +629,6 @@ def build(conn: sqlite3.Connection) -> None:
         _reload_assignments()
 
         _render_text(conn, source_id, coder_id, codes_by_id, text_container)
-        _load_notes(conn, source_id, coder_id, notes_area)
         source_header.refresh()
         bottom_bar.refresh()
         annotation_list_display.refresh()
@@ -742,7 +698,6 @@ def build(conn: sqlite3.Connection) -> None:
 
     # ── Initial render ───────────────────────────────────────────────
     _render_text(conn, current_source_id(), coder_id, codes_by_id, text_container)
-    _load_notes(conn, current_source_id(), coder_id, notes_area)
     _auto_transition()
 
 
@@ -757,10 +712,6 @@ def _render_text(conn, source_id, coder_id, codes_by_id, text_container):
     rendered = render_annotated_text(text, annotations, codes_by_id)
     text_container.content = rendered
 
-
-def _load_notes(conn, source_id, coder_id, notes_area):
-    note_text = _get_note(conn, source_id, coder_id)
-    notes_area.value = note_text or ""
 
 
 # ---------------------------------------------------------------------------
