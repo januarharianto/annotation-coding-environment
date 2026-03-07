@@ -442,7 +442,7 @@ def build(conn: sqlite3.Connection) -> None:
                     "Prev",
                     icon="chevron_left",
                     on_click=lambda: _navigate_to(max(0, idx - 1)),
-                ).props("flat dense" + (" disable" if idx == 0 else ""))
+                ).props("flat dense" + (" disable" if idx == 0 else "")).tooltip("Alt+\u2190")
 
                 ui.label(
                     f"Source {idx + 1} of {total} ({pct}% complete)"
@@ -452,7 +452,7 @@ def build(conn: sqlite3.Connection) -> None:
                     "Next",
                     icon="chevron_right",
                     on_click=lambda: _navigate_to(min(total - 1, idx + 1)),
-                ).props("flat dense" + (" disable" if idx >= total - 1 else "")).classes("q-mr-md")
+                ).props("flat dense" + (" disable" if idx >= total - 1 else "")).classes("q-mr-md").tooltip("Alt+\u2192")
 
             # Status buttons
             with ui.row().classes("items-center gap-2"):
