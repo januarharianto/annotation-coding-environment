@@ -54,6 +54,25 @@ def _store_and_route(file_path: Path) -> None:
         ui.navigate.to("/import")
 
 
+def _ask_overwrite(file_path: Path, on_confirm) -> None:
+    """Show a confirmation dialog to overwrite an existing .ace file."""
+    with ui.dialog(value=True) as dlg, ui.card().classes("q-pa-md"):
+        ui.label(f'"{file_path.name}" already exists.').classes("text-body1")
+        ui.label("Overwrite it? All existing data will be lost.").classes(
+            "text-body2 text-grey-7"
+        )
+        with ui.row().classes("q-mt-md justify-end full-width gap-2"):
+            ui.button("Cancel", on_click=dlg.close).props("flat")
+
+            def _confirm():
+                dlg.close()
+                on_confirm(overwrite=True)
+
+            ui.button("Overwrite", on_click=_confirm).props(
+                "unelevated color=negative"
+            )
+
+
 def register() -> None:
     """Register the landing page route."""
 
@@ -174,19 +193,25 @@ async def _open_new_dialog() -> None:
                 )
                 file_path = save_dir / f"{safe_name}.ace"
 
-                try:
-                    conn = create_project(file_path, name, desc_input.value.strip() or None)
-                    checkpoint_and_close(conn)
-                except FileExistsError:
-                    error_label.text = f"File already exists: {file_path.name}"
-                    return
-                except Exception as exc:
-                    error_label.text = str(exc)
-                    return
+                def _do_create(overwrite: bool = False) -> None:
+                    nonlocal file_path
+                    if overwrite and file_path.exists():
+                        file_path.unlink()
+                    try:
+                        conn = create_project(file_path, name, desc_input.value.strip() or None)
+                        checkpoint_and_close(conn)
+                    except FileExistsError:
+                        _ask_overwrite(file_path, _do_create)
+                        return
+                    except Exception as exc:
+                        error_label.text = str(exc)
+                        return
 
-                _update_recent(file_path)
-                dialog.close()
-                ui.navigate.to("/import")
+                    _update_recent(file_path)
+                    dialog.close()
+                    ui.navigate.to("/import")
+
+                _do_create()
 
             ui.button("Create", on_click=_create).props("unelevated color=primary")
 
