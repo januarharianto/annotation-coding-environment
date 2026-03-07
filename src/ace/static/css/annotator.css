@@ -28,6 +28,19 @@
     flex-shrink: 0;
 }
 
+.ace-keycap {
+    background: #2d2d2d;
+    color: #e0e0e0;
+    font-family: 'SF Mono', 'Menlo', 'Consolas', monospace;
+    font-size: 10px;
+    line-height: 1;
+    padding: 2px 5px;
+    border-radius: 3px;
+    border-bottom: 1px solid #1a1a1a;
+    box-shadow: 0 1px 0 rgba(0,0,0,0.3);
+    flex-shrink: 0;
+}
+
 .ace-hover-row .ace-hover-action {
     opacity: 0;
     transition: opacity 0.1s;
