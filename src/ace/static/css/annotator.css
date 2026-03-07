@@ -41,6 +41,22 @@
     flex-shrink: 0;
 }
 
+.ace-drag-handle {
+    cursor: grab;
+    opacity: 0;
+    transition: opacity 0.1s;
+    flex-shrink: 0;
+}
+.ace-hover-row:hover .ace-drag-handle {
+    opacity: 0.4;
+}
+.ace-drag-handle:hover {
+    opacity: 0.8 !important;
+}
+.ace-drag-ghost {
+    opacity: 0.4;
+}
+
 .ace-hover-row .ace-hover-action {
     opacity: 0;
     transition: opacity 0.1s;
