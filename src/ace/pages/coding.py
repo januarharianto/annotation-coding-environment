@@ -280,7 +280,7 @@ def build(conn: sqlite3.Connection) -> None:
             @ui.refreshable
             def code_list():
                 sorting = state.get("sort_codes", False)
-                with ui.column().classes("full-width ace-code-list gap-0"):
+                with ui.element("div").classes("full-width ace-code-list"):
                     for i, code in enumerate(codes):
                         if i < 9:
                             shortcut = str(i + 1)
