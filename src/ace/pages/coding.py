@@ -385,27 +385,34 @@ def build(conn: sqlite3.Connection) -> None:
             def annotation_list_display():
                 anns = get_annotations_for_source(conn, current_source_id(), coder_id)
                 if not anns:
-                    ui.label("No annotations yet.").classes("text-body2 text-grey-6")
+                    ui.label("No annotations yet.").classes("text-caption text-grey-6")
                 else:
-                    for ann in anns:
-                        code = codes_by_id.get(ann["code_id"])
-                        colour = code["colour"] if code else "#999999"
-                        code_name = code["name"] if code else "Unknown"
-                        with ui.row().classes("items-center q-py-xs full-width").style("gap: 8px;"):
-                            ui.element("div").classes("ace-code-dot").style(
-                                f"background-color: {colour};"
-                            )
+                    with ui.column().classes("full-width gap-0").style(
+                        "max-height: 150px; overflow-y: auto;"
+                    ):
+                        for ann in anns:
+                            code = codes_by_id.get(ann["code_id"])
+                            colour = code["colour"] if code else "#999999"
+                            code_name = code["name"] if code else "Unknown"
                             selected = ann["selected_text"] or ""
-                            truncated = selected[:60] + ("..." if len(selected) > 60 else "")
-                            with ui.column().classes("col").style("min-width: 0;"):
-                                ui.label(code_name).classes("text-caption text-weight-medium")
-                                ui.label(f'"{truncated}"').classes(
-                                    "text-caption text-grey-7 ellipsis"
+                            truncated = selected[:40] + ("..." if len(selected) > 40 else "")
+                            with ui.row().classes(
+                                "items-center full-width ace-annot-row"
+                            ).style("gap: 6px; padding: 2px 4px; min-height: 0;"):
+                                ui.element("div").style(
+                                    f"background-color: {colour}; width: 10px; height: 10px;"
+                                    " border-radius: 50%; flex-shrink: 0;"
                                 )
-                            ui.button(
-                                icon="close",
-                                on_click=lambda _e, a=ann: _delete_annotation(a),
-                            ).props("flat round dense size=sm color=negative")
+                                ui.label(code_name).classes(
+                                    "text-caption text-weight-medium"
+                                ).style("flex-shrink: 0;")
+                                ui.label(f'"{truncated}"').classes(
+                                    "text-caption text-grey-6 ellipsis"
+                                ).style("min-width: 0; flex: 1;")
+                                ui.button(
+                                    icon="close",
+                                    on_click=lambda _e, a=ann: _delete_annotation(a),
+                                ).props("flat round dense size=xs color=grey-5").classes("ace-annot-del")
 
             annotation_list_display()
 
