@@ -1,6 +1,6 @@
 """Tests for the annotation text renderer."""
 
-from ace.pages.coder.coding import render_annotated_text
+from ace.pages.coding import render_annotated_text
 
 
 def _ann(id, code_id, start, end, selected_text="text"):
