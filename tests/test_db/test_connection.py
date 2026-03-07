@@ -50,6 +50,16 @@ def test_open_project_uses_wal_mode(tmp_db):
     conn.close()
 
 
+def test_create_project_creates_default_coder(tmp_path):
+    from ace.db.connection import create_project, checkpoint_and_close
+    path = tmp_path / "test.ace"
+    conn = create_project(path, "Test")
+    row = conn.execute("SELECT * FROM coder").fetchone()
+    assert row is not None
+    assert row["name"] == "default"
+    checkpoint_and_close(conn)
+
+
 def test_checkpoint_and_close_switches_to_delete_mode(tmp_db):
     conn = create_project(tmp_db, "Test Project")
     checkpoint_and_close(conn)

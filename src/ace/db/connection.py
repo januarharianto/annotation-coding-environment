@@ -31,6 +31,13 @@ def create_project(
         (uuid.uuid4().hex, name, description, now, now),
     )
     conn.commit()
+
+    coder_id = uuid.uuid4().hex
+    conn.execute(
+        "INSERT INTO coder (id, name) VALUES (?, ?)",
+        (coder_id, "default"),
+    )
+    conn.commit()
     return conn
 
 
