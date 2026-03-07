@@ -71,6 +71,7 @@ def reorder_codes(conn: sqlite3.Connection, code_ids: list[str]) -> None:
 
 
 def delete_code(conn: sqlite3.Connection, code_id: str) -> None:
+    conn.execute("DELETE FROM annotation WHERE code_id = ?", (code_id,))
     conn.execute("DELETE FROM codebook_code WHERE id = ?", (code_id,))
     conn.commit()
 
