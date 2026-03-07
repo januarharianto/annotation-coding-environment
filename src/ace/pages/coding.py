@@ -811,4 +811,12 @@ def register() -> None:
             ui.notify(str(exc), type="negative")
             ui.navigate.to("/")
             return
+
+        def _cleanup():
+            try:
+                checkpoint_and_close(conn)
+            except Exception:
+                pass
+
+        ui.context.client.on_disconnect(_cleanup)
         build(conn)
