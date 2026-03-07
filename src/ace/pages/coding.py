@@ -265,10 +265,12 @@ def build(conn: sqlite3.Connection) -> None:
             "width: 280px; min-width: 280px; overflow-y: auto; "
             "border-right: 1px solid #e0e0e0;"
         ):
-            # Back button
-            ui.button(icon="arrow_back", on_click=lambda: _go_home(conn)).props(
-                "flat round dense"
-            ).tooltip("Back to home")
+            # Back button + app name
+            with ui.row().classes("items-center gap-2"):
+                ui.button(icon="arrow_back", on_click=lambda: _go_home(conn)).props(
+                    "flat round dense"
+                ).tooltip("Back to home")
+                ui.label("ACE").classes("text-subtitle2 text-weight-bold text-grey-7")
 
             ui.label("Codes").classes(
                 "text-subtitle1 text-weight-medium q-mt-sm"
