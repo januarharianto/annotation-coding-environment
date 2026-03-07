@@ -314,8 +314,8 @@ def build(conn: sqlite3.Connection) -> None:
                                 f"background-color: {colour};"
                             )
                             lbl = ui.label(code["name"]).classes(
-                                "text-body2 ellipsis"
-                            ).style("min-width: 0;")
+                                "text-body2"
+                            ).style("min-width: 0; word-break: break-word;")
                             if code["description"]:
                                 lbl.tooltip(code["description"])
                         if shortcut:
