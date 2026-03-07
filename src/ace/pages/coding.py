@@ -298,7 +298,14 @@ def build(conn: sqlite3.Connection) -> None:
             @ui.refreshable
             def code_list():
                 for i, code in enumerate(codes):
-                    shortcut = str(i + 1) if i < 9 else ""
+                    if i < 9:
+                        shortcut = str(i + 1)
+                    elif i == 9:
+                        shortcut = "0"
+                    elif i < 36:
+                        shortcut = chr(ord("a") + i - 10)
+                    else:
+                        shortcut = ""
                     colour = code["colour"] or "#999999"
 
                     async def _click_apply(_e, c=code):
