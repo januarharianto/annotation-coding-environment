@@ -38,6 +38,11 @@
     box-shadow: none !important;
 }
 
+/* Recent file list items */
+.ace-recent-item:hover {
+    background: #f0f0f0;
+}
+
 /* Dialog backdrop — slightly darker for contrast */
 .q-dialog__backdrop {
     background: rgba(0, 0, 0, 0.5);

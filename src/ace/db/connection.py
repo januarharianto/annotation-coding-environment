@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from ace.db.schema import ACE_APPLICATION_ID, create_schema
+from ace.models.coder import add_coder
 
 
 def create_project(
@@ -32,12 +33,7 @@ def create_project(
     )
     conn.commit()
 
-    coder_id = uuid.uuid4().hex
-    conn.execute(
-        "INSERT INTO coder (id, name) VALUES (?, ?)",
-        (coder_id, "default"),
-    )
-    conn.commit()
+    add_coder(conn, "default")
     return conn
 
 
