@@ -7,7 +7,7 @@
     filter: brightness(0.85);
 }
 
-#ace-text-content {
+.ace-text-content {
     font-size: 1rem;
     line-height: 1.8;
     white-space: pre-wrap;

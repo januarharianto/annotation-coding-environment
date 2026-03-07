@@ -10,7 +10,7 @@
 
   /**
    * Calculate the text offset of a given DOM node + offset within the
-   * #ace-text-content container.  Walks all text nodes in document order
+   * .ace-text-content container.  Walks all text nodes in document order
    * and sums their lengths until we reach the anchor/focus node.
    */
   function getTextOffset(container, node, offset) {
@@ -57,7 +57,7 @@
 
   function setupSelectionListener() {
     document.addEventListener("mouseup", function (e) {
-      var container = document.getElementById("ace-text-content");
+      var container = document.querySelector(".ace-text-content");
       if (!container) return;
 
       var sel = window.getSelection();
@@ -94,11 +94,16 @@
         endOffset = tmp;
       }
 
-      emitEvent("text_selected", {
+      var data = {
         start: startOffset,
         end: endOffset,
         text: selectedText,
-      });
+      };
+
+      // Store as fallback for when emitEvent doesn't deliver in time
+      window.__aceLastSelection = data;
+
+      emitEvent("text_selected", data);
     });
   }
 
@@ -119,7 +124,8 @@
           ids.push(el.dataset.annotationId);
         }
         el = el.parentElement;
-        if (el && el.id === "ace-text-content") break;
+        if (el && el.classList && el.classList.contains("ace-text-content"))
+          break;
       }
 
       if (ids.length > 0) {
