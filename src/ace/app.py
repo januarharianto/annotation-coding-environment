@@ -2,7 +2,7 @@ from pathlib import Path
 
 from nicegui import app, ui
 
-from ace.pages import coder, coding, import_page, landing, manager
+from ace.pages import coding, import_page, landing
 
 # Serve static assets (JS/CSS) and load global theme
 static_dir = Path(__file__).parent / "static"
@@ -16,8 +16,6 @@ def _inject_theme():
 # Register all page routes at import time (required by NiceGUI multiprocessing)
 landing.register()
 import_page.register()
-manager.register()
-coder.register()
 coding.register()
 
 
