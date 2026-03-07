@@ -95,7 +95,7 @@ def render_annotated_text(text: str, annotations: list, codes_by_id: dict) -> st
         end = ann["end_offset"]
         code = codes_by_id.get(ann["code_id"])
         colour = code["colour"] if code else "#999999"
-        code_name = code["name"] if code else "?"
+        code_name = code["name"] if code else "Unknown"
         events_list.append((start, 0, "open", {
             "id": ann["id"],
             "colour": colour,
@@ -398,9 +398,8 @@ def build(conn: sqlite3.Connection) -> None:
                             with ui.row().classes(
                                 "items-center full-width ace-annot-row"
                             ).style("gap: 6px; padding: 2px 4px; min-height: 0;"):
-                                ui.element("div").style(
+                                ui.element("div").classes("ace-code-dot").style(
                                     f"background-color: {colour}; width: 10px; height: 10px;"
-                                    " border-radius: 50%; flex-shrink: 0;"
                                 )
                                 ui.label(code_name).classes(
                                     "text-caption text-weight-medium"
@@ -640,9 +639,9 @@ def build(conn: sqlite3.Connection) -> None:
         if idx == state["current_index"]:
             return
 
-        # Auto-complete the departing source (unless flagged)
+        # Auto-complete the departing source (unless already complete or flagged)
         departing = current_assignment()
-        if departing["status"] != "flagged":
+        if departing["status"] not in ("complete", "flagged"):
             update_assignment_status(conn, departing["source_id"], coder_id, "complete")
 
         state["current_index"] = idx
