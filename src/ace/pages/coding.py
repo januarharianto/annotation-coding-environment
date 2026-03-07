@@ -395,7 +395,6 @@ def build(conn: sqlite3.Connection) -> None:
                             colour = code["colour"] if code else "#999999"
                             code_name = code["name"] if code else "Unknown"
                             selected = ann["selected_text"] or ""
-                            truncated = selected[:40] + ("..." if len(selected) > 40 else "")
                             with ui.row().classes(
                                 "items-center full-width ace-annot-row"
                             ).style("gap: 6px; padding: 2px 4px; min-height: 0;"):
@@ -406,9 +405,9 @@ def build(conn: sqlite3.Connection) -> None:
                                 ui.label(code_name).classes(
                                     "text-caption text-weight-medium"
                                 ).style("flex-shrink: 0;")
-                                ui.label(f'"{truncated}"').classes(
+                                ui.label(f'"{selected}"').classes(
                                     "text-caption text-grey-6 ellipsis"
-                                ).style("min-width: 0; flex: 1;")
+                                ).style("min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;")
                                 ui.button(
                                     icon="close",
                                     on_click=lambda _e, a=ann: _delete_annotation(a),
