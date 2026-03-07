@@ -28,6 +28,7 @@ from ace.services.undo import UndoManager
 
 _STATIC_DIR = Path(__file__).parent.parent / "static"
 _BRIDGE_HASH = hashlib.md5((_STATIC_DIR / "js" / "bridge.js").read_bytes()).hexdigest()[:8]
+_CSS_HASH = hashlib.md5((_STATIC_DIR / "css" / "annotator.css").read_bytes()).hexdigest()[:8]
 
 
 # ---------------------------------------------------------------------------
@@ -243,7 +244,7 @@ def build(conn: sqlite3.Connection) -> None:
         codes_by_id.update({c["id"]: c for c in codes})
 
     # ── Layout ────────────────────────────────────────────────────────
-    ui.add_head_html('<link rel="stylesheet" href="/static/css/annotator.css">')
+    ui.add_head_html(f'<link rel="stylesheet" href="/static/css/annotator.css?v={_CSS_HASH}">')
     ui.add_head_html(f'<script src="/static/js/bridge.js?v={_BRIDGE_HASH}" defer></script>')
     ui.add_head_html(
         '<style>'
