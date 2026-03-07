@@ -298,13 +298,11 @@ def build(conn: sqlite3.Connection) -> None:
                         async def _click_apply(_e, c=code):
                             await _apply_code(c)
 
-                        hex_c = colour.lstrip("#")
-                        r, g, b = int(hex_c[:2], 16), int(hex_c[2:4], 16), int(hex_c[4:6], 16)
                         with ui.row().classes(
                             "items-center full-width ace-hover-row ace-code-row"
                         ).style(
                             f"gap: 4px; padding: 2px 4px; flex-shrink: 0;"
-                            f" background: rgba({r},{g},{b},0.12);"
+                            f" border-left: 4px solid {colour};"
                         ) as row:
                             row.props(f'data-code-id={code["id"]}')
                             # Drag handle (hidden when sorting by name)
