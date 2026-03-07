@@ -245,12 +245,19 @@ def build(conn: sqlite3.Connection) -> None:
     # ── Layout ────────────────────────────────────────────────────────
     ui.add_head_html('<link rel="stylesheet" href="/static/css/annotator.css">')
     ui.add_head_html(f'<script src="/static/js/bridge.js?v={_BRIDGE_HASH}" defer></script>')
+    ui.add_head_html(
+        '<style>'
+        'html, body { overflow: hidden; height: 100vh; } '
+        '.q-page { display: flex; flex-direction: column; height: 100vh; } '
+        '.q-page > .nicegui-content { flex: 1; min-height: 0; display: flex; flex-direction: column; }'
+        '</style>'
+    )
 
     annotation_info_dialog = ui.dialog()
 
     # ── Main two-pane container ──────────────────────────────────────
-    with ui.row().classes("full-width no-wrap").style(
-        "height: calc(100vh - 52px); overflow: hidden;"
+    with ui.row().classes("full-width no-wrap col").style(
+        "overflow: hidden;"
     ):
 
         # ── Left Panel (280px) ───────────────────────────────────────
