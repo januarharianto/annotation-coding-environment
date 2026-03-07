@@ -18,7 +18,7 @@ from ace.models.annotation import (
     undelete_annotation,
 )
 from ace.models.assignment import get_assignments_for_coder, update_assignment_status
-from ace.models.codebook import add_code, delete_code, list_codes, update_code
+from ace.models.codebook import add_code, delete_code, list_codes, reorder_codes, update_code
 from ace.models.coder import add_coder, list_coders
 from ace.models.project import get_project
 from ace.models.source import get_source, get_source_content, list_sources
@@ -29,11 +29,7 @@ from ace.services.undo import UndoManager
 _STATIC_DIR = Path(__file__).parent.parent / "static"
 _BRIDGE_HASH = hashlib.md5((_STATIC_DIR / "js" / "bridge.js").read_bytes()).hexdigest()[:8]
 _CSS_HASH = hashlib.md5((_STATIC_DIR / "css" / "annotator.css").read_bytes()).hexdigest()[:8]
-
-
-# ---------------------------------------------------------------------------
-# Source note helpers
-# ---------------------------------------------------------------------------
+_SORTABLE_HASH = hashlib.md5((_STATIC_DIR / "js" / "Sortable.min.js").read_bytes()).hexdigest()[:8]
 
 
 # ---------------------------------------------------------------------------
@@ -214,6 +210,7 @@ def build(conn: sqlite3.Connection) -> None:
 
     # ── Layout ────────────────────────────────────────────────────────
     ui.add_head_html(f'<link rel="stylesheet" href="/static/css/annotator.css?v={_CSS_HASH}">')
+    ui.add_head_html(f'<script src="/static/js/Sortable.min.js?v={_SORTABLE_HASH}"></script>')
     ui.add_head_html(f'<script src="/static/js/bridge.js?v={_BRIDGE_HASH}" defer></script>')
     ui.add_head_html(
         '<style>'
@@ -236,13 +233,13 @@ def build(conn: sqlite3.Connection) -> None:
             "border-right: 1px solid #e0e0e0; height: 100%;"
         ):
             # Back button + app name
-            with ui.row().classes("items-center gap-2"):
+            with ui.row().classes("items-center gap-2").style("flex-shrink: 0;"):
                 ui.button(icon="arrow_back", on_click=lambda: _go_home()).props(
                     "flat round dense"
                 ).tooltip("Back to home")
                 ui.label("ACE").classes("text-subtitle2 text-weight-bold text-grey-7")
 
-            with ui.row().classes("items-center full-width q-mt-sm"):
+            with ui.row().classes("items-center full-width q-mt-sm").style("flex-shrink: 0;"):
                 ui.label("Codes").classes("text-subtitle1 text-weight-medium")
                 ui.space()
 
@@ -264,7 +261,7 @@ def build(conn: sqlite3.Connection) -> None:
             # ── Inline code creation ─────────────────────────────────
             new_code_input = ui.input(placeholder="+ New code...").props(
                 "dense outlined"
-            ).classes("full-width q-mb-sm")
+            ).classes("full-width q-mb-sm").style("flex-shrink: 0;")
 
             def _on_new_code_enter(e):
                 name = new_code_input.value.strip()
@@ -282,53 +279,63 @@ def build(conn: sqlite3.Connection) -> None:
             # ── Code list (refreshable) ──────────────────────────────
             @ui.refreshable
             def code_list():
-                for i, code in enumerate(codes):
-                    if i < 9:
-                        shortcut = str(i + 1)
-                    elif i == 9:
-                        shortcut = "0"
-                    elif i < 36:
-                        shortcut = chr(ord("a") + i - 10)
-                    else:
-                        shortcut = ""
-                    colour = code["colour"] or "#999999"
+                sorting = state.get("sort_codes", False)
+                with ui.element("div").classes("full-width ace-code-list").style("flex-shrink: 0;"):
+                    for i, code in enumerate(codes):
+                        if i < 9:
+                            shortcut = str(i + 1)
+                        elif i == 9:
+                            shortcut = "0"
+                        elif i < 36:
+                            shortcut = chr(ord("a") + i - 10)
+                        else:
+                            shortcut = ""
+                        colour = code["colour"] or "#999999"
 
-                    async def _click_apply(_e, c=code):
-                        await _apply_code(c)
+                        async def _click_apply(_e, c=code):
+                            await _apply_code(c)
 
-                    with ui.row().classes(
-                        "items-center full-width ace-hover-row"
-                    ).style(
-                        f"gap: 4px; padding: 1px 2px 1px 0; min-height: 0;"
-                        f" border-left: 3px solid {colour}; padding-left: 6px;"
-                    ):
-                        # Name (clickable to apply code)
-                        lbl = ui.label(code["name"]).classes(
-                            "text-body2 col cursor-pointer"
+                        hex_c = colour.lstrip("#")
+                        r, g, b = int(hex_c[:2], 16), int(hex_c[2:4], 16), int(hex_c[4:6], 16)
+                        with ui.row().classes(
+                            "items-center full-width ace-hover-row ace-code-row"
                         ).style(
-                            "min-width: 0; word-break: break-word; line-height: 1.4;"
-                        ).on("click", _click_apply)
-                        if code["description"]:
-                            lbl.tooltip(code["description"])
-                        if shortcut:
-                            ui.label(shortcut).classes("ace-keycap")
-                        # "..." menu (visible on hover)
-                        with ui.button(icon="more_horiz").props(
-                            "flat round dense size=xs"
-                        ).classes("ace-hover-action"):
-                            with ui.menu():
-                                ui.menu_item(
-                                    "Rename",
-                                    on_click=lambda _e, c=code: _open_rename_dialog(c),
+                            f"gap: 4px; padding: 2px 4px; flex-shrink: 0;"
+                            f" background: rgba({r},{g},{b},0.12);"
+                        ) as row:
+                            row.props(f'data-code-id={code["id"]}')
+                            # Drag handle (hidden when sorting by name)
+                            if not sorting:
+                                ui.icon("drag_indicator", size="xs").classes(
+                                    "ace-drag-handle text-grey-5"
                                 )
-                                ui.menu_item(
-                                    "Change colour",
-                                    on_click=lambda _e, c=code: _open_colour_dialog(c),
-                                )
-                                ui.menu_item(
-                                    "Delete",
-                                    on_click=lambda _e, c=code: _open_delete_dialog(c),
-                                )
+                            # Name (clickable to apply code)
+                            lbl = ui.label(code["name"]).classes(
+                                "text-body2 col cursor-pointer"
+                            ).style(
+                                "min-width: 0; word-break: break-word; line-height: 1.4;"
+                            ).on("click", _click_apply)
+                            if code["description"]:
+                                lbl.tooltip(code["description"])
+                            if shortcut:
+                                ui.label(shortcut).classes("ace-keycap")
+                            # "..." menu (visible on hover)
+                            with ui.button(icon="more_horiz").props(
+                                "flat round dense size=xs"
+                            ).classes("ace-hover-action"):
+                                with ui.menu():
+                                    ui.menu_item(
+                                        "Rename",
+                                        on_click=lambda _e, c=code: _open_rename_dialog(c),
+                                    )
+                                    ui.menu_item(
+                                        "Change colour",
+                                        on_click=lambda _e, c=code: _open_colour_dialog(c),
+                                    )
+                                    ui.menu_item(
+                                        "Delete",
+                                        on_click=lambda _e, c=code: _open_delete_dialog(c),
+                                    )
 
             code_list()
 
@@ -689,6 +696,14 @@ def build(conn: sqlite3.Connection) -> None:
         if 0 <= code_idx < len(codes):
             await _apply_code(codes[code_idx])
 
+    def _on_codes_reordered(e):
+        code_ids = e.args.get("code_ids", [])
+        if code_ids:
+            reorder_codes(conn, code_ids)
+            _refresh_codes()
+            code_list.refresh()
+
+    ui.on("codes_reordered", _on_codes_reordered)
     ui.on("shortcut_undo", _on_shortcut_undo)
     ui.on("shortcut_redo", _on_shortcut_redo)
     ui.on("shortcut_escape", _on_shortcut_escape)
