@@ -300,35 +300,33 @@ def build(conn: sqlite3.Connection) -> None:
                 for i, code in enumerate(codes):
                     shortcut = str(i + 1) if i < 9 else ""
                     colour = code["colour"] or "#999999"
-                    with ui.row().classes(
-                        "items-center q-py-xs full-width"
-                    ).style("gap: 8px;"):
-                        # Colour dot + name (clickable to apply code)
-                        async def _click_apply(_e, c=code):
-                            await _apply_code(c)
 
-                        with ui.row().classes(
-                            "items-center col cursor-pointer"
-                        ).style("gap: 8px; min-width: 0;").on(
-                            "click", _click_apply,
-                        ):
-                            ui.element("div").classes("ace-code-dot").style(
-                                f"background-color: {colour};"
-                            )
-                            lbl = ui.label(code["name"]).classes(
-                                "text-body2"
-                            ).style("min-width: 0; word-break: break-word;")
-                            if code["description"]:
-                                lbl.tooltip(code["description"])
+                    async def _click_apply(_e, c=code):
+                        await _apply_code(c)
+
+                    with ui.row().classes(
+                        "items-center full-width ace-code-row"
+                    ).style(
+                        f"gap: 6px; padding: 2px 4px 2px 0; min-height: 0;"
+                        f" border-left: 3px solid {colour}; padding-left: 8px;"
+                    ):
+                        # Name (clickable to apply code)
+                        lbl = ui.label(code["name"]).classes(
+                            "text-caption col cursor-pointer"
+                        ).style(
+                            "min-width: 0; word-break: break-word;"
+                        ).on("click", _click_apply)
+                        if code["description"]:
+                            lbl.tooltip(code["description"])
                         if shortcut:
                             ui.label(shortcut).classes(
                                 "text-caption text-grey-5"
                             ).style(
-                                "background: #eee; padding: 0 5px; font-family: monospace;"
+                                "background: #eee; padding: 0 4px; font-family: monospace; line-height: 1.4;"
                             )
                         # "..." menu
                         with ui.button(icon="more_horiz").props(
-                            "flat round dense size=sm"
+                            "flat round dense size=xs"
                         ):
                             with ui.menu():
                                 ui.menu_item(
@@ -397,22 +395,23 @@ def build(conn: sqlite3.Connection) -> None:
                             colour = code["colour"] if code else "#999999"
                             code_name = code["name"] if code else "Unknown"
                             selected = ann["selected_text"] or ""
-                            with ui.row().classes(
-                                "items-center full-width ace-annot-row"
-                            ).style("gap: 6px; padding: 2px 4px; min-height: 0;"):
-                                ui.element("div").classes("ace-code-dot").style(
-                                    f"background-color: {colour}; width: 10px; height: 10px;"
-                                )
-                                ui.label(code_name).classes(
-                                    "text-caption text-weight-medium"
-                                ).style("flex-shrink: 0;")
+                            with ui.column().classes(
+                                "full-width ace-annot-row"
+                            ).style(
+                                f"padding: 4px 6px; min-height: 0;"
+                                f" border-left: 3px solid {colour};"
+                            ):
+                                with ui.row().classes("items-center justify-between").style("gap: 4px;"):
+                                    ui.label(code_name).classes(
+                                        "text-caption text-weight-medium"
+                                    )
+                                    ui.button(
+                                        icon="close",
+                                        on_click=lambda _e, a=ann: _delete_annotation(a),
+                                    ).props("flat round dense size=xs color=grey-5").classes("ace-annot-del")
                                 ui.label(f'"{selected}"').classes(
-                                    "text-caption text-grey-6 ellipsis"
-                                ).style("min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;")
-                                ui.button(
-                                    icon="close",
-                                    on_click=lambda _e, a=ann: _delete_annotation(a),
-                                ).props("flat round dense size=xs color=grey-5").classes("ace-annot-del")
+                                    "text-caption text-grey-6"
+                                ).style("word-break: break-word;")
 
             annotation_list_display()
 

@@ -28,6 +28,10 @@
     flex-shrink: 0;
 }
 
+.ace-code-row:hover {
+    background: #f5f5f5;
+}
+
 .ace-annot-row .ace-annot-del {
     opacity: 0;
     transition: opacity 0.1s;
