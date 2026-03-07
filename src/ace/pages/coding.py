@@ -263,7 +263,7 @@ def build(conn: sqlite3.Connection) -> None:
         # ── Left Panel (280px) ───────────────────────────────────────
         with ui.column().classes("q-pa-md").style(
             "width: 280px; min-width: 280px; overflow-y: auto; "
-            "border-right: 1px solid #e0e0e0;"
+            "border-right: 1px solid #e0e0e0; height: 100%;"
         ):
             # Back button + app name
             with ui.row().classes("items-center gap-2"):
