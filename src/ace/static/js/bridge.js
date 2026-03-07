@@ -152,13 +152,6 @@
         return;
       }
 
-      // Ctrl/Cmd+Enter = mark complete
-      if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
-        e.preventDefault();
-        emitEvent("shortcut_mark_complete", {});
-        return;
-      }
-
       // Escape = dismiss (clear selection)
       if (e.key === "Escape") {
         emitEvent("shortcut_escape", {});
