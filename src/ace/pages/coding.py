@@ -462,15 +462,6 @@ def build(conn: sqlite3.Connection) -> None:
 
             # Status buttons
             with ui.row().classes("items-center gap-2"):
-                is_complete = asn["status"] == "complete"
-                ui.button(
-                    "Completed" if is_complete else "Mark Complete",
-                    icon="check_circle" if is_complete else "check_circle_outline",
-                    on_click=lambda: _toggle_complete(),
-                ).props(
-                    f"{'unelevated color=positive' if is_complete else 'outline'} dense"
-                )
-
                 is_flagged = asn["status"] == "flagged"
                 ui.button(
                     "Flagged" if is_flagged else "Flag",
@@ -649,6 +640,11 @@ def build(conn: sqlite3.Connection) -> None:
         if idx == state["current_index"]:
             return
 
+        # Auto-complete the departing source (unless flagged)
+        departing = current_assignment()
+        if departing["status"] != "flagged":
+            update_assignment_status(conn, departing["source_id"], coder_id, "complete")
+
         state["current_index"] = idx
         state["pending_selection"] = None
 
@@ -657,7 +653,8 @@ def build(conn: sqlite3.Connection) -> None:
 
         if asn["status"] == "pending":
             update_assignment_status(conn, source_id, coder_id, "in_progress")
-            _reload_assignments()
+
+        _reload_assignments()
 
         _render_text(conn, source_id, coder_id, codes_by_id, text_container)
         _load_notes(conn, source_id, coder_id, notes_area)
@@ -666,14 +663,6 @@ def build(conn: sqlite3.Connection) -> None:
         annotation_list_display.refresh()
 
     # ── Status toggles ───────────────────────────────────────────────
-
-    def _toggle_complete():
-        asn = current_assignment()
-        new_status = "in_progress" if asn["status"] == "complete" else "complete"
-        update_assignment_status(conn, asn["source_id"], coder_id, new_status)
-        _reload_assignments()
-        source_header.refresh()
-        bottom_bar.refresh()
 
     def _toggle_flag():
         asn = current_assignment()
@@ -710,9 +699,6 @@ def build(conn: sqlite3.Connection) -> None:
     def _on_shortcut_redo(_e):
         _do_redo(conn, coder_id, codes_by_id, text_container, annotation_list_display, undo_mgr, current_source_id())
 
-    def _on_shortcut_mark_complete(_e):
-        _toggle_complete()
-
     def _on_shortcut_escape(_e):
         state["pending_selection"] = None
         annotation_info_dialog.close()
@@ -734,7 +720,6 @@ def build(conn: sqlite3.Connection) -> None:
 
     ui.on("shortcut_undo", _on_shortcut_undo)
     ui.on("shortcut_redo", _on_shortcut_redo)
-    ui.on("shortcut_mark_complete", _on_shortcut_mark_complete)
     ui.on("shortcut_escape", _on_shortcut_escape)
     ui.on("shortcut_prev_source", _on_shortcut_prev)
     ui.on("shortcut_next_source", _on_shortcut_next)
