@@ -280,7 +280,7 @@ def build(conn: sqlite3.Connection) -> None:
             @ui.refreshable
             def code_list():
                 sorting = state.get("sort_codes", False)
-                with ui.element("div").classes("full-width ace-code-list"):
+                with ui.element("div").classes("full-width ace-code-list").style("flex-shrink: 0;"):
                     for i, code in enumerate(codes):
                         if i < 9:
                             shortcut = str(i + 1)
@@ -297,14 +297,13 @@ def build(conn: sqlite3.Connection) -> None:
 
                         hex_c = colour.lstrip("#")
                         r, g, b = int(hex_c[:2], 16), int(hex_c[2:4], 16), int(hex_c[4:6], 16)
-                        row = ui.row().classes(
-                            "items-center full-width ace-hover-row"
+                        with ui.row().classes(
+                            "items-center full-width ace-hover-row ace-code-row"
                         ).style(
                             f"gap: 4px; padding: 2px 4px; flex-shrink: 0;"
                             f" background: rgba({r},{g},{b},0.12); border-radius: 4px;"
-                        )
-                    row._props["data-code-id"] = code["id"]
-                    with row:
+                        ) as row:
+                            row.props(f'data-code-id={code["id"]}')
                             # Drag handle (hidden when sorting by name)
                             if not sorting:
                                 ui.icon("drag_indicator", size="xs").classes(
