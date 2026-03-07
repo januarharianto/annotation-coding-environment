@@ -312,12 +312,13 @@ def build(conn: sqlite3.Connection) -> None:
                                 )
                             # Name (clickable to apply code)
                             lbl = ui.label(code["name"]).classes(
-                                "text-body2 col cursor-pointer"
+                                "text-body2 col cursor-pointer ellipsis"
                             ).style(
-                                "min-width: 0; word-break: break-word; line-height: 1.4;"
+                                "min-width: 0; line-height: 1.4;"
                             ).on("click", _click_apply)
-                            if code["description"]:
-                                lbl.tooltip(code["description"])
+                            tip = f'{code["name"]}\n{code["description"]}' if code["description"] else code["name"]
+                            with lbl:
+                                ui.tooltip(tip).props(":delay=1000")
                             if shortcut:
                                 ui.label(shortcut).classes("ace-keycap")
                             # "..." menu (visible on hover)
