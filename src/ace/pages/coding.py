@@ -314,27 +314,27 @@ def build(conn: sqlite3.Connection) -> None:
                     with ui.row().classes(
                         "items-center full-width ace-code-row"
                     ).style(
-                        f"gap: 6px; padding: 2px 4px 2px 0; min-height: 0;"
-                        f" border-left: 3px solid {colour}; padding-left: 8px;"
+                        f"gap: 4px; padding: 1px 2px 1px 0; min-height: 0;"
+                        f" border-left: 3px solid {colour}; padding-left: 6px;"
                     ):
-                        # Name (clickable to apply code)
-                        lbl = ui.label(code["name"]).classes(
-                            "text-caption col cursor-pointer"
-                        ).style(
-                            "min-width: 0; word-break: break-word;"
-                        ).on("click", _click_apply)
-                        if code["description"]:
-                            lbl.tooltip(code["description"])
                         if shortcut:
                             ui.label(shortcut).classes(
                                 "text-caption text-grey-5"
                             ).style(
-                                "background: #eee; padding: 0 4px; font-family: monospace; line-height: 1.4;"
+                                "font-family: monospace; width: 12px; text-align: center; flex-shrink: 0;"
                             )
-                        # "..." menu
+                        # Name (clickable to apply code)
+                        lbl = ui.label(code["name"]).classes(
+                            "text-caption col cursor-pointer"
+                        ).style(
+                            "min-width: 0; word-break: break-word; line-height: 1.3;"
+                        ).on("click", _click_apply)
+                        if code["description"]:
+                            lbl.tooltip(code["description"])
+                        # "..." menu (visible on hover)
                         with ui.button(icon="more_horiz").props(
                             "flat round dense size=xs"
-                        ):
+                        ).classes("ace-code-menu"):
                             with ui.menu():
                                 ui.menu_item(
                                     "Rename",
