@@ -13,7 +13,7 @@ from ace.db.connection import (
     create_project,
     open_project,
 )
-from ace.models.project import get_project
+from ace.models.source import list_sources
 from ace.services.cloud_detect import is_cloud_sync_path
 
 
@@ -25,8 +25,7 @@ def _store_and_route(file_path: Path) -> None:
         ui.notify(str(exc), type="negative")
         return
 
-    project = get_project(conn)
-    role = project["file_role"]
+    sources = list_sources(conn)
     checkpoint_and_close(conn)
 
     app.storage.general["project_path"] = str(file_path)
@@ -39,12 +38,10 @@ def _store_and_route(file_path: Path) -> None:
             timeout=10000,
         )
 
-    if role == "manager":
-        ui.navigate.to("/manager")
-    elif role == "coder":
-        ui.navigate.to("/coder")
+    if sources:
+        ui.navigate.to("/code")
     else:
-        ui.notify(f"Unknown file_role: {role}", type="negative")
+        ui.navigate.to("/import")
 
 
 def register() -> None:
@@ -139,7 +136,7 @@ async def _open_new_dialog() -> None:
 
                 app.storage.general["project_path"] = str(file_path)
                 dialog.close()
-                ui.navigate.to("/manager")
+                ui.navigate.to("/import")
 
             ui.button("Create", on_click=_create).props("unelevated color=primary")
 
