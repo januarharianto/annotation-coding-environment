@@ -221,6 +221,9 @@ def build(conn: sqlite3.Connection) -> None:
     )
 
     annotation_info_dialog = ui.dialog()
+    rename_dialog = ui.dialog()
+    colour_dialog = ui.dialog()
+    delete_dialog = ui.dialog()
 
     # ── Main two-pane container ──────────────────────────────────────
     with ui.row().classes("full-width no-wrap col").style(
@@ -455,28 +458,31 @@ def build(conn: sqlite3.Connection) -> None:
     # ── Code management dialogs ──────────────────────────────────────
 
     def _open_rename_dialog(code):
-        with ui.dialog(value=True) as dlg, ui.card().classes("q-pa-md").style("min-width: 300px;"):
+        rename_dialog.clear()
+        with rename_dialog, ui.card().classes("q-pa-md").style("min-width: 300px;"):
             ui.label("Rename Code").classes("text-subtitle1 text-weight-medium q-mb-sm")
             name_input = ui.input("Name", value=code["name"]).props("autofocus outlined dense")
 
             with ui.row().classes("q-mt-md justify-end full-width gap-2"):
-                ui.button("Cancel", on_click=dlg.close).props("flat")
+                ui.button("Cancel", on_click=rename_dialog.close).props("flat")
 
                 def _save_rename():
                     new_name = name_input.value.strip()
                     if not new_name:
                         return
                     update_code(conn, code["id"], name=new_name)
-                    dlg.close()
+                    rename_dialog.close()
                     _refresh_codes()
                     code_list.refresh()
                     _render_text(conn, current_source_id(), coder_id, codes_by_id, text_container)
                     annotation_list_display.refresh()
 
                 ui.button("Save", on_click=_save_rename).props("unelevated color=primary")
+        rename_dialog.open()
 
     def _open_colour_dialog(code):
-        with ui.dialog(value=True) as dlg, ui.card().classes("q-pa-md").style("min-width: 300px;"):
+        colour_dialog.clear()
+        with colour_dialog, ui.card().classes("q-pa-md").style("min-width: 300px;"):
             ui.label("Change Colour").classes("text-subtitle1 text-weight-medium q-mb-sm")
             ui.label(code["name"]).classes("text-body2 text-grey-7 q-mb-sm")
 
@@ -484,7 +490,7 @@ def build(conn: sqlite3.Connection) -> None:
                 for hex_colour, colour_name in COLOUR_PALETTE:
                     def _pick(c=hex_colour):
                         update_code(conn, code["id"], colour=c)
-                        dlg.close()
+                        colour_dialog.close()
                         _refresh_codes()
                         code_list.refresh()
                         _render_text(conn, current_source_id(), coder_id, codes_by_id, text_container)
@@ -497,24 +503,26 @@ def build(conn: sqlite3.Connection) -> None:
                     ).tooltip(hex_colour).on("click", _pick)
 
             with ui.row().classes("q-mt-md justify-end full-width"):
-                ui.button("Cancel", on_click=dlg.close).props("flat")
+                ui.button("Cancel", on_click=colour_dialog.close).props("flat")
+        colour_dialog.open()
 
     def _open_delete_dialog(code):
-        with ui.dialog(value=True) as dlg, ui.card().classes("q-pa-md").style("min-width: 300px;"):
+        delete_dialog.clear()
+        with delete_dialog, ui.card().classes("q-pa-md").style("min-width: 300px;"):
             ui.label("Delete Code").classes("text-subtitle1 text-weight-medium q-mb-sm")
             ui.label(
                 f'Are you sure you want to delete "{code["name"]}"?'
             ).classes("text-body2 q-mb-sm")
             ui.label(
-                "Existing annotations using this code will remain but show as 'Unknown'."
+                "All annotations using this code will be permanently deleted."
             ).classes("text-caption text-grey-7 q-mb-md")
 
             with ui.row().classes("justify-end full-width gap-2"):
-                ui.button("Cancel", on_click=dlg.close).props("flat")
+                ui.button("Cancel", on_click=delete_dialog.close).props("flat")
 
                 def _confirm_delete():
                     delete_code(conn, code["id"])
-                    dlg.close()
+                    delete_dialog.close()
                     _refresh_codes()
                     code_list.refresh()
                     _render_text(conn, current_source_id(), coder_id, codes_by_id, text_container)
@@ -523,6 +531,7 @@ def build(conn: sqlite3.Connection) -> None:
                 ui.button("Delete", on_click=_confirm_delete).props(
                     "unelevated color=negative"
                 )
+        delete_dialog.open()
 
     # ── Apply code (no dialog) ───────────────────────────────────────
 
