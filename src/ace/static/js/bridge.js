@@ -225,6 +225,25 @@
     });
   }
 
+  // Scroll to and flash an annotation span by ID
+  window.aceFlashAnnotation = function (annotationId) {
+    var el = document.querySelector(
+      '[data-annotation-id="' + annotationId + '"]'
+    );
+    if (!el) return;
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    el.classList.remove("ace-annotation-flash");
+    void el.offsetWidth;
+    el.classList.add("ace-annotation-flash");
+    el.addEventListener(
+      "animationend",
+      function () {
+        el.classList.remove("ace-annotation-flash");
+      },
+      { once: true }
+    );
+  };
+
   // Initialize once DOM is ready
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", function () {

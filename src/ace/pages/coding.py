@@ -237,7 +237,7 @@ def build(conn: sqlite3.Connection) -> None:
         ):
             # Back button + app name
             with ui.row().classes("items-center gap-2").style("flex-shrink: 0;"):
-                ui.button(icon="arrow_back", on_click=lambda: _go_home()).props(
+                ui.button(icon="arrow_back", on_click=lambda: ui.navigate.to("/")).props(
                     "flat round dense"
                 ).tooltip("Back to home")
                 ui.label("ACE").classes("text-subtitle2 text-weight-bold text-grey-7")
@@ -409,17 +409,7 @@ def build(conn: sqlite3.Connection) -> None:
                             ).on(
                                 "click",
                                 lambda _e, aid=ann_id: ui.run_javascript(
-                                    f'(function() {{'
-                                    f'  var el = document.querySelector("[data-annotation-id=\\"{aid}\\"]");'
-                                    f'  if (!el) return;'
-                                    f'  el.scrollIntoView({{behavior: "smooth", block: "center"}});'
-                                    f'  el.classList.remove("ace-annotation-flash");'
-                                    f'  void el.offsetWidth;'
-                                    f'  el.classList.add("ace-annotation-flash");'
-                                    f'  el.addEventListener("animationend", function() {{'
-                                    f'    el.classList.remove("ace-annotation-flash");'
-                                    f'  }}, {{once: true}});'
-                                    f'}})();'
+                                    f'aceFlashAnnotation("{aid}")'
                                 ),
                             ):
                                 ui.label(code_name).classes(
@@ -470,6 +460,14 @@ def build(conn: sqlite3.Connection) -> None:
 
     bottom_bar()
 
+    # ── Helpers ────────────────────────────────────────────────────────
+
+    def _refresh_all():
+        _refresh_codes()
+        code_list.refresh()
+        _render_text(conn, current_source_id(), coder_id, codes_by_id, text_container)
+        annotation_list_display.refresh()
+
     # ── Code management dialogs ──────────────────────────────────────
 
     def _open_rename_dialog(code):
@@ -487,10 +485,7 @@ def build(conn: sqlite3.Connection) -> None:
                         return
                     update_code(conn, code["id"], name=new_name)
                     rename_dialog.close()
-                    _refresh_codes()
-                    code_list.refresh()
-                    _render_text(conn, current_source_id(), coder_id, codes_by_id, text_container)
-                    annotation_list_display.refresh()
+                    _refresh_all()
 
                 ui.button("Save", on_click=_save_rename).props("unelevated color=primary")
         rename_dialog.open()
@@ -506,10 +501,7 @@ def build(conn: sqlite3.Connection) -> None:
                     def _pick(c=hex_colour):
                         update_code(conn, code["id"], colour=c)
                         colour_dialog.close()
-                        _refresh_codes()
-                        code_list.refresh()
-                        _render_text(conn, current_source_id(), coder_id, codes_by_id, text_container)
-                        annotation_list_display.refresh()
+                        _refresh_all()
 
                     is_current = (code["colour"] or "").lower() == hex_colour.lower()
                     ui.element("div").classes("ace-code-dot cursor-pointer").style(
@@ -538,10 +530,7 @@ def build(conn: sqlite3.Connection) -> None:
                 def _confirm_delete():
                     delete_code(conn, code["id"])
                     delete_dialog.close()
-                    _refresh_codes()
-                    code_list.refresh()
-                    _render_text(conn, current_source_id(), coder_id, codes_by_id, text_container)
-                    annotation_list_display.refresh()
+                    _refresh_all()
 
                 ui.button("Delete", on_click=_confirm_delete).props(
                     "unelevated color=negative"
@@ -696,10 +685,10 @@ def build(conn: sqlite3.Connection) -> None:
     # ── Keyboard shortcut handlers ───────────────────────────────────
 
     def _on_shortcut_undo(_e):
-        _do_undo(conn, coder_id, codes_by_id, text_container, annotation_list_display, undo_mgr, current_source_id())
+        _do_undo_redo(conn, coder_id, codes_by_id, text_container, annotation_list_display, undo_mgr, current_source_id())
 
     def _on_shortcut_redo(_e):
-        _do_redo(conn, coder_id, codes_by_id, text_container, annotation_list_display, undo_mgr, current_source_id())
+        _do_undo_redo(conn, coder_id, codes_by_id, text_container, annotation_list_display, undo_mgr, current_source_id(), redo=True)
 
     def _on_shortcut_escape(_e):
         state["pending_selection"] = None
@@ -754,45 +743,28 @@ def _render_text(conn, source_id, coder_id, codes_by_id, text_container):
 
 
 # ---------------------------------------------------------------------------
-# Navigation helper
-# ---------------------------------------------------------------------------
-
-def _go_home():
-    ui.navigate.to("/")
-
-
-# ---------------------------------------------------------------------------
 # Undo / redo
 # ---------------------------------------------------------------------------
 
-def _do_undo(conn, coder_id, codes_by_id, text_container, annotation_list_display, undo_mgr, source_id):
-    action = undo_mgr.undo(source_id)
-    if action is None:
-        ui.notify("Nothing to undo.", type="info", position="bottom", timeout=1000)
-        return
-    ann_id = action["annotation_id"]
-    if action["type"] == "undo_add":
-        delete_annotation(conn, ann_id)
-    elif action["type"] == "undo_delete":
-        undelete_annotation(conn, ann_id)
-    _render_text(conn, source_id, coder_id, codes_by_id, text_container)
-    annotation_list_display.refresh()
-    ui.notify("Undone.", type="info", position="bottom", timeout=1000)
+_UNDO_OPS = {"undo_add": "delete", "undo_delete": "undelete"}
+_REDO_OPS = {"redo_add": "undelete", "redo_delete": "delete"}
 
 
-def _do_redo(conn, coder_id, codes_by_id, text_container, annotation_list_display, undo_mgr, source_id):
-    action = undo_mgr.redo(source_id)
+def _do_undo_redo(conn, coder_id, codes_by_id, text_container, annotation_list_display, undo_mgr, source_id, *, redo=False):
+    label = "redo" if redo else "undo"
+    action = (undo_mgr.redo if redo else undo_mgr.undo)(source_id)
     if action is None:
-        ui.notify("Nothing to redo.", type="info", position="bottom", timeout=1000)
+        ui.notify(f"Nothing to {label}.", type="info", position="bottom", timeout=1000)
         return
-    ann_id = action["annotation_id"]
-    if action["type"] == "redo_add":
-        undelete_annotation(conn, ann_id)
-    elif action["type"] == "redo_delete":
-        delete_annotation(conn, ann_id)
+    ops = _REDO_OPS if redo else _UNDO_OPS
+    op = ops.get(action["type"])
+    if op == "delete":
+        delete_annotation(conn, action["annotation_id"])
+    elif op == "undelete":
+        undelete_annotation(conn, action["annotation_id"])
     _render_text(conn, source_id, coder_id, codes_by_id, text_container)
     annotation_list_display.refresh()
-    ui.notify("Redone.", type="info", position="bottom", timeout=1000)
+    ui.notify(f"{label.title()}.", type="info", position="bottom", timeout=1000)
 
 
 # ---------------------------------------------------------------------------
