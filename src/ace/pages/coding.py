@@ -235,12 +235,15 @@ def build(conn: sqlite3.Connection) -> None:
             "width: 280px; min-width: 280px; overflow-y: auto; "
             "border-right: 1px solid #e0e0e0; height: 100%;"
         ):
-            # Back button + app name + sort toggle
-            with ui.row().classes("items-center full-width"):
+            # Back button + app name
+            with ui.row().classes("items-center gap-2"):
                 ui.button(icon="arrow_back", on_click=lambda: _go_home()).props(
                     "flat round dense"
                 ).tooltip("Back to home")
                 ui.label("ACE").classes("text-subtitle2 text-weight-bold text-grey-7")
+
+            with ui.row().classes("items-center full-width q-mt-sm"):
+                ui.label("Codes").classes("text-subtitle1 text-weight-medium")
                 ui.space()
 
                 def _toggle_sort():
@@ -254,9 +257,9 @@ def build(conn: sqlite3.Connection) -> None:
                 ui.button(
                     icon="sort_by_alpha",
                     on_click=_toggle_sort,
-                ).props("flat round dense size=sm").tooltip("Sort codes by name")
-
-            ui.label("Codes").classes("text-subtitle1 text-weight-medium q-mt-sm")
+                ).props("flat dense size=sm").classes(
+                    "text-grey-7"
+                ).tooltip("Sort codes by name")
 
             # ── Inline code creation ─────────────────────────────────
             new_code_input = ui.input(placeholder="+ New code...").props(
@@ -337,13 +340,21 @@ def build(conn: sqlite3.Connection) -> None:
             def source_header():
                 asn = current_assignment()
                 src = get_source(conn, asn["source_id"])
-                with ui.row().classes("items-center q-mb-sm"):
+                with ui.row().classes("items-center full-width q-mb-sm"):
                     ui.label(src["display_id"]).classes("text-h6 text-weight-medium")
                     status = asn["status"]
                     icon_name, icon_colour = _STATUS_ICONS.get(status, ("help", "grey"))
                     ui.icon(icon_name).style(
                         f"color: {icon_colour}; font-size: 1.2rem;"
                     ).tooltip(status.replace("_", " ").title())
+                    ui.space()
+                    is_flagged = asn["status"] == "flagged"
+                    ui.button(
+                        icon="flag",
+                        on_click=lambda: _toggle_flag(),
+                    ).props(
+                        f"{'unelevated color=negative' if is_flagged else 'flat color=grey-5'} round dense size=sm"
+                    ).tooltip("Flagged" if is_flagged else "Flag this source")
 
                 if src["metadata_json"]:
                     try:
@@ -430,18 +441,7 @@ def build(conn: sqlite3.Connection) -> None:
                     "Next",
                     icon="chevron_right",
                     on_click=lambda: _navigate_to(min(total - 1, idx + 1)),
-                ).props("flat dense" + (" disable" if idx >= total - 1 else "")).classes("q-mr-md").tooltip("Alt+\u2192")
-
-            # Status buttons
-            with ui.row().classes("items-center gap-2"):
-                is_flagged = asn["status"] == "flagged"
-                ui.button(
-                    "Flagged" if is_flagged else "Flag",
-                    icon="flag",
-                    on_click=lambda: _toggle_flag(),
-                ).props(
-                    f"{'unelevated color=negative' if is_flagged else 'outline'} dense"
-                )
+                ).props("flat dense" + (" disable" if idx >= total - 1 else "")).tooltip("Alt+\u2192")
 
     bottom_bar()
 
