@@ -236,13 +236,13 @@ def build(conn: sqlite3.Connection) -> None:
             "border-right: 1px solid #e0e0e0; height: 100%;"
         ):
             # Back button + app name
-            with ui.row().classes("items-center gap-2"):
+            with ui.row().classes("items-center gap-2").style("flex-shrink: 0;"):
                 ui.button(icon="arrow_back", on_click=lambda: _go_home()).props(
                     "flat round dense"
                 ).tooltip("Back to home")
                 ui.label("ACE").classes("text-subtitle2 text-weight-bold text-grey-7")
 
-            with ui.row().classes("items-center full-width q-mt-sm"):
+            with ui.row().classes("items-center full-width q-mt-sm").style("flex-shrink: 0;"):
                 ui.label("Codes").classes("text-subtitle1 text-weight-medium")
                 ui.space()
 
@@ -264,7 +264,7 @@ def build(conn: sqlite3.Connection) -> None:
             # ── Inline code creation ─────────────────────────────────
             new_code_input = ui.input(placeholder="+ New code...").props(
                 "dense outlined"
-            ).classes("full-width q-mb-sm")
+            ).classes("full-width q-mb-sm").style("flex-shrink: 0;")
 
             def _on_new_code_enter(e):
                 name = new_code_input.value.strip()
@@ -301,7 +301,7 @@ def build(conn: sqlite3.Connection) -> None:
                     with ui.row().classes(
                         "items-center full-width ace-hover-row"
                     ).style(
-                        f"gap: 4px; padding: 2px 4px; min-height: 0; margin-bottom: 2px;"
+                        f"gap: 4px; padding: 2px 4px; margin-bottom: 2px; flex-shrink: 0;"
                         f" background: rgba({r},{g},{b},0.12); border-radius: 4px;"
                     ):
                         # Name (clickable to apply code)
