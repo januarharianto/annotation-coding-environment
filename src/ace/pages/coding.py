@@ -28,6 +28,7 @@ from ace.services.undo import UndoManager
 
 _STATIC_DIR = Path(__file__).parent.parent / "static"
 _BRIDGE_HASH = hashlib.md5((_STATIC_DIR / "js" / "bridge.js").read_bytes()).hexdigest()[:8]
+_CSS_HASH = hashlib.md5((_STATIC_DIR / "css" / "annotator.css").read_bytes()).hexdigest()[:8]
 
 
 # ---------------------------------------------------------------------------
@@ -243,7 +244,7 @@ def build(conn: sqlite3.Connection) -> None:
         codes_by_id.update({c["id"]: c for c in codes})
 
     # ── Layout ────────────────────────────────────────────────────────
-    ui.add_head_html('<link rel="stylesheet" href="/static/css/annotator.css">')
+    ui.add_head_html(f'<link rel="stylesheet" href="/static/css/annotator.css?v={_CSS_HASH}">')
     ui.add_head_html(f'<script src="/static/js/bridge.js?v={_BRIDGE_HASH}" defer></script>')
     ui.add_head_html(
         '<style>'
@@ -272,9 +273,21 @@ def build(conn: sqlite3.Connection) -> None:
                 ).tooltip("Back to home")
                 ui.label("ACE").classes("text-subtitle2 text-weight-bold text-grey-7")
 
-            ui.label("Codes").classes(
-                "text-subtitle1 text-weight-medium q-mt-sm"
-            )
+            with ui.row().classes("items-center justify-between full-width q-mt-sm"):
+                ui.label("Codes").classes("text-subtitle1 text-weight-medium")
+
+                def _toggle_sort():
+                    state["sort_codes"] = not state.get("sort_codes", False)
+                    if state["sort_codes"]:
+                        codes.sort(key=lambda c: c["name"].lower())
+                    else:
+                        _refresh_codes()  # restore DB order
+                    code_list.refresh()
+
+                ui.button(
+                    icon="sort_by_alpha",
+                    on_click=_toggle_sort,
+                ).props("flat round dense size=xs").tooltip("Sort by name")
 
             # ── Inline code creation ─────────────────────────────────
             new_code_input = ui.input(placeholder="+ New code...").props(
@@ -317,20 +330,16 @@ def build(conn: sqlite3.Connection) -> None:
                         f"gap: 4px; padding: 1px 2px 1px 0; min-height: 0;"
                         f" border-left: 3px solid {colour}; padding-left: 6px;"
                     ):
-                        if shortcut:
-                            ui.label(shortcut).classes(
-                                "text-caption text-grey-5"
-                            ).style(
-                                "font-family: monospace; width: 12px; text-align: center; flex-shrink: 0;"
-                            )
                         # Name (clickable to apply code)
                         lbl = ui.label(code["name"]).classes(
-                            "text-caption col cursor-pointer"
+                            "text-body2 col cursor-pointer"
                         ).style(
-                            "min-width: 0; word-break: break-word; line-height: 1.3;"
+                            "min-width: 0; word-break: break-word; line-height: 1.4;"
                         ).on("click", _click_apply)
                         if code["description"]:
                             lbl.tooltip(code["description"])
+                        if shortcut:
+                            ui.label(shortcut).classes("ace-keycap")
                         # "..." menu (visible on hover)
                         with ui.button(icon="more_horiz").props(
                             "flat round dense size=xs"
@@ -521,7 +530,7 @@ def build(conn: sqlite3.Connection) -> None:
                     ui.element("div").classes("ace-code-dot cursor-pointer").style(
                         f"background-color: {hex_colour}; width: 28px; height: 28px; "
                         f"border: {'3px solid #333' if is_current else '2px solid transparent'};"
-                    ).tooltip(colour_name).on("click", _pick)
+                    ).tooltip(hex_colour).on("click", _pick)
 
             with ui.row().classes("q-mt-md justify-end full-width"):
                 ui.button("Cancel", on_click=dlg.close).props("flat")
