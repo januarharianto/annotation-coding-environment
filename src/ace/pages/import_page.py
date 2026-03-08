@@ -7,7 +7,9 @@ import pandas as pd
 from nicegui import app, events, ui
 
 from ace.db.connection import open_project
+from ace.models.project import get_project
 from ace.models.source import list_sources
+from ace.pages.header import build_header
 from ace.services.importer import import_csv, import_text_files
 
 
@@ -41,8 +43,10 @@ def _build(conn) -> None:
         "import_mode": None,  # "tabular" or "text_files"
     }
 
+    project = get_project(conn)
+    build_header(project_name=project["name"] if project else "ACE")
+
     with ui.column().classes("mx-auto q-pa-lg").style("max-width: 700px; width: 100%;"):
-        ui.label("ACE").classes("text-subtitle2 text-weight-bold text-grey-7")
         ui.label("Import Data").classes("text-h5 text-weight-bold q-mb-sm")
 
         # -- Existing sources summary --
