@@ -1,3 +1,7 @@
+import os
+import signal
+import subprocess
+import time
 from pathlib import Path
 
 from nicegui import app, ui
@@ -20,5 +24,26 @@ import_page.register()
 coding.register()
 
 
+def _kill_stale_server(port: int) -> None:
+    """Kill any existing process on the given port so we can bind cleanly."""
+    try:
+        result = subprocess.run(
+            ["lsof", "-ti", f":{port}"],
+            capture_output=True, text=True, timeout=5,
+        )
+        pids = result.stdout.strip().splitlines()
+        if not pids:
+            return
+        for pid in pids:
+            try:
+                os.kill(int(pid), signal.SIGTERM)
+            except (ProcessLookupError, ValueError):
+                pass
+        time.sleep(0.5)
+    except (subprocess.SubprocessError, FileNotFoundError):
+        pass
+
+
 def run():
+    _kill_stale_server(8080)
     ui.run(host="127.0.0.1", port=8080, title="ACE", storage_secret="ace-local", reload=False)
