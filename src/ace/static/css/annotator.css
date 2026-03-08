@@ -87,3 +87,11 @@
     background: #c5cae9;
     font-weight: 500;
 }
+
+.ace-no-scrollbar {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+.ace-no-scrollbar::-webkit-scrollbar {
+    display: none;
+}
