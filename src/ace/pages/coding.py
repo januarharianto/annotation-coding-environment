@@ -231,7 +231,7 @@ def build(conn: sqlite3.Connection) -> None:
     ):
 
         # ── Left Panel (280px) ───────────────────────────────────────
-        with ui.column().classes("q-pa-md").style(
+        with ui.column().classes("q-pa-md ace-no-scrollbar").style(
             "width: 280px; min-width: 280px; overflow-y: auto; "
             "border-right: 1px solid #e0e0e0; height: 100%;"
         ):
@@ -392,7 +392,7 @@ def build(conn: sqlite3.Connection) -> None:
                 if not anns:
                     ui.label("No annotations yet.").classes("text-caption text-grey-6")
                 else:
-                    with ui.column().classes("full-width gap-0").style(
+                    with ui.column().classes("full-width gap-0 ace-no-scrollbar").style(
                         "max-height: 150px; overflow-y: auto;"
                     ):
                         for ann in anns:
