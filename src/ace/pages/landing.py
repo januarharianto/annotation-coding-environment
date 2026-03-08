@@ -7,6 +7,7 @@ from pathlib import Path
 
 from nicegui import app, ui
 
+from ace.pages.header import build_header
 from ace.db.connection import (
     checkpoint_and_close,
     create_project,
@@ -78,11 +79,33 @@ def register() -> None:
 
     @ui.page("/")
     def landing():
+        build_header()
+
         with ui.column().classes("absolute-center items-center gap-6"):
             ui.label("ACE").classes("text-h3 text-weight-bold")
             ui.label("Annotation Coding Environment").classes(
                 "text-subtitle1 text-grey-7"
             )
+
+            # First-time name input (collapses once saved)
+            if not app.storage.general.get("coder_name"):
+                with ui.column().classes("items-center gap-2 q-mt-sm").style("width: 280px;"):
+                    ui.label("What's your name?").classes("text-body2 text-grey-6")
+                    _name_input = ui.input(placeholder="Your name").props(
+                        "autofocus outlined dense"
+                    ).classes("full-width")
+
+                    def _save_name():
+                        name = _name_input.value.strip()
+                        if not name:
+                            return
+                        app.storage.general["coder_name"] = name
+                        ui.navigate.reload()
+
+                    _name_input.on("keydown.enter", lambda: _save_name())
+                    ui.button("Save", on_click=_save_name).props(
+                        "unelevated color=primary dense"
+                    ).classes("full-width")
 
             # Resume button if there's an active project with sources
             current = app.storage.general.get("project_path")

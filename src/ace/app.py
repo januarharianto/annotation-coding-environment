@@ -4,6 +4,11 @@ import subprocess
 import time
 from pathlib import Path
 
+# Store NiceGUI data in user config directory (not CWD)
+_DATA_DIR = Path.home() / ".ace"
+_DATA_DIR.mkdir(exist_ok=True)
+os.environ.setdefault("NICEGUI_STORAGE_PATH", str(_DATA_DIR))
+
 from nicegui import app, ui
 
 from ace.pages import coding, import_page, landing

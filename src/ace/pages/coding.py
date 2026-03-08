@@ -19,8 +19,9 @@ from ace.models.annotation import (
 )
 from ace.models.assignment import get_assignments_for_coder, update_assignment_status
 from ace.models.codebook import add_code, delete_code, list_codes, reorder_codes, update_code
-from ace.models.coder import add_coder, list_coders
+from ace.models.coder import add_coder, list_coders, update_coder
 from ace.models.project import get_project
+from ace.pages.header import build_header
 from ace.models.source import get_source, get_source_content, list_sources
 from ace.services.offset import utf16_to_codepoint
 from ace.services.palette import COLOUR_PALETTE, next_colour
@@ -149,11 +150,18 @@ def build(conn: sqlite3.Connection) -> None:
     """Build the two-pane coding interface."""
 
     project = get_project(conn)
+    build_header(project_name=project["name"] if project else "ACE", conn=conn)
+
+    # Resolve coder — use stored name, or prompt if unknown
+    stored_name = app.storage.general.get("coder_name")
     coders = list_coders(conn)
     if not coders:
-        coder_id = add_coder(conn, "default")
+        coder_id = add_coder(conn, stored_name or "default")
     else:
         coder_id = coders[0]["id"]
+        # Sync coder name with stored name
+        if stored_name and coders[0]["name"] != stored_name:
+            update_coder(conn, coder_id, stored_name)
 
     sources = list_sources(conn)
     if not sources:
@@ -215,7 +223,7 @@ def build(conn: sqlite3.Connection) -> None:
     ui.add_head_html(
         '<style>'
         'html, body { overflow: hidden; height: 100vh; } '
-        '.q-page { display: flex; flex-direction: column; height: 100vh; } '
+        '.q-page { display: flex; flex-direction: column; height: 100%; } '
         '.q-page > .nicegui-content { flex: 1; min-height: 0; display: flex; flex-direction: column; }'
         '</style>'
     )
@@ -235,13 +243,6 @@ def build(conn: sqlite3.Connection) -> None:
             "width: 280px; min-width: 280px; overflow-y: auto; "
             "border-right: 1px solid #e0e0e0; height: 100%;"
         ):
-            # Back button + app name
-            with ui.row().classes("items-center gap-2").style("flex-shrink: 0;"):
-                ui.button(icon="arrow_back", on_click=lambda: ui.navigate.to("/")).props(
-                    "flat round dense"
-                ).tooltip("Back to home")
-                ui.label("ACE").classes("text-subtitle2 text-weight-bold text-grey-7")
-
             with ui.row().classes("items-center full-width q-mt-sm").style("flex-shrink: 0;"):
                 ui.label("Codes").classes("text-subtitle1 text-weight-medium")
                 ui.space()
