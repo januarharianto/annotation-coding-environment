@@ -116,10 +116,10 @@ def render_annotated_text(text: str, annotations: list, codes_by_id: dict) -> st
 # ---------------------------------------------------------------------------
 
 _STATUS_ICONS = {
-    "pending": ("radio_button_unchecked", "grey"),
-    "in_progress": ("timelapse", "orange"),
-    "complete": ("check_circle", "green"),
-    "flagged": ("flag", "red"),
+    "pending": ("radio_button_unchecked", "#757575"),
+    "in_progress": ("edit", "#1565c0"),
+    "complete": ("check_circle", "#2e7d32"),
+    "flagged": ("flag", "#c62828"),
 }
 
 
@@ -242,7 +242,7 @@ def build(conn: sqlite3.Connection) -> None:
         # ── Left Panel (280px) ───────────────────────────────────────
         with ui.column().classes("q-pa-md ace-no-scrollbar").style(
             "width: 280px; min-width: 280px; overflow-y: auto; "
-            "border-right: 1px solid #e0e0e0; height: 100%;"
+            "border-right: 1px solid #bdbdbd; height: 100%;"
         ):
             with ui.row().classes("items-center full-width q-mt-sm").style("flex-shrink: 0;"):
                 ui.label("Codes").classes("text-subtitle1 text-weight-medium")
@@ -430,7 +430,7 @@ def build(conn: sqlite3.Connection) -> None:
     # ── Source Grid Navigator ────────────────────────────────────────
 
     grid_container = ui.column().classes("full-width").style(
-        "border-top: 1px solid #e0e0e0; background: #fafafa;"
+        "border-top: 1px solid #bdbdbd; background: #f5f5f5;"
     )
     grid_container.set_visibility(False)
 
@@ -452,7 +452,7 @@ def build(conn: sqlite3.Connection) -> None:
             else:
                 lightness = 95 - int(65 * count / max_count) if max_count else 95
                 bg = f"hsl(210, 70%, {lightness}%)"
-            border = "2px solid #e67e22" if is_flagged else ("2px solid white" if is_current else "1px solid #e0e0e0")
+            border = "2px solid #d84315" if is_flagged else ("2px solid white" if is_current else "1px solid #bdbdbd")
             src = sources_by_id.get(sid)
             display_id = src["display_id"] if src else f"Source {i + 1}"
             cells.append(
@@ -467,7 +467,7 @@ def build(conn: sqlite3.Connection) -> None:
             f'<span><span style="display:inline-block;width:10px;height:10px;background:hsl(210,70%,60%);border:1px solid #ccc;"></span> some</span>'
             f'<span><span style="display:inline-block;width:10px;height:10px;background:hsl(210,70%,30%);border:1px solid #ccc;"></span> most</span>'
             f'<span><span style="display:inline-block;width:10px;height:10px;background:#222;border:2px solid white;"></span> current</span>'
-            f'<span><span style="display:inline-block;width:10px;height:10px;background:hsl(210,70%,80%);border:2px solid #e67e22;"></span> flagged</span>'
+            f'<span><span style="display:inline-block;width:10px;height:10px;background:hsl(210,70%,80%);border:2px solid #d84315;"></span> flagged</span>'
             '</div>'
         )
         return legend + '<div class="ace-source-grid">' + "".join(cells) + "</div>"
@@ -500,7 +500,7 @@ def build(conn: sqlite3.Connection) -> None:
         with ui.row().classes(
             "items-center full-width q-pa-sm justify-between"
         ).style(
-            "border-top: 1px solid #e0e0e0; background: #fafafa;"
+            "border-top: 1px solid #bdbdbd; background: #f5f5f5;"
         ):
             # Nav buttons
             with ui.row().classes("items-center gap-2"):
