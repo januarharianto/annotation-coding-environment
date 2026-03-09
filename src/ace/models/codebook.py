@@ -12,7 +12,6 @@ def add_code(
     conn: sqlite3.Connection,
     name: str,
     colour: str,
-    description: str | None = None,
 ) -> str:
     now = datetime.now(timezone.utc).isoformat()
     code_id = uuid.uuid4().hex
@@ -21,9 +20,9 @@ def add_code(
     sort_order = max_order + 1
 
     conn.execute(
-        "INSERT INTO codebook_code (id, name, description, colour, sort_order, created_at) "
-        "VALUES (?, ?, ?, ?, ?, ?)",
-        (code_id, name, description, colour, sort_order, now),
+        "INSERT INTO codebook_code (id, name, colour, sort_order, created_at) "
+        "VALUES (?, ?, ?, ?, ?)",
+        (code_id, name, colour, sort_order, now),
     )
     conn.commit()
     return code_id
@@ -38,7 +37,6 @@ def update_code(
     code_id: str,
     name: str | None = None,
     colour: str | None = None,
-    description: str | None = None,
 ) -> None:
     updates = []
     params = []
@@ -48,9 +46,6 @@ def update_code(
     if colour is not None:
         updates.append("colour = ?")
         params.append(colour)
-    if description is not None:
-        updates.append("description = ?")
-        params.append(description)
     if not updates:
         return
     params.append(code_id)
@@ -94,7 +89,6 @@ def import_codebook_from_csv(conn: sqlite3.Connection, path: str | Path) -> int:
                 conn,
                 name=row["name"],
                 colour=row["colour"],
-                description=row.get("description"),
             )
             count += 1
     return count

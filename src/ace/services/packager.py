@@ -9,6 +9,58 @@ from ace.db.schema import ACE_APPLICATION_ID, create_schema
 from ace.models.codebook import compute_codebook_hash
 
 
+def _upsert_by_id(conn: sqlite3.Connection, table: str, row: sqlite3.Row) -> str:
+    """UPSERT a row by its 'id' column. Returns 'insert', 'update', or 'skip'."""
+    existing = conn.execute(
+        f"SELECT id, updated_at FROM {table} WHERE id = ?", (row["id"],)
+    ).fetchone()
+    cols = row.keys()
+    if existing is None:
+        placeholders = ", ".join("?" for _ in cols)
+        conn.execute(
+            f"INSERT INTO {table} ({', '.join(cols)}) VALUES ({placeholders})",
+            tuple(row),
+        )
+        return "insert"
+    if row["updated_at"] > existing["updated_at"]:
+        update_cols = [c for c in cols if c not in ("id", "created_at")]
+        sets = ", ".join(f"{c} = ?" for c in update_cols)
+        conn.execute(
+            f"UPDATE {table} SET {sets} WHERE id = ?",
+            [row[c] for c in update_cols] + [row["id"]],
+        )
+        return "update"
+    return "skip"
+
+
+def _upsert_by_key(
+    conn: sqlite3.Connection, table: str, row: sqlite3.Row,
+    *, key_cols: tuple[str, ...], update_cols: tuple[str, ...],
+) -> str:
+    """UPSERT a row by composite key columns. Returns 'insert', 'update', or 'skip'."""
+    where = " AND ".join(f"{c} = ?" for c in key_cols)
+    key_vals = [row[c] for c in key_cols]
+    existing = conn.execute(
+        f"SELECT updated_at FROM {table} WHERE {where}", key_vals
+    ).fetchone()
+    if existing is None:
+        cols = row.keys()
+        placeholders = ", ".join("?" for _ in cols)
+        conn.execute(
+            f"INSERT INTO {table} ({', '.join(cols)}) VALUES ({placeholders})",
+            tuple(row),
+        )
+        return "insert"
+    if row["updated_at"] > existing["updated_at"]:
+        sets = ", ".join(f"{c} = ?" for c in update_cols)
+        conn.execute(
+            f"UPDATE {table} SET {sets} WHERE {where}",
+            [row[c] for c in update_cols] + key_vals,
+        )
+        return "update"
+    return "skip"
+
+
 @dataclass
 class ImportResult:
     annotations_imported: int = 0
@@ -108,9 +160,9 @@ def export_coder_package(
     ).fetchall()
     for code in codes:
         pkg_conn.execute(
-            "INSERT INTO codebook_code (id, name, description, colour, sort_order, created_at) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
-            tuple(code),
+            "INSERT INTO codebook_code (id, name, colour, sort_order, created_at) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (code["id"], code["name"], code["colour"], code["sort_order"], code["created_at"]),
         )
 
     # 8. Copy this coder only
@@ -211,9 +263,9 @@ def import_coder_package(
             ).fetchone()
             if existing is None:
                 conn.execute(
-                    "INSERT INTO codebook_code (id, name, description, colour, sort_order, created_at) "
-                    "VALUES (?, ?, ?, ?, ?, ?)",
-                    tuple(pc),
+                    "INSERT INTO codebook_code (id, name, colour, sort_order, created_at) "
+                    "VALUES (?, ?, ?, ?, ?)",
+                    (pc["id"], pc["name"], pc["colour"], pc["sort_order"], pc["created_at"]),
                 )
                 result.warnings.append(
                     f"Re-inserted deleted code: {pc['name']}"
@@ -224,64 +276,23 @@ def import_coder_package(
             "SELECT * FROM annotation WHERE deleted_at IS NULL"
         ).fetchall()
         for pa in pkg_annotations:
-            existing = conn.execute(
-                "SELECT id, updated_at FROM annotation WHERE id = ?",
-                (pa["id"],),
-            ).fetchone()
-            if existing is None:
-                # New annotation — insert
-                conn.execute(
-                    "INSERT INTO annotation "
-                    "(id, source_id, coder_id, code_id, start_offset, end_offset, "
-                    "selected_text, memo, w3c_selector_json, created_at, updated_at, deleted_at) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                    tuple(pa),
-                )
+            action = _upsert_by_id(conn, "annotation", pa)
+            if action == "insert":
                 result.annotations_imported += 1
-            elif pa["updated_at"] > existing["updated_at"]:
-                # Coder's version is newer — update
-                conn.execute(
-                    "UPDATE annotation SET "
-                    "code_id = ?, start_offset = ?, end_offset = ?, "
-                    "selected_text = ?, memo = ?, w3c_selector_json = ?, "
-                    "updated_at = ? "
-                    "WHERE id = ?",
-                    (
-                        pa["code_id"],
-                        pa["start_offset"],
-                        pa["end_offset"],
-                        pa["selected_text"],
-                        pa["memo"],
-                        pa["w3c_selector_json"],
-                        pa["updated_at"],
-                        pa["id"],
-                    ),
-                )
+            elif action == "update":
                 result.annotations_updated += 1
             else:
-                # Same or older — skip
                 result.annotations_skipped += 1
 
         # 6. Import source_notes (UPSERT by source_id + coder_id)
         pkg_notes = pkg_conn.execute("SELECT * FROM source_note").fetchall()
         for pn in pkg_notes:
-            existing = conn.execute(
-                "SELECT id, updated_at FROM source_note WHERE source_id = ? AND coder_id = ?",
-                (pn["source_id"], pn["coder_id"]),
-            ).fetchone()
-            if existing is None:
-                conn.execute(
-                    "INSERT INTO source_note (id, source_id, coder_id, note_text, created_at, updated_at) "
-                    "VALUES (?, ?, ?, ?, ?, ?)",
-                    tuple(pn),
-                )
-                result.notes_imported += 1
-            elif pn["updated_at"] > existing["updated_at"]:
-                conn.execute(
-                    "UPDATE source_note SET note_text = ?, updated_at = ? "
-                    "WHERE source_id = ? AND coder_id = ?",
-                    (pn["note_text"], pn["updated_at"], pn["source_id"], pn["coder_id"]),
-                )
+            action = _upsert_by_key(
+                conn, "source_note", pn,
+                key_cols=("source_id", "coder_id"),
+                update_cols=("note_text", "updated_at"),
+            )
+            if action in ("insert", "update"):
                 result.notes_imported += 1
 
         # 7. Update assignment statuses from package
