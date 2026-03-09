@@ -434,6 +434,8 @@ def build(conn: sqlite3.Connection) -> None:
     )
     grid_container.set_visibility(False)
 
+    sources_by_id = {s["id"]: s for s in sources}
+
     def _build_grid_html():
         counts = get_annotation_counts_by_source(conn, coder_id)
         max_count = max(counts.values()) if counts else 1
@@ -445,14 +447,13 @@ def build(conn: sqlite3.Connection) -> None:
             count = counts.get(sid, 0)
             is_current = i == state["current_index"]
             is_flagged = asn["status"] == "flagged"
-            # Blue gradient: hsl(210, 70%, 95%) to hsl(210, 70%, 30%)
             if is_current:
                 bg = "#222"
             else:
                 lightness = 95 - int(65 * count / max_count) if max_count else 95
                 bg = f"hsl(210, 70%, {lightness}%)"
             border = "2px solid #e67e22" if is_flagged else ("2px solid white" if is_current else "1px solid #e0e0e0")
-            src = get_source(conn, sid)
+            src = sources_by_id.get(sid)
             display_id = src["display_id"] if src else f"Source {i + 1}"
             cells.append(
                 f'<span class="ace-grid-cell" data-idx="{i}" '
