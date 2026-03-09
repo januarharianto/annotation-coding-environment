@@ -61,9 +61,9 @@ def test_import_codebook_from_csv(tmp_db, tmp_path):
     conn = create_project(tmp_db, "Test")
     csv_path = tmp_path / "codes.csv"
     csv_path.write_text(
-        "name,colour,description\n"
-        "Theme A,#FF0000,First theme\n"
-        "Theme B,#00FF00,Second theme\n"
+        "name,colour\n"
+        "Theme A,#FF0000\n"
+        "Theme B,#00FF00\n"
     )
     count = import_codebook_from_csv(conn, csv_path)
     assert count == 2
