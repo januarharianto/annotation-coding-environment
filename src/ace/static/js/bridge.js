@@ -245,17 +245,15 @@
   };
 
   // Initialize once DOM is ready
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", function () {
-      setupSelectionListener();
-      setupAnnotationClickListener();
-      setupKeyboardShortcuts();
-      setupCodeListSortable();
-    });
-  } else {
+  function initAll() {
     setupSelectionListener();
     setupAnnotationClickListener();
     setupKeyboardShortcuts();
     setupCodeListSortable();
+  }
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", initAll);
+  } else {
+    initAll();
   }
 })();

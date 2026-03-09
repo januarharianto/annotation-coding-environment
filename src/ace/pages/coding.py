@@ -317,9 +317,8 @@ def build(conn: sqlite3.Connection) -> None:
                             ).style(
                                 "min-width: 0; line-height: 1.4;"
                             ).on("click", _click_apply)
-                            tip = f'{code["name"]}\n{code["description"]}' if code["description"] else code["name"]
                             with lbl:
-                                ui.tooltip(tip).props(":delay=1000")
+                                ui.tooltip(code["name"]).props(":delay=1000")
                             if shortcut:
                                 ui.label(shortcut).classes("ace-keycap")
                             # "..." menu (visible on hover)
@@ -471,32 +470,37 @@ def build(conn: sqlite3.Connection) -> None:
 
     # ── Code management dialogs ──────────────────────────────────────
 
+    def _open_code_dialog(dlg, title, content_fn, action_label=None, action_fn=None, action_props="unelevated color=primary"):
+        dlg.clear()
+        with dlg, ui.card().classes("q-pa-md").style("min-width: 300px;"):
+            ui.label(title).classes("text-subtitle1 text-weight-medium q-mb-sm")
+            content_fn()
+            with ui.row().classes("q-mt-md justify-end full-width gap-2"):
+                ui.button("Cancel", on_click=dlg.close).props("flat")
+                if action_label:
+                    ui.button(action_label, on_click=action_fn).props(action_props)
+        dlg.open()
+
     def _open_rename_dialog(code):
-        rename_dialog.clear()
-        with rename_dialog, ui.card().classes("q-pa-md").style("min-width: 300px;"):
-            ui.label("Rename Code").classes("text-subtitle1 text-weight-medium q-mb-sm")
+        name_input = None
+
+        def _content():
+            nonlocal name_input
             name_input = ui.input("Name", value=code["name"]).props("autofocus outlined dense")
 
-            with ui.row().classes("q-mt-md justify-end full-width gap-2"):
-                ui.button("Cancel", on_click=rename_dialog.close).props("flat")
+        def _save():
+            new_name = name_input.value.strip()
+            if not new_name:
+                return
+            update_code(conn, code["id"], name=new_name)
+            rename_dialog.close()
+            _refresh_all()
 
-                def _save_rename():
-                    new_name = name_input.value.strip()
-                    if not new_name:
-                        return
-                    update_code(conn, code["id"], name=new_name)
-                    rename_dialog.close()
-                    _refresh_all()
-
-                ui.button("Save", on_click=_save_rename).props("unelevated color=primary")
-        rename_dialog.open()
+        _open_code_dialog(rename_dialog, "Rename Code", _content, "Save", _save)
 
     def _open_colour_dialog(code):
-        colour_dialog.clear()
-        with colour_dialog, ui.card().classes("q-pa-md").style("min-width: 300px;"):
-            ui.label("Change Colour").classes("text-subtitle1 text-weight-medium q-mb-sm")
+        def _content():
             ui.label(code["name"]).classes("text-body2 text-grey-7 q-mb-sm")
-
             with ui.row().classes("gap-2").style("flex-wrap: wrap;"):
                 for hex_colour, colour_name in COLOUR_PALETTE:
                     def _pick(c=hex_colour):
@@ -510,14 +514,10 @@ def build(conn: sqlite3.Connection) -> None:
                         f"border: {'3px solid #333' if is_current else '2px solid transparent'};"
                     ).tooltip(hex_colour).on("click", _pick)
 
-            with ui.row().classes("q-mt-md justify-end full-width"):
-                ui.button("Cancel", on_click=colour_dialog.close).props("flat")
-        colour_dialog.open()
+        _open_code_dialog(colour_dialog, "Change Colour", _content)
 
     def _open_delete_dialog(code):
-        delete_dialog.clear()
-        with delete_dialog, ui.card().classes("q-pa-md").style("min-width: 300px;"):
-            ui.label("Delete Code").classes("text-subtitle1 text-weight-medium q-mb-sm")
+        def _content():
             ui.label(
                 f'Are you sure you want to delete "{code["name"]}"?'
             ).classes("text-body2 q-mb-sm")
@@ -525,18 +525,12 @@ def build(conn: sqlite3.Connection) -> None:
                 "All annotations using this code will be permanently deleted."
             ).classes("text-caption text-grey-7 q-mb-md")
 
-            with ui.row().classes("justify-end full-width gap-2"):
-                ui.button("Cancel", on_click=delete_dialog.close).props("flat")
+        def _confirm():
+            delete_code(conn, code["id"])
+            delete_dialog.close()
+            _refresh_all()
 
-                def _confirm_delete():
-                    delete_code(conn, code["id"])
-                    delete_dialog.close()
-                    _refresh_all()
-
-                ui.button("Delete", on_click=_confirm_delete).props(
-                    "unelevated color=negative"
-                )
-        delete_dialog.open()
+        _open_code_dialog(delete_dialog, "Delete Code", _content, "Delete", _confirm, "unelevated color=negative")
 
     # ── Apply code (no dialog) ───────────────────────────────────────
 
