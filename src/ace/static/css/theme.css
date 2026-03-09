@@ -47,3 +47,31 @@
 .q-dialog__backdrop {
     background: rgba(0, 0, 0, 0.5);
 }
+
+/* Source grid navigator */
+.ace-source-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px;
+    padding: 8px;
+}
+.ace-grid-cell {
+    cursor: pointer;
+    transition: opacity 0.1s;
+}
+.ace-grid-cell:hover {
+    opacity: 0.7;
+}
+.ace-grid-legend {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 4px 8px;
+    font-size: 11px;
+    color: #888;
+}
+.ace-grid-legend span {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+}

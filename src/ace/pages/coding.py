@@ -14,6 +14,7 @@ from ace.db.connection import checkpoint_and_close, open_project
 from ace.models.annotation import (
     add_annotation,
     delete_annotation,
+    get_annotation_counts_by_source,
     get_annotations_for_source,
     undelete_annotation,
 )
@@ -426,6 +427,67 @@ def build(conn: sqlite3.Connection) -> None:
             annotation_list_display()
 
 
+    # ── Source Grid Navigator ────────────────────────────────────────
+
+    grid_container = ui.column().classes("full-width").style(
+        "border-top: 1px solid #e0e0e0; background: #fafafa;"
+    )
+    grid_container.set_visibility(False)
+
+    def _build_grid_html():
+        counts = get_annotation_counts_by_source(conn, coder_id)
+        max_count = max(counts.values()) if counts else 1
+        total = len(assignments)
+        cell_size = max(10, min(24, int((700 * 200 / max(total, 1)) ** 0.5)))
+        cells = []
+        for i, asn in enumerate(assignments):
+            sid = asn["source_id"]
+            count = counts.get(sid, 0)
+            is_current = i == state["current_index"]
+            is_flagged = asn["status"] == "flagged"
+            # Blue gradient: hsl(210, 70%, 95%) to hsl(210, 70%, 30%)
+            if is_current:
+                bg = "#222"
+            else:
+                lightness = 95 - int(65 * count / max_count) if max_count else 95
+                bg = f"hsl(210, 70%, {lightness}%)"
+            border = "2px solid #e67e22" if is_flagged else ("2px solid white" if is_current else "1px solid #e0e0e0")
+            src = get_source(conn, sid)
+            display_id = src["display_id"] if src else f"Source {i + 1}"
+            cells.append(
+                f'<span class="ace-grid-cell" data-idx="{i}" '
+                f'title="{display_id} ({count} annotations)" '
+                f'style="width:{cell_size}px;height:{cell_size}px;background:{bg};'
+                f'border:{border};display:inline-block;"></span>'
+            )
+        legend = (
+            '<div class="ace-grid-legend">'
+            f'<span><span style="display:inline-block;width:10px;height:10px;background:hsl(210,70%,95%);border:1px solid #ccc;"></span> 0</span>'
+            f'<span><span style="display:inline-block;width:10px;height:10px;background:hsl(210,70%,60%);border:1px solid #ccc;"></span> some</span>'
+            f'<span><span style="display:inline-block;width:10px;height:10px;background:hsl(210,70%,30%);border:1px solid #ccc;"></span> most</span>'
+            f'<span><span style="display:inline-block;width:10px;height:10px;background:#222;border:2px solid white;"></span> current</span>'
+            f'<span><span style="display:inline-block;width:10px;height:10px;background:hsl(210,70%,80%);border:2px solid #e67e22;"></span> flagged</span>'
+            '</div>'
+        )
+        return legend + '<div class="ace-source-grid">' + "".join(cells) + "</div>"
+
+    grid_html = ui.html("", sanitize=False)
+    grid_html.move(grid_container)
+
+    def _toggle_grid():
+        visible = grid_container.visible
+        if not visible:
+            grid_html.content = _build_grid_html()
+        grid_container.set_visibility(not visible)
+
+    def _on_grid_cell_clicked(e):
+        idx = e.args.get("index")
+        if idx is not None and 0 <= idx < len(assignments):
+            grid_container.set_visibility(False)
+            _navigate_to(idx)
+
+    ui.on("grid_cell_clicked", _on_grid_cell_clicked)
+
     # ── Bottom Bar ────────────────────────────────────────────────────
     @ui.refreshable
     def bottom_bar():
@@ -433,7 +495,6 @@ def build(conn: sqlite3.Connection) -> None:
         complete_count = sum(1 for a in assignments if a["status"] == "complete")
         pct = round(complete_count / total * 100) if total else 0
         idx = state["current_index"]
-        asn = current_assignment()
 
         with ui.row().classes(
             "items-center full-width q-pa-sm justify-between"
@@ -448,9 +509,10 @@ def build(conn: sqlite3.Connection) -> None:
                     on_click=lambda: _navigate_to(max(0, idx - 1)),
                 ).props("flat dense" + (" disable" if idx == 0 else "")).tooltip("Alt+\u2190")
 
-                ui.label(
-                    f"Source {idx + 1} of {total} ({pct}% complete)"
-                ).classes("text-body2 text-grey-8")
+                ui.button(
+                    f"Source {idx + 1} of {total} ({pct}% complete) \u25BE",
+                    on_click=_toggle_grid,
+                ).props("flat dense no-caps").classes("text-body2 text-grey-8").tooltip("G")
 
                 ui.button(
                     "Next",
@@ -686,6 +748,9 @@ def build(conn: sqlite3.Connection) -> None:
         _do_undo_redo(conn, coder_id, codes_by_id, text_container, annotation_list_display, undo_mgr, current_source_id(), redo=True)
 
     def _on_shortcut_escape(_e):
+        if grid_container.visible:
+            grid_container.set_visibility(False)
+            return
         state["pending_selection"] = None
         annotation_info_dialog.close()
 
@@ -718,6 +783,7 @@ def build(conn: sqlite3.Connection) -> None:
     ui.on("shortcut_prev_source", _on_shortcut_prev)
     ui.on("shortcut_next_source", _on_shortcut_next)
     ui.on("shortcut_apply_code", _on_shortcut_apply_code)
+    ui.on("shortcut_toggle_grid", lambda _e: _toggle_grid())
 
     # ── Initial render ───────────────────────────────────────────────
     _render_text(conn, current_source_id(), coder_id, codes_by_id, text_container)

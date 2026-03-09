@@ -67,6 +67,22 @@ def undelete_annotation(conn: sqlite3.Connection, annotation_id: str) -> None:
     conn.commit()
 
 
+def get_annotation_counts_by_source(conn: sqlite3.Connection, coder_id: str | None = None) -> dict[str, int]:
+    """Return {source_id: count} of non-deleted annotations."""
+    if coder_id is not None:
+        rows = conn.execute(
+            "SELECT source_id, COUNT(*) AS cnt FROM annotation "
+            "WHERE deleted_at IS NULL AND coder_id = ? GROUP BY source_id",
+            (coder_id,),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT source_id, COUNT(*) AS cnt FROM annotation "
+            "WHERE deleted_at IS NULL GROUP BY source_id",
+        ).fetchall()
+    return {r["source_id"]: r["cnt"] for r in rows}
+
+
 def compact_deleted(conn: sqlite3.Connection) -> int:
     cursor = conn.execute("DELETE FROM annotation WHERE deleted_at IS NOT NULL")
     conn.commit()
