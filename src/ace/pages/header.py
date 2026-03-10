@@ -64,7 +64,7 @@ def build_header(*, project_name: str | None = None, conn=None) -> None:
                 ).classes("text-grey-8")
 
                 with ui.button(icon="more_vert").props("flat round dense").classes(
-                    "text-grey-6"
+                    "text-grey-7"
                 ):
                     with ui.menu():
                         ui.menu_item("Settings (coming soon)").props("disable")
@@ -97,4 +97,4 @@ def build_header(*, project_name: str | None = None, conn=None) -> None:
 
                 ui.button(coder_name, icon="edit", on_click=_open_edit).props(
                     "flat dense no-caps size=sm"
-                ).classes("text-caption text-grey-6 q-ml-sm")
+                ).classes("text-caption text-grey-7 q-ml-sm")
