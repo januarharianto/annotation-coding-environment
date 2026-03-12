@@ -88,6 +88,15 @@
     font-weight: 500;
 }
 
+.q-splitter__separator {
+    background: #bdbdbd;
+    width: 1px !important;
+}
+.q-splitter__separator:hover {
+    background: #9e9e9e;
+    width: 3px !important;
+}
+
 .ace-no-scrollbar {
     scrollbar-width: none;
     -ms-overflow-style: none;
