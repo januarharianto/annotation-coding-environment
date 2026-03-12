@@ -238,6 +238,7 @@ def build(conn: sqlite3.Connection) -> None:
     splitter = ui.splitter(value=stored_width, limits=(180, 600)).props(
         'unit="px"'
     ).classes("full-width col").style("overflow: hidden;")
+
     def _on_splitter_change(e):
         app.storage.general["code_bar_width"] = e.value
 
