@@ -93,12 +93,23 @@
 }
 
 .q-splitter__separator {
-    background: #bdbdbd;
-    width: 1px !important;
+    position: relative;
+    width: 8px !important;
+    background: transparent;
 }
-.q-splitter__separator:hover {
+.q-splitter__separator::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 50%;
+    width: 1px;
+    transform: translateX(-50%);
+    background: #bdbdbd;
+}
+.q-splitter__separator:hover::before {
     background: #9e9e9e;
-    width: 3px !important;
+    width: 3px;
 }
 
 .ace-no-scrollbar {
