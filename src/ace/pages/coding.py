@@ -4,6 +4,7 @@ import hashlib
 import html
 import json
 import sqlite3
+import tempfile
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -18,7 +19,7 @@ from ace.models.annotation import (
     undelete_annotation,
 )
 from ace.models.assignment import get_assignments_for_coder, update_assignment_status
-from ace.models.codebook import add_code, delete_code, list_codes, reorder_codes, update_code
+from ace.models.codebook import add_code, delete_code, export_codebook_to_csv, import_codebook_from_csv, list_codes, reorder_codes, update_code
 from ace.models.coder import add_coder, list_coders, update_coder
 from ace.models.project import get_project
 from ace.pages.header import build_header
@@ -262,6 +263,50 @@ def build(conn: sqlite3.Connection) -> None:
                     "text-grey-7"
                 ).tooltip("Sort codes by name")
 
+                # Import / Export menu
+                def _import_codes():
+                    upload_el.run_method("pickFiles")
+
+                def _export_codes():
+                    tmp = tempfile.NamedTemporaryFile(suffix=".csv", delete=False, prefix="ace_codebook_")
+                    tmp.close()
+                    count = export_codebook_to_csv(conn, tmp.name)
+                    if count == 0:
+                        ui.notify("No codes to export.", type="info", position="bottom")
+                        Path(tmp.name).unlink(missing_ok=True)
+                        return
+                    ui.download(tmp.name, "codes.csv")
+
+                with ui.button(icon="more_vert").props("flat round dense size=sm").classes("text-grey-7"):
+                    with ui.menu():
+                        ui.menu_item("Import CSV...", on_click=lambda: _import_codes()).props(
+                            "disable" if codes else ""
+                        )
+                        ui.menu_item("Export CSV", on_click=lambda: _export_codes()).props(
+                            "disable" if not codes else ""
+                        )
+
+                def _handle_upload(e: events.UploadEventArguments):
+                    try:
+                        content = e.content.read().decode("utf-8-sig")
+                        tmp = tempfile.NamedTemporaryFile(
+                            suffix=".csv", delete=False, prefix="ace_import_", mode="w", encoding="utf-8",
+                        )
+                        tmp.write(content)
+                        tmp.close()
+                        count = import_codebook_from_csv(conn, tmp.name)
+                        Path(tmp.name).unlink(missing_ok=True)
+                        _refresh_codes()
+                        code_list.refresh()
+                        _render_text(conn, current_source_id(), coder_id, codes_by_id, text_container)
+                        ui.notify(f"Imported {count} code(s).", type="positive", position="bottom")
+                    except Exception as exc:
+                        ui.notify(f"Import failed: {exc}", type="negative", position="bottom")
+
+                upload_el = ui.upload(on_upload=_handle_upload, auto_upload=True).props(
+                    'accept=".csv" max-files=1'
+                ).classes("hidden")
+
             # ── Inline code creation ─────────────────────────────────
             new_code_input = ui.input(placeholder="+ New code...").props(
                 "dense outlined"
@@ -284,6 +329,13 @@ def build(conn: sqlite3.Connection) -> None:
             @ui.refreshable
             def code_list():
                 sorting = state.get("sort_codes", False)
+                if not codes:
+                    with ui.row().classes("q-mt-sm").style("flex-wrap: wrap; gap: 0 4px;"):
+                        ui.label("No codes yet. Type above to add one, or").classes("text-caption text-grey-6")
+                        ui.link("import from CSV.", target="").classes("text-caption").on(
+                            "click", lambda: _import_codes(), []
+                        )
+                    return
                 with ui.element("div").classes("full-width ace-code-list").style("flex-shrink: 0;"):
                     for i, code in enumerate(codes):
                         if i < 9:
