@@ -234,19 +234,25 @@ def build(conn: sqlite3.Connection) -> None:
     delete_dialog = ui.dialog()
 
     # ── Main two-pane container (resizable) ─────────────────────────
-    stored_width = app.storage.general.get("code_bar_width", 280)
+    _DEFAULT_WIDTH = 280
+    _STORAGE_KEY = "code_bar_width"
+
+    stored_width = app.storage.general.get(_STORAGE_KEY, _DEFAULT_WIDTH)
     splitter = ui.splitter(value=stored_width, limits=(180, 600)).props(
         'unit="px"'
     ).classes("full-width col").style("overflow: hidden;")
 
     def _on_splitter_change(e):
-        app.storage.general["code_bar_width"] = e.value
+        width = round(e.value)
+        if width == _DEFAULT_WIDTH:
+            app.storage.general.pop(_STORAGE_KEY, None)
+        elif app.storage.general.get(_STORAGE_KEY) != width:
+            app.storage.general[_STORAGE_KEY] = width
 
     splitter.on_value_change(_on_splitter_change)
 
     def _reset_code_bar_width():
-        splitter.value = 280
-        app.storage.general.pop("code_bar_width", None)
+        splitter.value = _DEFAULT_WIDTH
 
     ui.on("code_bar_reset", lambda _: _reset_code_bar_width())
 
@@ -255,7 +261,7 @@ def build(conn: sqlite3.Connection) -> None:
         # ── Left Panel (code bar) ───────────────────────────────────
         with splitter.before:
           with ui.column().classes("q-pa-md ace-no-scrollbar").style(
-              "overflow-y: auto; overflow-x: hidden; height: 100%;"
+              "overflow-y: auto; height: 100%;"
               " width: 100%; min-width: 0;"
           ):
             with ui.row().classes("items-center full-width q-mt-sm").style("flex-shrink: 0;"):
