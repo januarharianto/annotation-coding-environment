@@ -88,6 +88,10 @@
     font-weight: 500;
 }
 
+.q-splitter__panel {
+    overflow-x: hidden !important;
+}
+
 .q-splitter__separator {
     background: #bdbdbd;
     width: 1px !important;
