@@ -255,7 +255,8 @@ def build(conn: sqlite3.Connection) -> None:
         # ── Left Panel (code bar) ───────────────────────────────────
         with splitter.before:
           with ui.column().classes("q-pa-md ace-no-scrollbar").style(
-              "overflow-y: auto; height: 100%;"
+              "overflow-y: auto; overflow-x: hidden; height: 100%;"
+              " width: 100%; min-width: 0;"
           ):
             with ui.row().classes("items-center full-width q-mt-sm").style("flex-shrink: 0;"):
                 ui.label("Codes").classes("text-subtitle1 text-weight-medium")
@@ -314,9 +315,9 @@ def build(conn: sqlite3.Connection) -> None:
                             await _apply_code(c)
 
                         with ui.row().classes(
-                            "items-center full-width ace-hover-row ace-code-row"
+                            "items-center full-width no-wrap ace-hover-row ace-code-row"
                         ).style(
-                            f"gap: 4px; padding: 2px 4px; flex-shrink: 0;"
+                            f"gap: 4px; padding: 2px 4px; flex-shrink: 0; overflow: hidden;"
                             f" border-left: 4px solid {colour};"
                         ) as row:
                             row.props(f'data-code-id={code["id"]}')
