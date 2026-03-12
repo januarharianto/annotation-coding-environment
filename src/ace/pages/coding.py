@@ -233,16 +233,29 @@ def build(conn: sqlite3.Connection) -> None:
     colour_dialog = ui.dialog()
     delete_dialog = ui.dialog()
 
-    # ── Main two-pane container ──────────────────────────────────────
-    with ui.row().classes("full-width no-wrap col").style(
-        "overflow: hidden;"
-    ):
+    # ── Main two-pane container (resizable) ─────────────────────────
+    stored_width = app.storage.general.get("code_bar_width", 280)
+    splitter = ui.splitter(value=stored_width, limits=(180, 600)).props(
+        'unit="px"'
+    ).classes("full-width col").style("overflow: hidden;")
+    def _on_splitter_change(e):
+        app.storage.general["code_bar_width"] = e.value
 
-        # ── Left Panel (280px) ───────────────────────────────────────
-        with ui.column().classes("q-pa-md ace-no-scrollbar").style(
-            "width: 280px; min-width: 280px; overflow-y: auto; "
-            "border-right: 1px solid #e0e0e0; height: 100%;"
-        ):
+    splitter.on_value_change(_on_splitter_change)
+
+    def _reset_code_bar_width():
+        splitter.value = 280
+        app.storage.general.pop("code_bar_width", None)
+
+    ui.on("code_bar_reset", lambda _: _reset_code_bar_width())
+
+    with splitter:
+
+        # ── Left Panel (code bar) ───────────────────────────────────
+        with splitter.before:
+          with ui.column().classes("q-pa-md ace-no-scrollbar").style(
+              "overflow-y: auto; height: 100%;"
+          ):
             with ui.row().classes("items-center full-width q-mt-sm").style("flex-shrink: 0;"):
                 ui.label("Codes").classes("text-subtitle1 text-weight-medium")
                 ui.space()
@@ -343,7 +356,8 @@ def build(conn: sqlite3.Connection) -> None:
             code_list()
 
         # ── Right Panel (flex) ───────────────────────────────────────
-        with ui.column().classes("col q-pa-md").style("overflow-y: auto;"):
+        with splitter.after:
+          with ui.column().classes("col q-pa-md").style("overflow-y: auto;"):
 
             # Source header
             @ui.refreshable
