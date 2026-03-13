@@ -88,6 +88,10 @@
     font-weight: 500;
 }
 
+.ace-solid-readonly .q-field__control::before {
+    border-style: solid !important;
+}
+
 .ace-no-scrollbar {
     scrollbar-width: none;
     -ms-overflow-style: none;

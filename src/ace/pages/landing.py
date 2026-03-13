@@ -169,32 +169,31 @@ def register() -> None:
 
 async def _open_new_dialog() -> None:
     """Show a dialog to create a new project."""
-    with ui.dialog() as dialog, ui.card().classes("q-pa-md").style("min-width: 350px"):
-        ui.label("New Project").classes("text-h6")
-        name_input = ui.input("Project name").props("autofocus")
-        desc_input = ui.input("Description (optional)")
-        with ui.row().classes("items-center full-width gap-2"):
-            path_input = ui.input("Save location", placeholder="Choose a folder...").props(
-                "readonly"
-            ).classes("col")
+    with ui.dialog() as dialog, ui.card().classes("q-pa-md").style(
+        "min-width: 380px;"
+    ):
+        ui.label("New Project").classes("text-subtitle1 text-weight-medium q-mb-sm")
+        name_input = ui.input(placeholder="Project name").props("outlined dense").classes("full-width")
+        desc_input = ui.input(placeholder="Description (optional)").props("outlined dense").classes("full-width q-mt-xs")
+        path_input = ui.input(placeholder="Save location").props(
+            "outlined dense readonly"
+        ).classes("full-width q-mt-xs cursor-pointer ace-solid-readonly")
 
-            async def _browse_save_location() -> None:
-                if not _IS_MACOS:
-                    ui.notify("Folder browser not supported on this platform.", type="warning")
-                    return
-                loop = asyncio.get_event_loop()
-                chosen = await loop.run_in_executor(None, _native_pick_folder)
-                if chosen:
-                    path_input.value = chosen.rstrip("/")
+        async def _browse_save_location() -> None:
+            if not _IS_MACOS:
+                ui.notify("Folder browser not supported on this platform.", type="warning")
+                return
+            loop = asyncio.get_event_loop()
+            chosen = await loop.run_in_executor(None, _native_pick_folder)
+            if chosen:
+                path_input.value = chosen.rstrip("/")
 
-            ui.button("Browse", icon="folder_open", on_click=_browse_save_location).props(
-                "flat dense"
-            )
+        path_input.on("click", _browse_save_location)
 
-        error_label = ui.label("").classes("text-negative text-caption")
+        error_label = ui.label("").classes("text-negative text-caption q-mt-xs")
 
-        with ui.row().classes("q-mt-md justify-end full-width gap-2"):
-            ui.button("Cancel", on_click=dialog.close).props("flat")
+        with ui.row().classes("q-mt-sm justify-end full-width gap-2"):
+            ui.button("Cancel", on_click=dialog.close).props("flat no-caps")
 
             async def _create() -> None:
                 name = name_input.value.strip()
@@ -236,7 +235,7 @@ async def _open_new_dialog() -> None:
 
                 _do_create()
 
-            ui.button("Create", on_click=_create).props("unelevated color=primary")
+            ui.button("Create", on_click=_create).props("unelevated color=primary no-caps")
 
     dialog.open()
 
