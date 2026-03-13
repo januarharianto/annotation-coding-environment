@@ -1,3 +1,4 @@
+import re
 import sqlite3
 
 import pytest
@@ -7,6 +8,7 @@ from ace.models.codebook import (
     add_code,
     compute_codebook_hash,
     delete_code,
+    export_codebook_to_csv,
     import_codebook_from_csv,
     list_codes,
     update_code,
@@ -71,3 +73,79 @@ def test_import_codebook_from_csv(tmp_db, tmp_path):
     assert len(codes) == 2
     assert codes[0]["name"] == "Theme A"
     assert codes[1]["name"] == "Theme B"
+
+
+def test_import_csv_optional_colour(tmp_db, tmp_path):
+    """Import CSV with no colour column — colours auto-assigned."""
+    conn = create_project(tmp_db, "Test")
+    csv_path = tmp_path / "codes.csv"
+    csv_path.write_text("name,description\nAlpha,First\nBeta,Second\n")
+    count = import_codebook_from_csv(conn, csv_path)
+    assert count == 2
+    codes = list_codes(conn)
+    assert all(re.match(r"^#[0-9A-F]{6}$", c["colour"]) for c in codes)
+
+
+def test_import_csv_skips_empty_names(tmp_db, tmp_path):
+    """Rows with empty name are skipped."""
+    conn = create_project(tmp_db, "Test")
+    csv_path = tmp_path / "codes.csv"
+    csv_path.write_text("name,colour\nAlpha,#FF0000\n,#00FF00\n  ,#0000FF\n")
+    count = import_codebook_from_csv(conn, csv_path)
+    assert count == 1
+
+
+def test_import_csv_dedup_names(tmp_db, tmp_path):
+    """Duplicate names in CSV: keep first, skip subsequent."""
+    conn = create_project(tmp_db, "Test")
+    csv_path = tmp_path / "codes.csv"
+    csv_path.write_text("name,colour\nAlpha,#FF0000\nAlpha,#00FF00\nBeta,#0000FF\n")
+    count = import_codebook_from_csv(conn, csv_path)
+    assert count == 2
+    codes = list_codes(conn)
+    assert codes[0]["colour"] == "#FF0000"  # first occurrence kept
+
+
+def test_import_csv_invalid_colour_auto_assigns(tmp_db, tmp_path):
+    """Invalid colour values get auto-assigned from palette."""
+    conn = create_project(tmp_db, "Test")
+    csv_path = tmp_path / "codes.csv"
+    csv_path.write_text("name,colour\nAlpha,red\nBeta,#00FF00\n")
+    count = import_codebook_from_csv(conn, csv_path)
+    assert count == 2
+    codes = list_codes(conn)
+    assert re.match(r"^#[0-9A-F]{6}$", codes[0]["colour"])  # auto-assigned
+    assert codes[1]["colour"] == "#00FF00"  # valid, kept
+
+
+def test_import_csv_atomic_rollback(tmp_db, tmp_path):
+    """Import is atomic — raises ValueError if no name column."""
+    conn = create_project(tmp_db, "Test")
+    csv_path = tmp_path / "codes.csv"
+    csv_path.write_text("colour\n#FF0000\n#00FF00\n")
+    with pytest.raises(ValueError, match="name"):
+        import_codebook_from_csv(conn, csv_path)
+    assert list_codes(conn) == []
+
+
+def test_import_csv_utf8_bom(tmp_db, tmp_path):
+    """Handle UTF-8 BOM from Excel exports."""
+    conn = create_project(tmp_db, "Test")
+    csv_path = tmp_path / "codes.csv"
+    csv_path.write_bytes(b"\xef\xbb\xbfname,colour\nAlpha,#FF0000\n")
+    count = import_codebook_from_csv(conn, csv_path)
+    assert count == 1
+    assert list_codes(conn)[0]["name"] == "Alpha"
+
+
+def test_export_codebook_to_csv(tmp_db, tmp_path):
+    conn = create_project(tmp_db, "Test")
+    add_code(conn, "Alpha", "#FF0000", "First")
+    add_code(conn, "Beta", "#00FF00")
+    out = tmp_path / "out.csv"
+    count = export_codebook_to_csv(conn, out)
+    assert count == 2
+    content = out.read_text()
+    assert "name,description,colour" in content
+    assert "Alpha,First,#FF0000" in content
+    assert "Beta,,#00FF00" in content
