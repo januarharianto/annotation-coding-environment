@@ -2,10 +2,15 @@
 
 import csv
 import hashlib
+import re as _re
 import sqlite3
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
+
+from ace.services.palette import next_colour
+
+_COLOUR_RE = _re.compile(r"^#[0-9A-Fa-f]{6}$")
 
 
 def add_code(
@@ -86,15 +91,54 @@ def compute_codebook_hash(conn: sqlite3.Connection) -> str:
 
 def import_codebook_from_csv(conn: sqlite3.Connection, path: str | Path) -> int:
     path = Path(path)
-    count = 0
-    with open(path, newline="") as f:
+    with open(path, newline="", encoding="utf-8-sig") as f:
         reader = csv.DictReader(f)
+        if reader.fieldnames is None or "name" not in reader.fieldnames:
+            raise ValueError("CSV must have a 'name' column")
+
+        rows_to_insert = []
+        seen_names: set[str] = set()
         for row in reader:
-            add_code(
-                conn,
-                name=row["name"],
-                colour=row["colour"],
-                description=row.get("description"),
+            name = row.get("name", "").strip()
+            if not name or name in seen_names:
+                continue
+            seen_names.add(name)
+
+            colour = row.get("colour", "").strip()
+            if not _COLOUR_RE.match(colour):
+                colour = next_colour(len(rows_to_insert))
+
+            description = row.get("description", "").strip() or None
+            rows_to_insert.append((name, colour, description))
+
+    now = datetime.now(timezone.utc).isoformat()
+    try:
+        for i, (name, colour, description) in enumerate(rows_to_insert):
+            code_id = uuid.uuid4().hex
+            conn.execute(
+                "INSERT INTO codebook_code (id, name, description, colour, sort_order, created_at) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                (code_id, name, description, colour, i + 1, now),
             )
-            count += 1
-    return count
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    return len(rows_to_insert)
+
+
+def export_codebook_to_csv(conn: sqlite3.Connection, path: str | Path) -> int:
+    path = Path(path)
+    codes = conn.execute(
+        "SELECT name, description, colour FROM codebook_code ORDER BY sort_order"
+    ).fetchall()
+    with open(path, "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=["name", "description", "colour"])
+        writer.writeheader()
+        for code in codes:
+            writer.writerow({
+                "name": code["name"],
+                "description": code["description"] or "",
+                "colour": code["colour"],
+            })
+    return len(codes)
