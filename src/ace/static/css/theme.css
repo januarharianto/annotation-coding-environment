@@ -43,6 +43,11 @@
     background: #f0f0f0;
 }
 
+/* Readonly inputs with solid border (instead of Quasar dashed default) */
+.ace-solid-readonly .q-field__control::before {
+    border-style: solid !important;
+}
+
 /* Dialog backdrop — slightly darker for contrast */
 .q-dialog__backdrop {
     background: rgba(0, 0, 0, 0.5);
