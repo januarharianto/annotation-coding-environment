@@ -244,6 +244,15 @@
     );
   };
 
+  // ── Splitter double-click reset ─────────────────────────────────
+  function setupSplitterReset() {
+    document.addEventListener("dblclick", function (e) {
+      if (!e.target.closest(".q-splitter__separator")) return;
+      e.preventDefault();
+      emitEvent("code_bar_reset", {});
+    });
+  }
+
   // Initialize once DOM is ready
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", function () {
@@ -251,11 +260,13 @@
       setupAnnotationClickListener();
       setupKeyboardShortcuts();
       setupCodeListSortable();
+      setupSplitterReset();
     });
   } else {
     setupSelectionListener();
     setupAnnotationClickListener();
     setupKeyboardShortcuts();
     setupCodeListSortable();
+    setupSplitterReset();
   }
 })();
