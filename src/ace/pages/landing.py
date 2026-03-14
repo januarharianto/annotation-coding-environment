@@ -134,7 +134,7 @@ def register() -> None:
                     "Check Agreement",
                     icon="compare_arrows",
                     on_click=lambda: ui.navigate.to("/agreement"),
-                ).props("outline no-caps")
+                ).props("outline")
 
             # Recent files
             recents: list = app.storage.general.get("recent_files", [])
