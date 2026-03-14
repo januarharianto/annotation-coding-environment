@@ -5,7 +5,6 @@ from pathlib import Path
 from ace.db.connection import create_project
 from ace.models.annotation import add_annotation
 from ace.models.codebook import add_code
-from ace.models.coder import add_coder
 from ace.models.source import add_source
 from ace.services.agreement_computer import compute_agreement
 from ace.services.agreement_loader import AgreementLoader

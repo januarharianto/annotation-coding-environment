@@ -239,15 +239,6 @@ def _render_per_code_table(result, dataset):
             "_low": metrics.krippendorffs_alpha is not None and metrics.krippendorffs_alpha < 0.67,
         })
 
-    table = ui.table(columns=base_columns, rows=rows, row_key="code").props("flat dense").classes("full-width")
-
-    def toggle_columns(show_all: bool):
-        if show_all:
-            table._props["columns"] = base_columns + extra_columns
-        else:
-            table._props["columns"] = base_columns
-        table.update()
-
     with ui.row().classes("items-center justify-between full-width q-mt-lg q-mb-sm"):
         ui.label("Agreement by Code").classes("text-h6 text-weight-medium")
         with ui.row().classes("items-center gap-2"):
@@ -257,6 +248,15 @@ def _render_per_code_table(result, dataset):
                 icon="download",
                 on_click=lambda: _export_per_code_csv(result),
             ).props("flat dense no-caps").classes("text-grey-8")
+
+    table = ui.table(columns=base_columns, rows=rows, row_key="code").props("flat dense").classes("full-width")
+
+    def toggle_columns(show_all: bool):
+        if show_all:
+            table._props["columns"] = base_columns + extra_columns
+        else:
+            table._props["columns"] = base_columns
+        table.update()
 
 
 def _render_pairwise(result, dataset):
@@ -358,7 +358,7 @@ def _agreement_label(value: float | None) -> str:
         return "Moderate"
     if value <= 0.80:
         return "Substantial"
-    return "Near-Perfect"
+    return "Almost Perfect"
 
 
 async def _copy_methods_paragraph(result):

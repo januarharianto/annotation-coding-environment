@@ -8,7 +8,6 @@ from ace.db.schema import ACE_APPLICATION_ID
 from ace.models.source import add_source
 from ace.models.codebook import add_code
 from ace.models.annotation import add_annotation
-from ace.models.coder import add_coder
 from ace.services.agreement_loader import AgreementLoader
 
 

@@ -215,36 +215,22 @@ class AgreementLoader:
 
     def _resolve_coder_labels(self) -> list[CoderInfo]:
         """Build unique coder identities from all files."""
-        coders: list[CoderInfo] = []
-        seen_names: dict[str, int] = {}
-
+        # First pass: collect all (coder_name, file_index, coder_id, path) tuples
+        raw: list[tuple[str, int, str, str]] = []
+        name_counts: dict[str, int] = {}
         for i, fd in enumerate(self._file_data):
-            path = fd["path"]
-            filename = Path(path).stem
             for coder_id, coder_name in fd["coders"].items():
-                # Check for ambiguous names
-                if coder_name in seen_names or coder_name == "default":
-                    label = f"{coder_name} ({filename})"
-                else:
-                    label = coder_name
-                seen_names[coder_name] = seen_names.get(coder_name, 0) + 1
-                unique_id = f"{i}_{coder_id}"
-                coders.append(CoderInfo(id=unique_id, label=label, source_file=path))
+                raw.append((coder_name, i, coder_id, fd["path"]))
+                name_counts[coder_name] = name_counts.get(coder_name, 0) + 1
 
-        # Second pass: if any name appeared more than once, relabel all instances
-        name_counts = {}
-        for c in coders:
-            base = c.label.split(" (")[0]
-            name_counts[base] = name_counts.get(base, 0) + 1
-
-        counters: dict[str, int] = {}
-        for c in coders:
-            base = c.label.split(" (")[0]
-            if name_counts[base] > 1 and base != c.label:
-                pass  # already disambiguated with filename
-            elif name_counts[base] > 1:
-                counters[base] = counters.get(base, 0) + 1
-                c.label = f"{base} ({Path(c.source_file).stem})"
+        # Second pass: disambiguate names that appear more than once or are "default"
+        coders: list[CoderInfo] = []
+        for coder_name, i, coder_id, path in raw:
+            if name_counts[coder_name] > 1 or coder_name == "default":
+                label = f"{coder_name} ({Path(path).stem})"
+            else:
+                label = coder_name
+            coders.append(CoderInfo(id=f"{i}_{coder_id}", label=label, source_file=path))
 
         return coders
 
