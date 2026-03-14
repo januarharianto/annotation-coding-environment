@@ -130,6 +130,11 @@ def register() -> None:
                 ui.button(
                     "Open Project", icon="folder_open", on_click=_open_file_picker
                 ).props("outline")
+                ui.button(
+                    "Check Agreement",
+                    icon="compare_arrows",
+                    on_click=lambda: ui.navigate.to("/agreement"),
+                ).props("outline no-caps")
 
             # Recent files
             recents: list = app.storage.general.get("recent_files", [])
