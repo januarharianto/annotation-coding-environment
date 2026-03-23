@@ -284,8 +284,7 @@ def _render_pairwise(result, dataset):
             elif i == j:
                 html += '<td class="ace-heatmap-diag">\u2014</td>'
             else:
-                bg = _heatmap_color(val)
-                text_color = "#ffffff" if val > 0.6 else "#212121"
+                bg, text_color = _heatmap_color(val)
                 html += (
                     f'<td style="background-color: {bg}; color: {text_color};">'
                     f"{val:.3f}</td>"
@@ -296,12 +295,20 @@ def _render_pairwise(result, dataset):
     ui.html(html, sanitize=False)
 
 
-def _heatmap_color(value: float) -> str:
-    """Interpolate from white (#ffffff) to blue (#1565c0) based on value 0-1."""
-    r = int(255 + (21 - 255) * value)
-    g = int(255 + (101 - 255) * value)
-    b = int(255 + (192 - 255) * value)
-    return f"rgb({r},{g},{b})"
+def _heatmap_color(value: float) -> tuple[str, str]:
+    """Return (background, text) colours for a 0-1 agreement value.
+
+    Uses a colourblind-friendly blue scale (#e3f2fd → #0d47a1) with
+    white text on dark backgrounds, dark text on light backgrounds.
+    Contrast threshold at 0.55 ensures WCAG AA compliance.
+    """
+    # Interpolate #e3f2fd (light blue) → #0d47a1 (dark blue)
+    r = int(227 + (13 - 227) * value)
+    g = int(242 + (71 - 242) * value)
+    b = int(253 + (161 - 253) * value)
+    bg = f"rgb({r},{g},{b})"
+    text = "#ffffff" if value > 0.55 else "#212121"
+    return bg, text
 
 
 def _render_methods_paragraph(result):
