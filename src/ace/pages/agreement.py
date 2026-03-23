@@ -143,7 +143,6 @@ def _render_dashboard(result, dataset):
     """Render the full agreement dashboard — single scrolling page."""
     alpha_val = result.overall.krippendorffs_alpha
     alpha_str = f"{alpha_val:.3f}" if alpha_val is not None else "N/A"
-    label, _ = _agreement_label(alpha_val)
 
     if result.n_coders == 2:
         kappa_label = "Cohen's Kappa"
@@ -164,7 +163,7 @@ def _render_dashboard(result, dataset):
         with ui.column().classes(
             "items-center justify-center gap-1 q-pa-md"
         ).style("min-width: 300px; border: 1px solid #bdbdbd;"):
-            _render_metric_line("Krippendorff's Alpha", alpha_str, label)
+            _render_metric_line("Krippendorff's Alpha", alpha_str)
             _render_metric_line(kappa_label, kappa_str)
             _render_metric_line("Percent Agreement", pct_str)
 
@@ -189,15 +188,13 @@ def _render_dashboard(result, dataset):
     _render_methods_paragraph(result)
 
 
-def _render_metric_line(label: str, value: str, qualifier: str = ""):
-    """Render a single metric as a line: Label  Value  Qualifier."""
+def _render_metric_line(label: str, value: str):
+    """Render a single metric as a line: Label  Value."""
     with ui.row().classes("items-center gap-3"):
         ui.label(label).classes("text-body2 text-grey-7").style(
             "width: 170px; text-align: right;"
         )
         ui.label(value).classes("ace-metric-lg")
-        if qualifier:
-            ui.label(qualifier).classes("text-caption text-grey-6")
 
 
 def _render_per_code_table(result):
@@ -240,17 +237,18 @@ def _render_per_code_table(result):
             "fleiss": f"{metrics.fleiss_kappa:.3f}" if metrics.fleiss_kappa is not None else "N/A",
         })
 
-    with ui.row().classes("items-center justify-between full-width q-mb-sm"):
-        ui.label("Agreement by Code").classes("ace-section-header")
-        ui.button(
-            "Export CSV",
-            icon="download",
-            on_click=lambda: _export_per_code_csv(result),
-        ).props("flat dense no-caps").classes("text-grey-8")
+    with ui.column().classes("items-center full-width"):
+        with ui.row().classes("items-center gap-4 q-mb-sm"):
+            ui.label("Agreement by Code").classes("ace-section-header")
+            ui.button(
+                "Export CSV",
+                icon="download",
+                on_click=lambda: _export_per_code_csv(result),
+            ).props("flat dense no-caps").classes("text-grey-8")
 
-    ui.table(
-        columns=columns, rows=rows, row_key="code",
-    ).props("flat dense").classes("full-width ace-data-table")
+        ui.table(
+            columns=columns, rows=rows, row_key="code",
+        ).props("flat dense").classes("ace-data-table")
 
 
 def _render_pairwise(result, dataset):
@@ -370,22 +368,6 @@ async def _copy_to_clipboard(text: str):
     )
     ui.notify("Copied to clipboard", type="positive")
 
-
-def _agreement_label(value: float | None) -> tuple[str, str]:
-    """Return (verbal label, css-level) for the Landis & Koch scale."""
-    if value is None:
-        return ("", "")
-    if value < 0.0:
-        return ("Poor", "poor")
-    if value <= 0.20:
-        return ("Slight", "slight")
-    if value <= 0.40:
-        return ("Fair", "fair")
-    if value <= 0.60:
-        return ("Moderate", "moderate")
-    if value <= 0.80:
-        return ("Substantial", "substantial")
-    return ("Almost Perfect", "almost-perfect")
 
 
 async def _native_pick_files() -> list[str]:
