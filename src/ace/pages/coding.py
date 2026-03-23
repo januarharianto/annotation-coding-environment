@@ -20,13 +20,14 @@ from ace.models.annotation import (
     undelete_annotation,
 )
 from ace.models.assignment import get_assignments_for_coder, update_assignment_status
-from ace.models.codebook import add_code, delete_code, export_codebook_to_csv, import_codebook_from_csv, list_codes, reorder_codes, update_code
+from ace.models.codebook import add_code, export_codebook_to_csv, import_codebook_from_csv, list_codes, reorder_codes
 from ace.models.coder import add_coder, list_coders, update_coder
 from ace.models.project import get_project
 from ace.pages.header import build_header
 from ace.models.source import get_source, get_source_content, list_sources
 from ace.services.offset import utf16_to_codepoint
-from ace.services.palette import COLOUR_PALETTE, next_colour
+from ace.pages.coding_dialogs import open_annotation_info, open_colour_dialog, open_delete_dialog, open_rename_dialog
+from ace.services.palette import next_colour
 from ace.services.undo import UndoManager
 
 _STATIC_DIR = Path(__file__).parent.parent / "static"
@@ -402,15 +403,15 @@ def build(conn: sqlite3.Connection) -> None:
                                 with ui.menu():
                                     ui.menu_item(
                                         "Rename",
-                                        on_click=lambda _e, c=code: _open_rename_dialog(c),
+                                        on_click=lambda _e, c=code: open_rename_dialog(conn, rename_dialog, c, _refresh_all),
                                     )
                                     ui.menu_item(
                                         "Change colour",
-                                        on_click=lambda _e, c=code: _open_colour_dialog(c),
+                                        on_click=lambda _e, c=code: open_colour_dialog(conn, colour_dialog, c, _refresh_all),
                                     )
                                     ui.menu_item(
                                         "Delete",
-                                        on_click=lambda _e, c=code: _open_delete_dialog(c),
+                                        on_click=lambda _e, c=code: open_delete_dialog(conn, delete_dialog, c, _refresh_all),
                                     )
 
             code_list()
@@ -606,70 +607,6 @@ def build(conn: sqlite3.Connection) -> None:
         _render_text(conn, current_source_id(), coder_id, codes_by_id, text_container)
         annotation_list_display.refresh()
 
-    # ── Code management dialogs ──────────────────────────────────────
-
-    def _open_code_dialog(dlg, title, content_fn, action_label=None, action_fn=None, action_props="unelevated color=primary"):
-        dlg.clear()
-        with dlg, ui.card().classes("q-pa-md").style("min-width: 300px;"):
-            ui.label(title).classes("text-subtitle1 text-weight-medium q-mb-sm")
-            content_fn()
-            with ui.row().classes("q-mt-md justify-end full-width gap-2"):
-                ui.button("Cancel", on_click=dlg.close).props("flat")
-                if action_label:
-                    ui.button(action_label, on_click=action_fn).props(action_props)
-        dlg.open()
-
-    def _open_rename_dialog(code):
-        name_input = None
-
-        def _content():
-            nonlocal name_input
-            name_input = ui.input("Name", value=code["name"]).props("autofocus outlined dense")
-
-        def _save():
-            new_name = name_input.value.strip()
-            if not new_name:
-                return
-            update_code(conn, code["id"], name=new_name)
-            rename_dialog.close()
-            _refresh_all()
-
-        _open_code_dialog(rename_dialog, "Rename Code", _content, "Save", _save)
-
-    def _open_colour_dialog(code):
-        def _content():
-            ui.label(code["name"]).classes("text-body2 text-grey-7 q-mb-sm")
-            with ui.row().classes("gap-2").style("flex-wrap: wrap;"):
-                for hex_colour, colour_name in COLOUR_PALETTE:
-                    def _pick(c=hex_colour):
-                        update_code(conn, code["id"], colour=c)
-                        colour_dialog.close()
-                        _refresh_all()
-
-                    is_current = (code["colour"] or "").lower() == hex_colour.lower()
-                    ui.element("div").classes("ace-code-dot cursor-pointer").style(
-                        f"background-color: {hex_colour}; width: 28px; height: 28px; "
-                        f"border: {'3px solid #333' if is_current else '2px solid transparent'};"
-                    ).tooltip(hex_colour).on("click", _pick)
-
-        _open_code_dialog(colour_dialog, "Change Colour", _content)
-
-    def _open_delete_dialog(code):
-        def _content():
-            ui.label(
-                f'Are you sure you want to delete "{code["name"]}"?'
-            ).classes("text-body2 q-mb-sm")
-            ui.label(
-                "All annotations using this code will be permanently deleted."
-            ).classes("text-caption text-grey-7 q-mb-md")
-
-        def _confirm():
-            delete_code(conn, code["id"])
-            delete_dialog.close()
-            _refresh_all()
-
-        _open_code_dialog(delete_dialog, "Delete Code", _content, "Delete", _confirm, "unelevated color=negative")
-
     # ── Apply code (no dialog) ───────────────────────────────────────
 
     async def _apply_code(code):
@@ -717,47 +654,6 @@ def build(conn: sqlite3.Connection) -> None:
         _render_text(conn, source_id, coder_id, codes_by_id, text_container)
         annotation_list_display.refresh()
         ui.notify("Annotation removed.", type="info", position="bottom", timeout=1500)
-
-    # ── Annotation info dialog ───────────────────────────────────────
-
-    def _open_annotation_info(ann_ids):
-        anns = []
-        for aid in ann_ids:
-            row = conn.execute(
-                "SELECT * FROM annotation WHERE id = ? AND deleted_at IS NULL", (aid,)
-            ).fetchone()
-            if row:
-                anns.append(row)
-
-        if not anns:
-            return
-
-        annotation_info_dialog.clear()
-        with annotation_info_dialog, ui.card().classes("q-pa-sm").style("min-width: 250px;"):
-            ui.label("Annotations").classes("text-subtitle2 text-weight-medium q-mb-xs")
-
-            for ann in anns:
-                code = codes_by_id.get(ann["code_id"])
-                colour = code["colour"] if code else "#999999"
-                code_name = code["name"] if code else "Unknown"
-                selected = ann["selected_text"] or ""
-                truncated = selected[:60] + ("..." if len(selected) > 60 else "")
-
-                with ui.row().classes("items-center q-py-xs full-width").style("gap: 8px;"):
-                    ui.element("div").classes("ace-code-dot").style(
-                        f"background-color: {colour};"
-                    )
-                    with ui.column().classes("col").style("min-width: 0;"):
-                        ui.label(code_name).classes("text-body2 text-weight-medium")
-                        ui.label(f'"{truncated}"').classes("text-caption text-grey-7 ellipsis")
-                    ui.button(
-                        icon="delete",
-                        on_click=lambda _e, a=ann: _delete_annotation(a, annotation_info_dialog),
-                    ).props("flat round dense size=sm color=negative")
-
-            ui.button("Close", on_click=annotation_info_dialog.close).props("flat dense").classes("q-mt-xs")
-
-        annotation_info_dialog.open()
 
     # ── Navigation ───────────────────────────────────────────────────
 
@@ -810,7 +706,7 @@ def build(conn: sqlite3.Connection) -> None:
         data = e.args
         ann_ids = data.get("annotation_ids", [])
         if ann_ids:
-            _open_annotation_info(ann_ids)
+            open_annotation_info(conn, annotation_info_dialog, ann_ids, codes_by_id, _delete_annotation)
 
     ui.on("text_selected", _on_text_selected)
     ui.on("annotation_clicked", _on_annotation_clicked)
