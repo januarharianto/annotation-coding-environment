@@ -11,7 +11,8 @@ dependencies = [
     "nicegui>=3.0",
     "pandas>=2.0",
     "openpyxl>=3.1",
-    "irrCAC>=0.3",
+    "irrCAC>=0.4",
+    "krippendorff>=0.7",
     "scikit-learn>=1.0",
 ]
 
@@ -24,3 +25,8 @@ packages = ["src/ace"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+]
