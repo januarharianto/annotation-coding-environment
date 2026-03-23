@@ -80,15 +80,3 @@
     align-items: center;
     gap: 3px;
 }
-
-/* Agreement dashboard metric typography */
-.ace-metric {
-    font-family: 'SF Mono', 'Menlo', 'Consolas', monospace;
-    font-size: 0.875rem;
-}
-.ace-metric-hero {
-    font-family: 'SF Mono', 'Menlo', 'Consolas', monospace;
-    font-size: 2.5rem;
-    font-weight: 700;
-    letter-spacing: -0.02em;
-}
