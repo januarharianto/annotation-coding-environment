@@ -12,8 +12,8 @@ def _generate_palette(n: int) -> list[tuple[str, str]]:
     colours = []
     for i in range(n):
         hue = (i * golden_ratio) % 1.0
-        lightness = 0.42 if i % 2 == 0 else 0.58
-        saturation = 0.65
+        lightness = 0.38 if i % 2 == 0 else 0.62
+        saturation = 0.75
         r, g, b = colorsys.hls_to_rgb(hue, lightness, saturation)
         hex_val = f"#{int(r * 255):02X}{int(g * 255):02X}{int(b * 255):02X}"
         colours.append((hex_val, f"Colour {i + 1}"))

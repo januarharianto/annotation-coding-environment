@@ -63,9 +63,9 @@ def test_import_codebook_from_csv(tmp_db, tmp_path):
     conn = create_project(tmp_db, "Test")
     csv_path = tmp_path / "codes.csv"
     csv_path.write_text(
-        "name,colour,description\n"
-        "Theme A,#FF0000,First theme\n"
-        "Theme B,#00FF00,Second theme\n"
+        "name,colour\n"
+        "Theme A,#FF0000\n"
+        "Theme B,#00FF00\n"
     )
     count = import_codebook_from_csv(conn, csv_path)
     assert count == 2
@@ -140,12 +140,12 @@ def test_import_csv_utf8_bom(tmp_db, tmp_path):
 
 def test_export_codebook_to_csv(tmp_db, tmp_path):
     conn = create_project(tmp_db, "Test")
-    add_code(conn, "Alpha", "#FF0000", "First")
+    add_code(conn, "Alpha", "#FF0000")
     add_code(conn, "Beta", "#00FF00")
     out = tmp_path / "out.csv"
     count = export_codebook_to_csv(conn, out)
     assert count == 2
     content = out.read_text()
-    assert "name,description,colour" in content
-    assert "Alpha,First,#FF0000" in content
-    assert "Beta,,#00FF00" in content
+    assert "name,colour" in content
+    assert "Alpha,#FF0000" in content
+    assert "Beta,#00FF00" in content

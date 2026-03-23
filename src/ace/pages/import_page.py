@@ -75,7 +75,7 @@ def _build(conn) -> None:
             ),
         ).props('accept=".csv,.xlsx,.xls" flat bordered').classes("full-width")
 
-        ui.label("or").classes("text-body2 text-grey-6 q-my-xs self-center")
+        ui.label("or").classes("text-body2 text-grey-7 q-my-xs self-center")
 
         with ui.row().classes("items-center gap-2 full-width"):
             folder_input = ui.input(
@@ -190,7 +190,7 @@ def _handle_folder_load(
         ui.table(columns=columns, rows=rows).classes("full-width")
         if len(txt_files) > 10:
             ui.label(f"... and {len(txt_files) - 10} more files").classes(
-                "text-caption text-grey-6"
+                "text-caption text-grey-7"
             )
 
     preview_container.set_visibility(True)

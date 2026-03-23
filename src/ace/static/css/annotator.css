@@ -10,7 +10,7 @@
     animation: ace-flash 1s ease-out;
 }
 @keyframes ace-flash {
-    0%, 20% { outline: 2px solid #1976d2; outline-offset: 1px; }
+    0%, 20% { outline: 2px solid #1565c0; outline-offset: 1px; }
     100% { outline: 2px solid transparent; outline-offset: 1px; }
 }
 
@@ -20,8 +20,8 @@
     white-space: pre-wrap;
     word-wrap: break-word;
     padding: 16px;
-    border: 1px solid #e0e0e0;
-    background: #fafafa;
+    border: 1px solid #bdbdbd;
+    background: #ffffff;
     min-height: 200px;
     user-select: text;
     -webkit-user-select: text;
@@ -36,14 +36,14 @@
 }
 
 .ace-keycap {
-    background: #f0f0f0;
-    color: #555;
+    background: #eeeeee;
+    color: #333;
     font-family: 'SF Mono', 'Menlo', 'Consolas', monospace;
     font-size: 11px;
     line-height: 1;
     padding: 2px 5px;
     border-radius: 3px;
-    border: 1px solid #d0d0d0;
+    border: 1px solid #999;
     border-bottom-width: 2px;
     flex-shrink: 0;
 }
@@ -81,10 +81,10 @@
     transition: background 0.1s;
 }
 .ace-source-item:hover {
-    background: #e8eaf6;
+    background: #e0e0e0;
 }
 .ace-source-item.active {
-    background: #c5cae9;
+    background: #bdbdbd;
     font-weight: 500;
 }
 
