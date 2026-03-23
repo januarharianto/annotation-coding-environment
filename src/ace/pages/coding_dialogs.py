@@ -45,7 +45,7 @@ def open_colour_dialog(conn: sqlite3.Connection, dlg, code, refresh_all_fn):
     def _content():
         ui.label(code["name"]).classes("text-body2 text-grey-7 q-mb-sm")
         with ui.row().classes("gap-2").style("flex-wrap: wrap;"):
-            for hex_colour, colour_name in COLOUR_PALETTE:
+            for hex_colour, _ in COLOUR_PALETTE:
                 def _pick(c=hex_colour):
                     update_code(conn, code["id"], colour=c)
                     dlg.close()

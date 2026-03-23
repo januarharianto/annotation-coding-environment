@@ -10,6 +10,7 @@ from ace.models.annotation import (
 )
 from ace.models.assignment import update_assignment_status
 from ace.models.source import get_source_content
+from ace.pages.coding_render import render_annotated_text
 from ace.services.offset import utf16_to_codepoint
 
 
@@ -18,8 +19,6 @@ from ace.services.offset import utf16_to_codepoint
 # ---------------------------------------------------------------------------
 
 def render_text(conn, source_id, coder_id, codes_by_id, text_container):
-    from ace.pages.coding import render_annotated_text
-
     content_row = get_source_content(conn, source_id)
     text = content_row["content_text"] if content_row else ""
     annotations = get_annotations_for_source(conn, source_id, coder_id)
