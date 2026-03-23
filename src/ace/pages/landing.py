@@ -60,7 +60,7 @@ def _ask_overwrite(file_path: Path, on_confirm) -> None:
     with ui.dialog(value=True) as dlg, ui.card().classes("q-pa-md"):
         ui.label(f'"{file_path.name}" already exists.').classes("text-body1")
         ui.label("Overwrite it? All existing data will be lost.").classes(
-            "text-body2 text-grey-7"
+            "text-body2 text-grey-8"
         )
         with ui.row().classes("q-mt-md justify-end full-width gap-2"):
             ui.button("Cancel", on_click=dlg.close).props("flat")
@@ -84,13 +84,13 @@ def register() -> None:
         with ui.column().classes("absolute-center items-center gap-6"):
             ui.label("ACE").classes("text-h3 text-weight-bold")
             ui.label("Annotation Coding Environment").classes(
-                "text-subtitle1 text-grey-7"
+                "text-subtitle1 text-grey-8"
             )
 
             # First-time name input (collapses once saved)
             if not app.storage.general.get("coder_name"):
                 with ui.column().classes("items-center gap-2 q-mt-sm").style("width: 280px;"):
-                    ui.label("What's your name?").classes("text-body2 text-grey-6")
+                    ui.label("What's your name?").classes("text-body2 text-grey-7")
                     _name_input = ui.input(placeholder="Your name").props(
                         "autofocus outlined dense"
                     ).classes("full-width")
@@ -138,7 +138,7 @@ def register() -> None:
             if recents:
                 ui.separator().classes("q-my-sm").style("width: 300px")
                 with ui.row().classes("items-center full-width justify-between").style("width: 300px"):
-                    ui.label("Recent").classes("text-caption text-grey-6")
+                    ui.label("Recent").classes("text-caption text-grey-7")
 
                     def _clear_recents():
                         app.storage.general["recent_files"] = []
@@ -146,7 +146,7 @@ def register() -> None:
 
                     ui.button("Clear", on_click=_clear_recents).props(
                         "flat dense no-caps"
-                    ).classes("text-caption text-grey-5")
+                    ).classes("text-caption text-grey-7")
                 with ui.column().classes("gap-0").style("width: 300px"):
                     for rpath in recents:
                         p = Path(rpath)
@@ -159,11 +159,11 @@ def register() -> None:
                         ).style(
                             "gap: 8px; border-radius: 4px;"
                         ).on("click", _open_recent):
-                            ui.icon("description", size="xs").classes("text-grey-6")
+                            ui.icon("description", size="xs").classes("text-grey-7")
                             with ui.column().classes("gap-0").style("min-width: 0;"):
                                 ui.label(p.stem).classes("text-body2 ellipsis")
                                 ui.label(str(p.parent)).classes(
-                                    "text-caption text-grey-5 ellipsis"
+                                    "text-caption text-grey-7 ellipsis"
                                 )
 
 

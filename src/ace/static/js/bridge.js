@@ -203,6 +203,12 @@
         return;
       }
 
+      // G = toggle source grid
+      if (e.key === "g" && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        emitEvent("shortcut_toggle_grid", {});
+        return;
+      }
+
       // 1-9, 0, a-z = apply code (only when there is an active text selection)
       if (!e.ctrlKey && !e.metaKey && !e.altKey) {
         var codeIndex = -1;
@@ -253,20 +259,30 @@
     });
   }
 
-  // Initialize once DOM is ready
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", function () {
-      setupSelectionListener();
-      setupAnnotationClickListener();
-      setupKeyboardShortcuts();
-      setupCodeListSortable();
-      setupSplitterReset();
+  // ── Source grid delegated click ──────────────────────────────────
+  function setupGridClickListener() {
+    document.addEventListener("click", function (e) {
+      var cell = e.target.closest(".ace-grid-cell");
+      if (!cell) return;
+      var idx = parseInt(cell.dataset.idx, 10);
+      if (!isNaN(idx)) {
+        emitEvent("grid_cell_clicked", { index: idx });
+      }
     });
-  } else {
+  }
+
+  // Initialize once DOM is ready
+  function initAll() {
     setupSelectionListener();
     setupAnnotationClickListener();
     setupKeyboardShortcuts();
     setupCodeListSortable();
     setupSplitterReset();
+    setupGridClickListener();
+  }
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", initAll);
+  } else {
+    initAll();
   }
 })();

@@ -24,12 +24,12 @@
 
 /* Cards get a border for definition */
 .q-card {
-    border: 1px solid #d0d0d0;
+    border: 1px solid #9e9e9e;
 }
 
 /* Stepper remove default shadow */
 .q-stepper {
-    border: 1px solid #d0d0d0;
+    border: 1px solid #9e9e9e;
 }
 
 /* Upload area */
@@ -40,7 +40,7 @@
 
 /* Recent file list items */
 .ace-recent-item:hover {
-    background: #f0f0f0;
+    background: #e8e8e8;
 }
 
 /* Readonly inputs with solid border (instead of Quasar dashed default) */
@@ -51,4 +51,32 @@
 /* Dialog backdrop — slightly darker for contrast */
 .q-dialog__backdrop {
     background: rgba(0, 0, 0, 0.5);
+}
+
+/* Source grid navigator */
+.ace-source-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px;
+    padding: 8px;
+}
+.ace-grid-cell {
+    cursor: pointer;
+    transition: opacity 0.1s;
+}
+.ace-grid-cell:hover {
+    opacity: 0.7;
+}
+.ace-grid-legend {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 4px 8px;
+    font-size: 11px;
+    color: #555;
+}
+.ace-grid-legend span {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
 }
