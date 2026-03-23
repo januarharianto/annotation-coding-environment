@@ -163,6 +163,7 @@ def _render_dashboard(result, dataset):
         with ui.column().classes(
             "items-center justify-center gap-1 q-pa-md"
         ).style("min-width: 300px; border: 1px solid #bdbdbd;"):
+            ui.label("Overall").classes("ace-section-header")
             _render_metric_line("Krippendorff's Alpha", alpha_str)
             _render_metric_line(kappa_label, kappa_str)
             _render_metric_line("Percent Agreement", pct_str)
@@ -186,6 +187,16 @@ def _render_dashboard(result, dataset):
     # ── Methods paragraph ─────────────────────────────────────
     ui.separator().classes("q-my-md")
     _render_methods_paragraph(result)
+
+    # ── Export ────────────────────────────────────────────────
+    ui.separator().classes("q-my-md")
+    with ui.column().classes("items-center full-width"):
+        ui.button(
+            "Export All Results",
+            icon="download",
+            on_click=lambda: _export_all_csv(result, dataset),
+        ).props("unelevated no-caps").classes("ace-compute-btn")
+
 
 
 def _render_metric_line(label: str, value: str):
@@ -238,13 +249,7 @@ def _render_per_code_table(result):
         })
 
     with ui.column().classes("items-center full-width"):
-        with ui.row().classes("items-center gap-4 q-mb-sm"):
-            ui.label("Agreement by Code").classes("ace-section-header")
-            ui.button(
-                "Export CSV",
-                icon="download",
-                on_click=lambda: _export_per_code_csv(result),
-            ).props("flat dense no-caps").classes("text-grey-8")
+        ui.label("Agreement by Code").classes("ace-section-header q-mb-sm")
 
         ui.table(
             columns=columns, rows=rows, row_key="code",
@@ -313,18 +318,17 @@ def _render_methods_paragraph(result):
     """Render the methods paragraph inline with a copy button."""
     para = _build_methods_text(result)
 
-    with ui.row().classes("items-start full-width q-mb-sm"):
-        ui.label("Methods Paragraph").classes("ace-section-header").style(
-            "border-bottom: none; margin-bottom: 0; padding-bottom: 0; flex: 1;"
-        )
-        ui.button(
-            icon="content_copy",
-            on_click=lambda: _copy_to_clipboard(para),
-        ).props("flat dense round").classes("text-grey-7")
+    with ui.column().classes("items-center full-width"):
+        with ui.row().classes("items-center gap-2 q-mb-sm"):
+            ui.label("Methods Paragraph").classes("ace-section-header")
+            ui.button(
+                icon="content_copy",
+                on_click=lambda: _copy_to_clipboard(para),
+            ).props("flat dense round").classes("text-grey-7")
 
-    ui.label(para).classes("text-body2 text-grey-8").style(
-        "line-height: 1.6; font-style: italic;"
-    )
+        ui.label(para).classes("text-body2 text-grey-8").style(
+            "line-height: 1.6; font-style: italic; max-width: 72ch; text-align: center;"
+        )
 
 
 def _build_methods_text(result) -> str:
@@ -410,28 +414,63 @@ async def _native_pick_files() -> list[str]:
         return []
 
 
-def _export_per_code_csv(result):
-    """Export per-code metrics as CSV download."""
+def _export_all_csv(result, dataset):
+    """Export all agreement results as a single CSV with sections."""
     import csv
     import io
     from datetime import date
 
     buf = io.StringIO()
-    writer = csv.writer(buf)
-    writer.writerow([
-        "code_name", "n_positions", "percent_agreement",
-        "cohens_kappa", "krippendorffs_alpha", "fleiss_kappa",
-        "gwets_ac1", "brennan_prediger", "congers_kappa",
-    ])
+    w = csv.writer(buf)
+
+    # ── Overall ───────────────────────────────────────────────
+    w.writerow(["Overall"])
+    w.writerow(["metric", "value"])
+    w.writerow(["Krippendorff's Alpha", f"{result.overall.krippendorffs_alpha:.4f}" if result.overall.krippendorffs_alpha is not None else ""])
+    if result.n_coders == 2:
+        w.writerow(["Cohen's Kappa", f"{result.overall.cohens_kappa:.4f}" if result.overall.cohens_kappa is not None else ""])
+    else:
+        w.writerow(["Fleiss' Kappa", f"{result.overall.fleiss_kappa:.4f}" if result.overall.fleiss_kappa is not None else ""])
+    w.writerow(["Percent Agreement", f"{result.overall.percent_agreement:.4f}"])
+    w.writerow(["Sources", result.n_sources])
+    w.writerow(["Codes", result.n_codes])
+    w.writerow(["Coders", result.n_coders])
+
+    # ── Agreement by Code ─────────────────────────────────────
+    w.writerow([])
+    w.writerow(["Agreement by Code"])
+    w.writerow(["code_name", "pct_agree", "k_alpha", "kappa", "ac1", "bp", "conger", "fleiss"])
     for code_name, m in sorted(result.per_code.items()):
-        writer.writerow([
-            code_name, m.n_positions, f"{m.percent_agreement:.4f}",
-            f"{m.cohens_kappa:.4f}" if m.cohens_kappa is not None else "",
+        kappa = m.cohens_kappa if result.n_coders == 2 else m.fleiss_kappa
+        w.writerow([
+            code_name,
+            f"{m.percent_agreement:.4f}",
             f"{m.krippendorffs_alpha:.4f}" if m.krippendorffs_alpha is not None else "",
-            f"{m.fleiss_kappa:.4f}" if m.fleiss_kappa is not None else "",
+            f"{kappa:.4f}" if kappa is not None else "",
             f"{m.gwets_ac1:.4f}" if m.gwets_ac1 is not None else "",
             f"{m.brennan_prediger:.4f}" if m.brennan_prediger is not None else "",
             f"{m.congers_kappa:.4f}" if m.congers_kappa is not None else "",
+            f"{m.fleiss_kappa:.4f}" if m.fleiss_kappa is not None else "",
         ])
 
-    ui.download(buf.getvalue().encode(), f"agreement_by_code_{date.today()}.csv")
+    # ── Pairwise (3+ coders) ──────────────────────────────────
+    if result.n_coders > 2:
+        coders = dataset.coders
+        w.writerow([])
+        w.writerow(["Pairwise"])
+        w.writerow([""] + [c.label for c in coders])
+        for i, ci in enumerate(coders):
+            row = [ci.label]
+            for j, cj in enumerate(coders):
+                if i == j:
+                    row.append("")
+                else:
+                    key = (ci.id, cj.id)
+                    alt = (cj.id, ci.id)
+                    val = result.pairwise.get(key) or result.pairwise.get(alt)
+                    row.append(f"{val:.4f}" if val is not None else "")
+            w.writerow(row)
+
+    ui.download(buf.getvalue().encode(), f"agreement_results_{date.today()}.csv")
+
+
