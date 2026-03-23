@@ -190,11 +190,16 @@ def _render_dashboard(result, dataset):
 
     # ── Export ────────────────────────────────────────────────
     ui.separator().classes("q-my-md")
-    with ui.column().classes("items-center full-width"):
+    with ui.row().classes("items-center justify-center full-width gap-4"):
         ui.button(
-            "Export All Results",
+            "Export Results",
             icon="download",
             on_click=lambda: _export_all_csv(result, dataset),
+        ).props("unelevated no-caps").classes("ace-compute-btn")
+        ui.button(
+            "Export Raw Data",
+            icon="table_chart",
+            on_click=lambda: _export_raw_data_csv(dataset),
         ).props("unelevated no-caps").classes("ace-compute-btn")
 
 
@@ -472,5 +477,55 @@ def _export_all_csv(result, dataset):
             w.writerow(row)
 
     ui.download(buf.getvalue().encode(), f"agreement_results_{date.today()}.csv")
+
+
+def _export_raw_data_csv(dataset):
+    """Export position-level wide matrix for R/statistical reanalysis.
+
+    Format: rows = character positions (filtered to coded positions only),
+    columns = coders, cells = code name (or blank). This is directly usable
+    by R packages like irrCAC, irr, and krippendorffsalpha.
+    """
+    import csv
+    import io
+    from collections import defaultdict
+    from datetime import date
+
+    coder_ids = [c.id for c in dataset.coders]
+    coder_labels = {c.id: c.label for c in dataset.coders}
+
+    # Index annotations by (source_hash, coder_id)
+    ann_index = defaultdict(list)
+    for ann in dataset.annotations:
+        ann_index[(ann.source_hash, ann.coder_id)].append(ann)
+
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(["unit_id"] + [coder_labels[cid] for cid in coder_ids])
+
+    for source in dataset.sources:
+        text_len = len(source.content_text)
+        if text_len == 0:
+            continue
+
+        # Build per-coder code assignments at each position
+        coder_positions: dict[str, list[str]] = {cid: [""] * text_len for cid in coder_ids}
+        any_coded = [False] * text_len
+
+        for cid in coder_ids:
+            for ann in ann_index.get((source.content_hash, cid), []):
+                for i in range(ann.start_offset, min(ann.end_offset, text_len)):
+                    coder_positions[cid][i] = ann.code_name
+                    any_coded[i] = True
+
+        # Only output positions where at least one coder applied a code
+        for i in range(text_len):
+            if not any_coded[i]:
+                continue
+            unit_id = f"{source.display_id}_{i:04d}"
+            row = [unit_id] + [coder_positions[cid][i] for cid in coder_ids]
+            w.writerow(row)
+
+    ui.download(buf.getvalue().encode(), f"agreement_raw_data_{date.today()}.csv")
 
 
