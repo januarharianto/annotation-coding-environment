@@ -13,19 +13,24 @@ from nicegui import app, events, ui
 
 from ace.db.connection import checkpoint_and_close, open_project
 from ace.models.annotation import (
-    add_annotation,
-    delete_annotation,
     get_annotation_counts_by_source,
     get_annotations_for_source,
-    undelete_annotation,
 )
-from ace.models.assignment import get_assignments_for_coder, update_assignment_status
+from ace.models.assignment import get_assignments_for_coder
 from ace.models.codebook import add_code, export_codebook_to_csv, import_codebook_from_csv, list_codes, reorder_codes
 from ace.models.coder import add_coder, list_coders, update_coder
 from ace.models.project import get_project
 from ace.pages.header import build_header
-from ace.models.source import get_source, get_source_content, list_sources
-from ace.services.offset import utf16_to_codepoint
+from ace.models.source import get_source, list_sources
+from ace.pages.coding_actions import (
+    apply_code,
+    auto_transition,
+    delete_annotation_action,
+    do_undo_redo,
+    navigate_to,
+    render_text,
+    toggle_flag,
+)
 from ace.pages.coding_dialogs import open_annotation_info, open_colour_dialog, open_delete_dialog, open_rename_dialog
 from ace.services.palette import next_colour
 from ace.services.undo import UndoManager
@@ -200,12 +205,6 @@ def build(conn: sqlite3.Connection) -> None:
     def current_source_id():
         return current_assignment()["source_id"]
 
-    def _auto_transition():
-        asn = current_assignment()
-        if asn["status"] == "pending":
-            update_assignment_status(conn, asn["source_id"], coder_id, "in_progress")
-            _reload_assignments()
-
     def _reload_assignments():
         fresh = get_assignments_for_coder(conn, coder_id)
         assignments.clear()
@@ -321,7 +320,7 @@ def build(conn: sqlite3.Connection) -> None:
                         Path(tmp.name).unlink(missing_ok=True)
                         _refresh_codes()
                         code_list.refresh()
-                        _render_text(conn, current_source_id(), coder_id, codes_by_id, text_container)
+                        render_text(conn, current_source_id(), coder_id, codes_by_id, text_container)
                         ui.notify(f"Imported {count} code(s).", type="positive", position="bottom")
                     except Exception as exc:
                         ui.notify(f"Import failed: {exc}", type="negative", position="bottom")
@@ -344,7 +343,7 @@ def build(conn: sqlite3.Connection) -> None:
                 new_code_input.value = ""
                 _refresh_codes()
                 code_list.refresh()
-                _render_text(conn, current_source_id(), coder_id, codes_by_id, text_container)
+                render_text(conn, current_source_id(), coder_id, codes_by_id, text_container)
 
             new_code_input.on("keydown.enter", _on_new_code_enter)
 
@@ -604,93 +603,28 @@ def build(conn: sqlite3.Connection) -> None:
     def _refresh_all():
         _refresh_codes()
         code_list.refresh()
-        _render_text(conn, current_source_id(), coder_id, codes_by_id, text_container)
+        render_text(conn, current_source_id(), coder_id, codes_by_id, text_container)
         annotation_list_display.refresh()
 
     # ── Apply code (no dialog) ───────────────────────────────────────
 
     async def _apply_code(code):
-        sel = state.get("pending_selection")
-        if not sel:
-            # Fallback: read snapshot captured on last mousedown
-            sel = await ui.run_javascript("window.__aceLastSelection")
-            if sel:
-                state["pending_selection"] = sel
-        if not sel:
-            ui.notify("Select text first, then click a code.", type="info", position="bottom", timeout=2000)
-            return
-
-        source_id = current_source_id()
-        content_row = get_source_content(conn, source_id)
-        text = content_row["content_text"] if content_row else ""
-
-        start_cp = utf16_to_codepoint(text, sel["start"])
-        end_cp = utf16_to_codepoint(text, sel["end"])
-        selected_text = text[start_cp:end_cp]
-
-        ann_id = add_annotation(
-            conn,
-            source_id=source_id,
-            coder_id=coder_id,
-            code_id=code["id"],
-            start_offset=start_cp,
-            end_offset=end_cp,
-            selected_text=selected_text,
-        )
-        undo_mgr.record_add(source_id, ann_id)
-
-        state["pending_selection"] = None
-        _render_text(conn, source_id, coder_id, codes_by_id, text_container)
-        annotation_list_display.refresh()
+        await apply_code(state, conn, coder_id, current_source_id, codes_by_id, text_container, annotation_list_display.refresh, undo_mgr, code)
 
     # ── Delete annotation ────────────────────────────────────────────
 
     def _delete_annotation(ann, dialog=None):
-        source_id = ann["source_id"]
-        undo_mgr.record_delete(source_id, ann["id"])
-        delete_annotation(conn, ann["id"])
-        if dialog:
-            dialog.close()
-        _render_text(conn, source_id, coder_id, codes_by_id, text_container)
-        annotation_list_display.refresh()
-        ui.notify("Annotation removed.", type="info", position="bottom", timeout=1500)
+        delete_annotation_action(conn, ann, undo_mgr, codes_by_id, coder_id, text_container, annotation_list_display.refresh, dialog)
 
     # ── Navigation ───────────────────────────────────────────────────
 
     def _navigate_to(idx):
-        if idx == state["current_index"]:
-            return
-
-        # Auto-complete the departing source (unless already complete or flagged)
-        departing = current_assignment()
-        if departing["status"] not in ("complete", "flagged"):
-            update_assignment_status(conn, departing["source_id"], coder_id, "complete")
-
-        state["current_index"] = idx
-        state["pending_selection"] = None
-
-        asn = assignments[idx]
-        source_id = asn["source_id"]
-
-        if asn["status"] == "pending":
-            update_assignment_status(conn, source_id, coder_id, "in_progress")
-
-        _reload_assignments()
-
-        _render_text(conn, source_id, coder_id, codes_by_id, text_container)
-        source_header.refresh()
-        bottom_bar.refresh()
-        annotation_list_display.refresh()
+        navigate_to(conn, coder_id, state, assignments, codes_by_id, text_container, source_header.refresh, bottom_bar.refresh, annotation_list_display.refresh, _reload_assignments, idx)
 
     # ── Status toggles ───────────────────────────────────────────────
 
     def _toggle_flag():
-        asn = current_assignment()
-        new_status = "in_progress" if asn["status"] == "flagged" else "flagged"
-        update_assignment_status(conn, asn["source_id"], coder_id, new_status)
-        _reload_assignments()
-        source_header.refresh()
-        bottom_bar.refresh()
+        toggle_flag(conn, coder_id, state, assignments, source_header.refresh, bottom_bar.refresh, _reload_assignments)
 
     # ── Event handlers from JS ───────────────────────────────────────
 
@@ -714,10 +648,10 @@ def build(conn: sqlite3.Connection) -> None:
     # ── Keyboard shortcut handlers ───────────────────────────────────
 
     def _on_shortcut_undo(_e):
-        _do_undo_redo(conn, coder_id, codes_by_id, text_container, annotation_list_display, undo_mgr, current_source_id())
+        do_undo_redo(conn, coder_id, codes_by_id, text_container, annotation_list_display.refresh, undo_mgr, current_source_id())
 
     def _on_shortcut_redo(_e):
-        _do_undo_redo(conn, coder_id, codes_by_id, text_container, annotation_list_display, undo_mgr, current_source_id(), redo=True)
+        do_undo_redo(conn, coder_id, codes_by_id, text_container, annotation_list_display.refresh, undo_mgr, current_source_id(), redo=True)
 
     def _on_shortcut_escape(_e):
         if grid_container.visible:
@@ -758,46 +692,8 @@ def build(conn: sqlite3.Connection) -> None:
     ui.on("shortcut_toggle_grid", lambda _e: _toggle_grid())
 
     # ── Initial render ───────────────────────────────────────────────
-    _render_text(conn, current_source_id(), coder_id, codes_by_id, text_container)
-    _auto_transition()
-
-
-# ---------------------------------------------------------------------------
-# Text rendering
-# ---------------------------------------------------------------------------
-
-def _render_text(conn, source_id, coder_id, codes_by_id, text_container):
-    content_row = get_source_content(conn, source_id)
-    text = content_row["content_text"] if content_row else ""
-    annotations = get_annotations_for_source(conn, source_id, coder_id)
-    rendered = render_annotated_text(text, annotations, codes_by_id)
-    text_container.content = rendered
-
-
-
-# ---------------------------------------------------------------------------
-# Undo / redo
-# ---------------------------------------------------------------------------
-
-_UNDO_OPS = {"undo_add": "delete", "undo_delete": "undelete"}
-_REDO_OPS = {"redo_add": "undelete", "redo_delete": "delete"}
-
-
-def _do_undo_redo(conn, coder_id, codes_by_id, text_container, annotation_list_display, undo_mgr, source_id, *, redo=False):
-    label = "redo" if redo else "undo"
-    action = (undo_mgr.redo if redo else undo_mgr.undo)(source_id)
-    if action is None:
-        ui.notify(f"Nothing to {label}.", type="info", position="bottom", timeout=1000)
-        return
-    ops = _REDO_OPS if redo else _UNDO_OPS
-    op = ops.get(action["type"])
-    if op == "delete":
-        delete_annotation(conn, action["annotation_id"])
-    elif op == "undelete":
-        undelete_annotation(conn, action["annotation_id"])
-    _render_text(conn, source_id, coder_id, codes_by_id, text_container)
-    annotation_list_display.refresh()
-    ui.notify(f"{label.title()}.", type="info", position="bottom", timeout=1000)
+    render_text(conn, current_source_id(), coder_id, codes_by_id, text_container)
+    auto_transition(conn, coder_id, state, assignments, _reload_assignments)
 
 
 # ---------------------------------------------------------------------------
