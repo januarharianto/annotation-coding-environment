@@ -18,8 +18,17 @@ def register():
         ui.add_css((Path(__file__).parent.parent / "static" / "css" / "agreement.css").read_text())
 
         loader = AgreementLoader()
+        # Pre-create containers so they can be moved into the layout
         file_list_container = ui.column().classes("items-center full-width gap-0")
         validation_container = ui.column().classes("items-center full-width q-mt-sm")
+        compute_wrapper = ui.column().classes("items-center full-width")
+        with compute_wrapper:
+            ui.button(
+                "Compute Agreement",
+                icon="calculate",
+                on_click=lambda: _run_computation(loader, results_container),
+            ).props("unelevated no-caps").classes("ace-compute-btn q-mt-md")
+        compute_wrapper.set_visibility(False)
         results_container = ui.column().classes("items-center full-width")
 
         with ui.column().classes("mx-auto q-pa-lg items-center").style(
@@ -37,37 +46,30 @@ def register():
                     "text-body1 text-grey-6"
                 )
                 ui.label(
-                    "Two or more project files from different coders"
+                    "Select multiple files with \u2318 or Shift"
                 ).classes("text-caption text-grey-5 q-mt-xs")
 
-            file_list_container.move(target_index=-1)
-
-            # Add File button
+            # Add Files button
             ui.button(
-                "Add File",
+                "Add Files",
                 icon="add",
                 on_click=lambda: _pick_and_add_file(
                     loader, file_list_container, validation_container,
-                    compute_btn, empty_state,
+                    compute_wrapper, empty_state,
                 ),
             ).props("flat dense no-caps").classes("text-grey-8 q-mt-sm")
 
+            # Order: file list → validation → compute button → results
+            file_list_container.move(target_index=-1)
             validation_container.move(target_index=-1)
-
-            compute_btn = ui.button(
-                "Compute Agreement",
-                icon="calculate",
-                on_click=lambda: _run_computation(loader, results_container),
-            ).props("unelevated no-caps").classes("ace-compute-btn q-mt-md")
-            compute_btn.set_visibility(False)
-
+            compute_wrapper.move(target_index=-1)
             results_container.move(target_index=-1)
 
 
 _IS_MACOS = platform.system() == "Darwin"
 
 
-async def _pick_and_add_file(loader, file_list_container, validation_container, compute_btn, empty_state):
+async def _pick_and_add_file(loader, file_list_container, validation_container, compute_wrapper, empty_state):
     """Open native file picker and add the selected .ace file."""
     if _IS_MACOS:
         path = await _native_pick_files()
@@ -109,12 +111,12 @@ async def _pick_and_add_file(loader, file_list_container, validation_container, 
                     f"{validation['matched_codes']} codes matched \u2014 "
                     f"Coders: {', '.join(validation['coders'])}"
                 ).classes("ace-validation ace-validation--ok")
-                compute_btn.set_visibility(True)
+                compute_wrapper.set_visibility(True)
             else:
                 ui.label(validation["error"]).classes(
                     "ace-validation ace-validation--error"
                 )
-                compute_btn.set_visibility(False)
+                compute_wrapper.set_visibility(False)
     elif loader.file_count == 1:
         empty_state.set_visibility(False)
 
