@@ -157,9 +157,13 @@ def _render_dashboard(result, dataset):
     # ── Headline metrics + pairwise side by side ──────────────
     ui.separator().classes("q-my-md")
 
-    with ui.row().classes("full-width gap-6").style("flex-wrap: wrap;"):
+    with ui.row().classes("full-width gap-4 justify-center items-stretch").style(
+        "flex-wrap: wrap;"
+    ):
         # Left: metrics
-        with ui.column().classes("gap-1").style("flex: 1; min-width: 300px;"):
+        with ui.column().classes(
+            "items-center justify-center gap-1 q-pa-md"
+        ).style("min-width: 300px; border: 1px solid #bdbdbd;"):
             _render_metric_line("Krippendorff's Alpha", alpha_str, label)
             _render_metric_line(kappa_label, kappa_str)
             _render_metric_line("Percent Agreement", pct_str)
@@ -171,7 +175,9 @@ def _render_dashboard(result, dataset):
 
         # Right: pairwise heatmap (3+ coders only)
         if result.n_coders > 2:
-            with ui.column().classes("gap-1").style("flex: 1; min-width: 280px;"):
+            with ui.column().classes(
+                "items-center justify-center gap-1 q-pa-md"
+            ).style("min-width: 280px; border: 1px solid #bdbdbd;"):
                 _render_pairwise(result, dataset)
 
     # ── Agreement by Code ─────────────────────────────────────
