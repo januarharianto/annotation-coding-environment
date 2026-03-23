@@ -1,5 +1,6 @@
 """Agreement dashboard page — /agreement route."""
 
+import html as html_mod
 import json
 import platform
 import subprocess
@@ -274,17 +275,19 @@ def _render_pairwise(result, dataset):
         for j in range(i + 1, n):
             key = (coders[i].id, coders[j].id)
             alt_key = (coders[j].id, coders[i].id)
-            val = result.pairwise.get(key) or result.pairwise.get(alt_key)
+            val = result.pairwise.get(key)
+            if val is None:
+                val = result.pairwise.get(alt_key)
             matrix[i][j] = val
             matrix[j][i] = val
 
     html = '<table class="ace-heatmap"><tr><th></th>'
     for c in coders:
-        html += f"<th>{c.label}</th>"
+        html += f"<th>{html_mod.escape(c.label)}</th>"
     html += "</tr>"
 
     for i, coder in enumerate(coders):
-        html += f"<tr><th>{coder.label}</th>"
+        html += f"<tr><th>{html_mod.escape(coder.label)}</th>"
         for j in range(n):
             val = matrix[i][j]
             if val is None:
@@ -472,7 +475,9 @@ def _export_all_csv(result, dataset):
                 else:
                     key = (ci.id, cj.id)
                     alt = (cj.id, ci.id)
-                    val = result.pairwise.get(key) or result.pairwise.get(alt)
+                    val = result.pairwise.get(key)
+                    if val is None:
+                        val = result.pairwise.get(alt)
                     row.append(f"{val:.4f}" if val is not None else "")
             w.writerow(row)
 
@@ -508,14 +513,16 @@ def _export_raw_data_csv(dataset):
         if text_len == 0:
             continue
 
-        # Build per-coder code assignments at each position
-        coder_positions: dict[str, list[str]] = {cid: [""] * text_len for cid in coder_ids}
+        # Build per-coder code sets at each position (handles overlapping spans)
+        coder_positions: dict[str, list[set]] = {
+            cid: [set() for _ in range(text_len)] for cid in coder_ids
+        }
         any_coded = [False] * text_len
 
         for cid in coder_ids:
             for ann in ann_index.get((source.content_hash, cid), []):
                 for i in range(ann.start_offset, min(ann.end_offset, text_len)):
-                    coder_positions[cid][i] = ann.code_name
+                    coder_positions[cid][i].add(ann.code_name)
                     any_coded[i] = True
 
         # Only output positions where at least one coder applied a code
@@ -523,7 +530,10 @@ def _export_raw_data_csv(dataset):
             if not any_coded[i]:
                 continue
             unit_id = f"{source.display_id}_{i:04d}"
-            row = [unit_id] + [coder_positions[cid][i] for cid in coder_ids]
+            row = [unit_id]
+            for cid in coder_ids:
+                codes = sorted(coder_positions[cid][i])
+                row.append("|".join(codes) if codes else "")
             w.writerow(row)
 
     ui.download(buf.getvalue().encode(), f"agreement_raw_data_{date.today()}.csv")
