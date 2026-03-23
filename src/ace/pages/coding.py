@@ -17,7 +17,7 @@ from ace.models.annotation import (
     get_annotations_for_source,
 )
 from ace.models.assignment import get_assignments_for_coder
-from ace.models.codebook import add_code, export_codebook_to_csv, import_codebook_from_csv, list_codes, reorder_codes
+from ace.models.codebook import add_code, export_codebook_to_csv, import_codebook_from_csv, list_codes
 from ace.models.coder import add_coder, list_coders, update_coder
 from ace.models.project import get_project
 from ace.pages.header import build_header
@@ -26,12 +26,12 @@ from ace.pages.coding_actions import (
     apply_code,
     auto_transition,
     delete_annotation_action,
-    do_undo_redo,
     navigate_to,
     render_text,
     toggle_flag,
 )
-from ace.pages.coding_dialogs import open_annotation_info, open_colour_dialog, open_delete_dialog, open_rename_dialog
+from ace.pages.coding_dialogs import open_colour_dialog, open_delete_dialog, open_rename_dialog
+from ace.pages.coding_shortcuts import register_shortcuts
 from ace.services.palette import next_colour
 from ace.services.undo import UndoManager
 
@@ -626,70 +626,26 @@ def build(conn: sqlite3.Connection) -> None:
     def _toggle_flag():
         toggle_flag(conn, coder_id, state, assignments, source_header.refresh, bottom_bar.refresh, _reload_assignments)
 
-    # ── Event handlers from JS ───────────────────────────────────────
-
-    def _on_text_selected(e):
-        data = e.args
-        state["pending_selection"] = {
-            "start": data["start"],
-            "end": data["end"],
-            "text": data["text"],
-        }
-
-    def _on_annotation_clicked(e):
-        data = e.args
-        ann_ids = data.get("annotation_ids", [])
-        if ann_ids:
-            open_annotation_info(conn, annotation_info_dialog, ann_ids, codes_by_id, _delete_annotation)
-
-    ui.on("text_selected", _on_text_selected)
-    ui.on("annotation_clicked", _on_annotation_clicked)
-
-    # ── Keyboard shortcut handlers ───────────────────────────────────
-
-    def _on_shortcut_undo(_e):
-        do_undo_redo(conn, coder_id, codes_by_id, text_container, annotation_list_display.refresh, undo_mgr, current_source_id())
-
-    def _on_shortcut_redo(_e):
-        do_undo_redo(conn, coder_id, codes_by_id, text_container, annotation_list_display.refresh, undo_mgr, current_source_id(), redo=True)
-
-    def _on_shortcut_escape(_e):
-        if grid_container.visible:
-            grid_container.set_visibility(False)
-            return
-        state["pending_selection"] = None
-        annotation_info_dialog.close()
-
-    def _on_shortcut_prev(_e):
-        idx = state["current_index"]
-        if idx > 0:
-            _navigate_to(idx - 1)
-
-    def _on_shortcut_next(_e):
-        idx = state["current_index"]
-        if idx < len(assignments) - 1:
-            _navigate_to(idx + 1)
-
-    async def _on_shortcut_apply_code(e):
-        code_idx = e.args.get("index", -1)
-        if 0 <= code_idx < len(codes):
-            await _apply_code(codes[code_idx])
-
-    def _on_codes_reordered(e):
-        code_ids = e.args.get("code_ids", [])
-        if code_ids:
-            reorder_codes(conn, code_ids)
-            _refresh_codes()
-            code_list.refresh()
-
-    ui.on("codes_reordered", _on_codes_reordered)
-    ui.on("shortcut_undo", _on_shortcut_undo)
-    ui.on("shortcut_redo", _on_shortcut_redo)
-    ui.on("shortcut_escape", _on_shortcut_escape)
-    ui.on("shortcut_prev_source", _on_shortcut_prev)
-    ui.on("shortcut_next_source", _on_shortcut_next)
-    ui.on("shortcut_apply_code", _on_shortcut_apply_code)
-    ui.on("shortcut_toggle_grid", lambda _e: _toggle_grid())
+    # ── Event handlers & keyboard shortcuts ───────────────────────────
+    register_shortcuts(
+        state=state,
+        conn=conn,
+        coder_id=coder_id,
+        codes=codes,
+        codes_by_id=codes_by_id,
+        undo_mgr=undo_mgr,
+        text_container=text_container,
+        annotation_list_refresh=annotation_list_display.refresh,
+        grid_container=grid_container,
+        annotation_info_dialog=annotation_info_dialog,
+        assignments=assignments,
+        current_source_id=current_source_id,
+        navigate_to_fn=_navigate_to,
+        toggle_grid_fn=_toggle_grid,
+        refresh_codes_fn=_refresh_codes,
+        code_list_refresh=code_list.refresh,
+        delete_annotation_fn=_delete_annotation,
+    )
 
     # ── Initial render ───────────────────────────────────────────────
     render_text(conn, current_source_id(), coder_id, codes_by_id, text_container)
