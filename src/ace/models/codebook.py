@@ -17,7 +17,6 @@ def add_code(
     conn: sqlite3.Connection,
     name: str,
     colour: str,
-    description: str | None = None,
 ) -> str:
     now = datetime.now(timezone.utc).isoformat()
     code_id = uuid.uuid4().hex
@@ -26,9 +25,9 @@ def add_code(
     sort_order = max_order + 1
 
     conn.execute(
-        "INSERT INTO codebook_code (id, name, description, colour, sort_order, created_at) "
-        "VALUES (?, ?, ?, ?, ?, ?)",
-        (code_id, name, description, colour, sort_order, now),
+        "INSERT INTO codebook_code (id, name, colour, sort_order, created_at) "
+        "VALUES (?, ?, ?, ?, ?)",
+        (code_id, name, colour, sort_order, now),
     )
     conn.commit()
     return code_id
@@ -43,7 +42,6 @@ def update_code(
     code_id: str,
     name: str | None = None,
     colour: str | None = None,
-    description: str | None = None,
 ) -> None:
     updates = []
     params = []
@@ -53,9 +51,6 @@ def update_code(
     if colour is not None:
         updates.append("colour = ?")
         params.append(colour)
-    if description is not None:
-        updates.append("description = ?")
-        params.append(description)
     if not updates:
         return
     params.append(code_id)
@@ -108,17 +103,16 @@ def import_codebook_from_csv(conn: sqlite3.Connection, path: str | Path) -> int:
             if not _COLOUR_RE.match(colour):
                 colour = next_colour(len(rows_to_insert))
 
-            description = row.get("description", "").strip() or None
-            rows_to_insert.append((name, colour, description))
+            rows_to_insert.append((name, colour))
 
     now = datetime.now(timezone.utc).isoformat()
     try:
-        for i, (name, colour, description) in enumerate(rows_to_insert):
+        for i, (name, colour) in enumerate(rows_to_insert):
             code_id = uuid.uuid4().hex
             conn.execute(
-                "INSERT INTO codebook_code (id, name, description, colour, sort_order, created_at) "
-                "VALUES (?, ?, ?, ?, ?, ?)",
-                (code_id, name, description, colour, i + 1, now),
+                "INSERT INTO codebook_code (id, name, colour, sort_order, created_at) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (code_id, name, colour, i + 1, now),
             )
         conn.commit()
     except Exception:
@@ -130,15 +124,14 @@ def import_codebook_from_csv(conn: sqlite3.Connection, path: str | Path) -> int:
 def export_codebook_to_csv(conn: sqlite3.Connection, path: str | Path) -> int:
     path = Path(path)
     codes = conn.execute(
-        "SELECT name, description, colour FROM codebook_code ORDER BY sort_order"
+        "SELECT name, colour FROM codebook_code ORDER BY sort_order"
     ).fetchall()
     with open(path, "w", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=["name", "description", "colour"])
+        writer = csv.DictWriter(f, fieldnames=["name", "colour"])
         writer.writeheader()
         for code in codes:
             writer.writerow({
                 "name": code["name"],
-                "description": code["description"] or "",
                 "colour": code["colour"],
             })
     return len(codes)

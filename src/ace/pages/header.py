@@ -20,7 +20,7 @@ def build_header(*, project_name: str | None = None, conn=None) -> None:
     edit_dialog = ui.dialog()
 
     with ui.header().classes("bg-white text-dark items-center q-px-md").style(
-        "border-bottom: 1px solid #e0e0e0; min-height: 40px; height: 40px;"
+        "border-bottom: 1px solid #bdbdbd; min-height: 40px; height: 40px;"
     ):
         with ui.row().classes("items-center full-width no-wrap").style("height: 100%;"):
             # Left: project name or branding
@@ -33,7 +33,7 @@ def build_header(*, project_name: str | None = None, conn=None) -> None:
                     "text-subtitle2 text-weight-bold text-grey-8"
                 ).tooltip("Back to home")
             else:
-                ui.label("ACE").classes("text-subtitle2 text-weight-bold text-grey-7")
+                ui.label("ACE").classes("text-subtitle2 text-weight-bold text-grey-8")
 
             ui.space()
 
@@ -64,7 +64,7 @@ def build_header(*, project_name: str | None = None, conn=None) -> None:
                 ).classes("text-grey-8")
 
                 with ui.button(icon="more_vert").props("flat round dense").classes(
-                    "text-grey-6"
+                    "text-grey-7"
                 ):
                     with ui.menu():
                         ui.menu_item("Settings (coming soon)").props("disable")
@@ -97,4 +97,4 @@ def build_header(*, project_name: str | None = None, conn=None) -> None:
 
                 ui.button(coder_name, icon="edit", on_click=_open_edit).props(
                     "flat dense no-caps size=sm"
-                ).classes("text-caption text-grey-6 q-ml-sm")
+                ).classes("text-caption text-grey-7 q-ml-sm")

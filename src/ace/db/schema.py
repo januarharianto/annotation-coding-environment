@@ -38,7 +38,6 @@ CREATE TABLE IF NOT EXISTS source_content (
 CREATE TABLE IF NOT EXISTS codebook_code (
     id          TEXT PRIMARY KEY,
     name        TEXT NOT NULL UNIQUE,
-    description TEXT,
     colour      TEXT NOT NULL,
     sort_order  INTEGER NOT NULL,
     created_at  TEXT NOT NULL
