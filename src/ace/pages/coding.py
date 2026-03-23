@@ -529,9 +529,10 @@ def build(conn: sqlite3.Connection) -> None:
             border = "2px solid #d84315" if is_flagged else ("2px solid white" if is_current else "1px solid #bdbdbd")
             src = sources_by_id.get(sid)
             display_id = src["display_id"] if src else f"Source {i + 1}"
+            safe_title = html.escape(f"{display_id} ({count} annotations)", quote=True)
             cells.append(
                 f'<span class="ace-grid-cell" data-idx="{i}" '
-                f'title="{display_id} ({count} annotations)" '
+                f'title="{safe_title}" '
                 f'style="width:{cell_size}px;height:{cell_size}px;background:{bg};'
                 f'border:{border};display:inline-block;"></span>'
             )
