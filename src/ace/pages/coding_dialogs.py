@@ -92,7 +92,7 @@ def open_annotation_info(conn: sqlite3.Connection, dlg, ann_ids, codes_by_id, de
         return
 
     dlg.clear()
-    with dlg, ui.card().classes("q-pa-sm").style("min-width: 250px;"):
+    with dlg, ui.card().classes("q-pa-md").style("min-width: 300px;"):
         ui.label("Annotations").classes("text-subtitle2 text-weight-medium q-mb-xs")
 
         for ann in anns:

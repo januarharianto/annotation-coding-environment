@@ -22,18 +22,6 @@
 .ace-validation--warn { border-left-color: #ef6c00; }
 .ace-validation--error { border-left-color: #c62828; }
 
-/* ── Compute button ────────────────────────────────────────── */
-.ace-compute-btn {
-    background: #212121 !important;
-    color: #ffffff !important;
-    font-weight: 500;
-    letter-spacing: 0.02em;
-    padding: 8px 24px;
-    transition: background 0.15s;
-}
-.ace-compute-btn:hover {
-    background: #424242 !important;
-}
 
 /* ── Metadata line ─────────────────────────────────────────── */
 .ace-metadata {

@@ -28,7 +28,7 @@ def register():
                 "Compute Agreement",
                 icon="calculate",
                 on_click=lambda: _run_computation(loader, results_container),
-            ).props("unelevated no-caps").classes("ace-compute-btn q-mt-md")
+            ).props("unelevated color=primary no-caps").classes("q-mt-md")
         compute_wrapper.set_visibility(False)
         results_container = ui.column().classes("items-center full-width")
 
@@ -185,12 +185,12 @@ def _render_dashboard(result, dataset):
             "Export Results",
             icon="download",
             on_click=lambda: _export_all_csv(result, dataset),
-        ).props("unelevated no-caps").classes("ace-compute-btn")
+        ).props("unelevated color=primary no-caps")
         ui.button(
             "Export Raw Data",
             icon="table_chart",
             on_click=lambda: _export_raw_data_csv(dataset),
-        ).props("unelevated no-caps").classes("ace-compute-btn")
+        ).props("unelevated color=primary no-caps")
 
 
 
