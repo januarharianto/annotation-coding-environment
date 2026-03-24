@@ -48,7 +48,7 @@ _SORTABLE_HASH = hashlib.md5((_STATIC_DIR / "js" / "Sortable.min.js").read_bytes
 
 _STATUS_ICONS = {
     "pending": ("radio_button_unchecked", "#757575"),
-    "in_progress": ("edit", "#1565c0"),
+    "in_progress": ("edit", "#546e7a"),
     "complete": ("check_circle", "#2e7d32"),
     "flagged": ("flag", "#c62828"),
 }

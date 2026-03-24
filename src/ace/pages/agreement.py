@@ -39,26 +39,18 @@ def register():
                 "text-h5 text-weight-bold"
             ).style("letter-spacing: -0.01em;")
 
-            # Empty state
-            with ui.column().classes(
-                "items-center full-width ace-empty-state q-mt-md"
-            ) as empty_state:
-                ui.label("Add .ace files to compare").classes(
-                    "text-body1 text-grey-6"
-                )
-                ui.label(
-                    "Select multiple files with \u2318 or Shift"
-                ).classes("text-caption text-grey-5 q-mt-xs")
-
             # Add Files button
             ui.button(
-                "Add Files",
+                "Add .ace files to compare",
                 icon="add",
                 on_click=lambda: _pick_and_add_file(
                     loader, file_list_container, validation_container,
-                    compute_wrapper, empty_state,
+                    compute_wrapper,
                 ),
             ).props("flat dense no-caps").classes("text-grey-8 q-mt-sm")
+            ui.label(
+                "Select multiple files with \u2318 or Shift"
+            ).classes("text-caption text-grey-5")
 
             # Order: file list → validation → compute button → results
             file_list_container.move(target_index=-1)
@@ -70,7 +62,7 @@ def register():
 _IS_MACOS = platform.system() == "Darwin"
 
 
-async def _pick_and_add_file(loader, file_list_container, validation_container, compute_wrapper, empty_state):
+async def _pick_and_add_file(loader, file_list_container, validation_container, compute_wrapper):
     """Open native file picker and add the selected .ace file."""
     if _IS_MACOS:
         path = await _native_pick_files()
@@ -99,7 +91,6 @@ async def _pick_and_add_file(loader, file_list_container, validation_container, 
 
     # Update validation
     if loader.file_count >= 2:
-        empty_state.set_visibility(False)
         validation = loader.validate()
         validation_container.clear()
         with validation_container:
@@ -118,8 +109,6 @@ async def _pick_and_add_file(loader, file_list_container, validation_container, 
                     "ace-validation ace-validation--error"
                 )
                 compute_wrapper.set_visibility(False)
-    elif loader.file_count == 1:
-        empty_state.set_visibility(False)
 
 
 async def _run_computation(loader, results_container):
@@ -309,14 +298,14 @@ def _render_pairwise(result, dataset):
 def _heatmap_color(value: float) -> tuple[str, str]:
     """Return (background, text) colours for a 0-1 agreement value.
 
-    Uses a colourblind-friendly blue scale (#e3f2fd → #0d47a1) with
+    Uses a slate/graphite scale (#f0f0f0 → #37474f) with
     white text on dark backgrounds, dark text on light backgrounds.
     Contrast threshold at 0.55 ensures WCAG AA compliance.
     """
-    # Interpolate #e3f2fd (light blue) → #0d47a1 (dark blue)
-    r = int(227 + (13 - 227) * value)
-    g = int(242 + (71 - 242) * value)
-    b = int(253 + (161 - 253) * value)
+    # Interpolate #f0f0f0 (light grey) → #37474f (dark slate)
+    r = int(240 + (55 - 240) * value)
+    g = int(240 + (71 - 240) * value)
+    b = int(240 + (79 - 240) * value)
     bg = f"rgb({r},{g},{b})"
     text = "#ffffff" if value > 0.55 else "#212121"
     return bg, text

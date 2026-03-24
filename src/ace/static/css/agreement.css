@@ -9,13 +9,6 @@
     color: #212121;
 }
 
-/* ── Empty state ───────────────────────────────────────────── */
-.ace-empty-state {
-    border: 1px dashed #bdbdbd;
-    padding: 40px 24px;
-    text-align: center;
-    background: #fafafa;
-}
 
 /* ── Validation messages ───────────────────────────────────── */
 .ace-validation {

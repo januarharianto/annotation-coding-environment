@@ -37,7 +37,7 @@ def build_bottom_bar(*, conn, coder_id, assignments, state, sources, navigate_to
                 bg = "#222"
             else:
                 lightness = 95 - int(65 * count / max_count) if max_count else 95
-                bg = f"hsl(210, 70%, {lightness}%)"
+                bg = f"hsl(210, 10%, {lightness}%)"
             border = "2px solid #d84315" if is_flagged else ("2px solid white" if is_current else "1px solid #bdbdbd")
             src = sources_by_id.get(sid)
             display_id = src["display_id"] if src else f"Source {i + 1}"
@@ -50,11 +50,11 @@ def build_bottom_bar(*, conn, coder_id, assignments, state, sources, navigate_to
             )
         legend = (
             '<div class="ace-grid-legend">'
-            f'<span><span style="display:inline-block;width:10px;height:10px;background:hsl(210,70%,95%);border:1px solid #ccc;"></span> 0</span>'
-            f'<span><span style="display:inline-block;width:10px;height:10px;background:hsl(210,70%,60%);border:1px solid #ccc;"></span> some</span>'
-            f'<span><span style="display:inline-block;width:10px;height:10px;background:hsl(210,70%,30%);border:1px solid #ccc;"></span> most</span>'
+            f'<span><span style="display:inline-block;width:10px;height:10px;background:hsl(210,10%,95%);border:1px solid #ccc;"></span> 0</span>'
+            f'<span><span style="display:inline-block;width:10px;height:10px;background:hsl(210,10%,60%);border:1px solid #ccc;"></span> some</span>'
+            f'<span><span style="display:inline-block;width:10px;height:10px;background:hsl(210,10%,30%);border:1px solid #ccc;"></span> most</span>'
             f'<span><span style="display:inline-block;width:10px;height:10px;background:#222;border:2px solid white;"></span> current</span>'
-            f'<span><span style="display:inline-block;width:10px;height:10px;background:hsl(210,70%,80%);border:2px solid #d84315;"></span> flagged</span>'
+            f'<span><span style="display:inline-block;width:10px;height:10px;background:hsl(210,10%,80%);border:2px solid #d84315;"></span> flagged</span>'
             '</div>'
         )
         return legend + '<div class="ace-source-grid">' + "".join(cells) + "</div>"
