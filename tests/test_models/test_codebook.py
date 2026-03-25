@@ -11,6 +11,7 @@ from ace.models.codebook import (
     export_codebook_to_csv,
     import_codebook_from_csv,
     list_codes,
+    preview_codebook_csv,
     update_code,
 )
 
@@ -136,6 +137,40 @@ def test_import_csv_utf8_bom(tmp_db, tmp_path):
     count = import_codebook_from_csv(conn, csv_path)
     assert count == 1
     assert list_codes(conn)[0]["name"] == "Alpha"
+
+
+def test_preview_marks_existing_codes(tmp_db, tmp_path):
+    """Preview marks codes that already exist in the project."""
+    conn = create_project(tmp_db, "Test")
+    add_code(conn, "Alpha", "#FF0000")
+
+    csv_path = tmp_path / "codes.csv"
+    csv_path.write_text("name,colour\nAlpha,#FF0000\nBeta,#00FF00\n")
+
+    preview = preview_codebook_csv(conn, csv_path)
+    assert len(preview) == 2
+    assert preview[0] == {"name": "Alpha", "colour": "#FF0000", "exists": True}
+    assert preview[1] == {"name": "Beta", "colour": "#00FF00", "exists": False}
+
+
+def test_preview_empty_csv(tmp_db, tmp_path):
+    """Preview of CSV with only header returns empty list."""
+    conn = create_project(tmp_db, "Test")
+    csv_path = tmp_path / "codes.csv"
+    csv_path.write_text("name,colour\n")
+
+    preview = preview_codebook_csv(conn, csv_path)
+    assert preview == []
+
+
+def test_preview_no_existing_codes(tmp_db, tmp_path):
+    """Preview with no codes in DB marks all as not existing."""
+    conn = create_project(tmp_db, "Test")
+    csv_path = tmp_path / "codes.csv"
+    csv_path.write_text("name,colour\nAlpha,#FF0000\nBeta,#00FF00\n")
+
+    preview = preview_codebook_csv(conn, csv_path)
+    assert all(not p["exists"] for p in preview)
 
 
 def test_export_codebook_to_csv(tmp_db, tmp_path):

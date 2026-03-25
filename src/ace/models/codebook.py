@@ -113,6 +113,21 @@ def _parse_codebook_csv(path: str | Path) -> list[dict]:
     return rows
 
 
+def preview_codebook_csv(conn: sqlite3.Connection, path: str | Path) -> list[dict]:
+    """Parse a codebook CSV and mark which codes already exist in the project.
+
+    Returns list of {"name": str, "colour": str, "exists": bool} dicts.
+    """
+    rows = _parse_codebook_csv(path)
+    existing = {
+        r["name"] for r in conn.execute("SELECT name FROM codebook_code").fetchall()
+    }
+    return [
+        {"name": r["name"], "colour": r["colour"], "exists": r["name"] in existing}
+        for r in rows
+    ]
+
+
 def import_codebook_from_csv(conn: sqlite3.Connection, path: str | Path) -> int:
     rows_to_insert = _parse_codebook_csv(path)
 
