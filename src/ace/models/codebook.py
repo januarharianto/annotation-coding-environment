@@ -84,14 +84,20 @@ def compute_codebook_hash(conn: sqlite3.Connection) -> str:
     return hashlib.sha256(combined.encode()).hexdigest()
 
 
-def import_codebook_from_csv(conn: sqlite3.Connection, path: str | Path) -> int:
+def _parse_codebook_csv(path: str | Path) -> list[dict]:
+    """Parse a codebook CSV file into a list of {name, colour} dicts.
+
+    Normalises: skips empty names, deduplicates (first wins),
+    auto-assigns colours for invalid/missing values.
+    Raises ValueError if 'name' column is missing.
+    """
     path = Path(path)
     with open(path, newline="", encoding="utf-8-sig") as f:
         reader = csv.DictReader(f)
         if reader.fieldnames is None or "name" not in reader.fieldnames:
             raise ValueError("CSV must have a 'name' column")
 
-        rows_to_insert = []
+        rows: list[dict] = []
         seen_names: set[str] = set()
         for row in reader:
             name = row.get("name", "").strip()
@@ -101,18 +107,23 @@ def import_codebook_from_csv(conn: sqlite3.Connection, path: str | Path) -> int:
 
             colour = row.get("colour", "").strip()
             if not _COLOUR_RE.match(colour):
-                colour = next_colour(len(rows_to_insert))
+                colour = next_colour(len(rows))
 
-            rows_to_insert.append((name, colour))
+            rows.append({"name": name, "colour": colour})
+    return rows
+
+
+def import_codebook_from_csv(conn: sqlite3.Connection, path: str | Path) -> int:
+    rows_to_insert = _parse_codebook_csv(path)
 
     now = datetime.now(timezone.utc).isoformat()
     try:
-        for i, (name, colour) in enumerate(rows_to_insert):
+        for i, row in enumerate(rows_to_insert):
             code_id = uuid.uuid4().hex
             conn.execute(
                 "INSERT INTO codebook_code (id, name, colour, sort_order, created_at) "
                 "VALUES (?, ?, ?, ?, ?)",
-                (code_id, name, colour, i + 1, now),
+                (code_id, row["name"], row["colour"], i + 1, now),
             )
         conn.commit()
     except Exception:
