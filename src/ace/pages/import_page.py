@@ -52,7 +52,7 @@ def _build(conn) -> None:
         # -- Existing sources summary --
         existing = list_sources(conn)
         if existing:
-            existing_card = ui.card().classes("full-width q-mb-md bg-blue-1")
+            existing_card = ui.card().classes("full-width q-mb-md bg-grey-2")
             with existing_card:
                 ui.label(
                     f"This project already has {len(existing)} imported source(s)."

@@ -10,7 +10,7 @@
     animation: ace-flash 1s ease-out;
 }
 @keyframes ace-flash {
-    0%, 20% { outline: 2px solid #1565c0; outline-offset: 1px; }
+    0%, 20% { outline: 2px solid #37474f; outline-offset: 1px; }
     100% { outline: 2px solid transparent; outline-offset: 1px; }
 }
 
@@ -51,7 +51,7 @@
 .ace-drag-handle {
     cursor: grab;
     opacity: 0;
-    transition: opacity 0.1s;
+    transition: opacity 0.15s;
     flex-shrink: 0;
 }
 .ace-hover-row:hover .ace-drag-handle {
@@ -66,7 +66,7 @@
 
 .ace-hover-row .ace-hover-action {
     opacity: 0;
-    transition: opacity 0.1s;
+    transition: opacity 0.15s;
 }
 .ace-hover-row:hover .ace-hover-action {
     opacity: 1;
@@ -78,7 +78,7 @@
 .ace-source-item {
     cursor: pointer;
     padding: 4px 8px;
-    transition: background 0.1s;
+    transition: background 0.15s;
 }
 .ace-source-item:hover {
     background: #e0e0e0;

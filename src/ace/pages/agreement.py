@@ -1,7 +1,6 @@
 """Agreement dashboard page — /agreement route."""
 
 import html as html_mod
-import json
 import platform
 import subprocess
 from pathlib import Path
@@ -27,8 +26,10 @@ def register():
             ui.button(
                 "Compute Agreement",
                 icon="calculate",
-                on_click=lambda: _run_computation(loader, results_container),
-            ).props("unelevated no-caps").classes("ace-compute-btn q-mt-md")
+                on_click=lambda: _run_computation(
+                    loader, results_container,
+                ),
+            ).props("unelevated color=primary no-caps").classes("q-mt-md")
         compute_wrapper.set_visibility(False)
         results_container = ui.column().classes("items-center full-width")
 
@@ -39,26 +40,18 @@ def register():
                 "text-h5 text-weight-bold"
             ).style("letter-spacing: -0.01em;")
 
-            # Empty state
-            with ui.column().classes(
-                "items-center full-width ace-empty-state q-mt-md"
-            ) as empty_state:
-                ui.label("Add .ace files to compare").classes(
-                    "text-body1 text-grey-6"
-                )
-                ui.label(
-                    "Select multiple files with \u2318 or Shift"
-                ).classes("text-caption text-grey-5 q-mt-xs")
-
             # Add Files button
             ui.button(
-                "Add Files",
+                "Add .ace files to compare",
                 icon="add",
                 on_click=lambda: _pick_and_add_file(
                     loader, file_list_container, validation_container,
-                    compute_wrapper, empty_state,
+                    compute_wrapper,
                 ),
             ).props("flat dense no-caps").classes("text-grey-8 q-mt-sm")
+            ui.label(
+                "Select multiple files with \u2318 or Shift"
+            ).classes("text-caption text-grey-5")
 
             # Order: file list → validation → compute button → results
             file_list_container.move(target_index=-1)
@@ -70,7 +63,7 @@ def register():
 _IS_MACOS = platform.system() == "Darwin"
 
 
-async def _pick_and_add_file(loader, file_list_container, validation_container, compute_wrapper, empty_state):
+async def _pick_and_add_file(loader, file_list_container, validation_container, compute_wrapper):
     """Open native file picker and add the selected .ace file."""
     if _IS_MACOS:
         path = await _native_pick_files()
@@ -99,7 +92,6 @@ async def _pick_and_add_file(loader, file_list_container, validation_container, 
 
     # Update validation
     if loader.file_count >= 2:
-        empty_state.set_visibility(False)
         validation = loader.validate()
         validation_container.clear()
         with validation_container:
@@ -118,8 +110,6 @@ async def _pick_and_add_file(loader, file_list_container, validation_container, 
                     "ace-validation ace-validation--error"
                 )
                 compute_wrapper.set_visibility(False)
-    elif loader.file_count == 1:
-        empty_state.set_visibility(False)
 
 
 async def _run_computation(loader, results_container):
@@ -132,11 +122,15 @@ async def _run_computation(loader, results_container):
         ui.notify(str(e), type="negative")
         return
 
-    ui.notify("Computing agreement metrics...", type="info")
     result = compute_agreement(ds)
 
     results_container.clear()
     with results_container:
+        ui.button(
+            "Start Over",
+            icon="refresh",
+            on_click=lambda: ui.navigate.reload(),
+        ).props("flat dense no-caps").classes("text-grey-8")
         _render_dashboard(result, ds)
 
 
@@ -185,10 +179,6 @@ def _render_dashboard(result, dataset):
     ui.separator().classes("q-my-md")
     _render_per_code_table(result)
 
-    # ── Methods paragraph ─────────────────────────────────────
-    ui.separator().classes("q-my-md")
-    _render_methods_paragraph(result)
-
     # ── Export ────────────────────────────────────────────────
     ui.separator().classes("q-my-md")
     with ui.row().classes("items-center justify-center full-width gap-4"):
@@ -196,12 +186,12 @@ def _render_dashboard(result, dataset):
             "Export Results",
             icon="download",
             on_click=lambda: _export_all_csv(result, dataset),
-        ).props("unelevated no-caps").classes("ace-compute-btn")
+        ).props("unelevated color=primary no-caps")
         ui.button(
             "Export Raw Data",
             icon="table_chart",
             on_click=lambda: _export_raw_data_csv(dataset),
-        ).props("unelevated no-caps").classes("ace-compute-btn")
+        ).props("unelevated color=primary no-caps")
 
 
 
@@ -309,76 +299,18 @@ def _render_pairwise(result, dataset):
 def _heatmap_color(value: float) -> tuple[str, str]:
     """Return (background, text) colours for a 0-1 agreement value.
 
-    Uses a colourblind-friendly blue scale (#e3f2fd → #0d47a1) with
+    Uses a slate/graphite scale (#f0f0f0 → #37474f) with
     white text on dark backgrounds, dark text on light backgrounds.
     Contrast threshold at 0.55 ensures WCAG AA compliance.
     """
-    # Interpolate #e3f2fd (light blue) → #0d47a1 (dark blue)
-    r = int(227 + (13 - 227) * value)
-    g = int(242 + (71 - 242) * value)
-    b = int(253 + (161 - 253) * value)
+    # Interpolate #f0f0f0 (light grey) → #37474f (dark slate)
+    r = int(240 + (55 - 240) * value)
+    g = int(240 + (71 - 240) * value)
+    b = int(240 + (79 - 240) * value)
     bg = f"rgb({r},{g},{b})"
     text = "#ffffff" if value > 0.55 else "#212121"
     return bg, text
 
-
-def _render_methods_paragraph(result):
-    """Render the methods paragraph inline with a copy button."""
-    para = _build_methods_text(result)
-
-    with ui.column().classes("items-center full-width"):
-        with ui.row().classes("items-center gap-2 q-mb-sm"):
-            ui.label("Methods Paragraph").classes("ace-section-header")
-            ui.button(
-                icon="content_copy",
-                on_click=lambda: _copy_to_clipboard(para),
-            ).props("flat dense round").classes("text-grey-7")
-
-        ui.label(para).classes("text-body2 text-grey-8").style(
-            "line-height: 1.6; font-style: italic; max-width: 72ch; text-align: center;"
-        )
-
-
-def _build_methods_text(result) -> str:
-    """Generate a publication-ready methods paragraph."""
-    alpha = result.overall.krippendorffs_alpha
-    alpha_str = f"{alpha:.2f}" if alpha is not None else "N/A"
-
-    if result.n_coders == 2:
-        kappa = result.overall.cohens_kappa
-        kappa_label = "Cohen's kappa"
-    else:
-        kappa = result.overall.fleiss_kappa
-        kappa_label = "Fleiss' kappa"
-    kappa_str = f"{kappa:.2f}" if kappa is not None else "N/A"
-
-    code_kappas = []
-    for m in result.per_code.values():
-        k = m.cohens_kappa if result.n_coders == 2 else m.fleiss_kappa
-        if k is not None:
-            code_kappas.append(k)
-
-    range_str = ""
-    if code_kappas:
-        range_str = (
-            f" Per-code agreement ranged from "
-            f"\u03BA = {min(code_kappas):.2f} to \u03BA = {max(code_kappas):.2f}."
-        )
-
-    return (
-        f"Inter-coder reliability was assessed using Krippendorff's alpha "
-        f"(\u03B1 = {alpha_str}) and {kappa_label} "
-        f"(\u03BA = {kappa_str}) across {result.n_coders} coders "
-        f"and {result.n_sources} source texts.{range_str}"
-    )
-
-
-async def _copy_to_clipboard(text: str):
-    """Copy text to clipboard via browser API."""
-    await ui.run_javascript(
-        f"navigator.clipboard.writeText({json.dumps(text)})"
-    )
-    ui.notify("Copied to clipboard", type="positive")
 
 
 

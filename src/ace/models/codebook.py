@@ -84,14 +84,20 @@ def compute_codebook_hash(conn: sqlite3.Connection) -> str:
     return hashlib.sha256(combined.encode()).hexdigest()
 
 
-def import_codebook_from_csv(conn: sqlite3.Connection, path: str | Path) -> int:
+def _parse_codebook_csv(path: str | Path) -> list[dict]:
+    """Parse a codebook CSV file into a list of {name, colour} dicts.
+
+    Normalises: skips empty names, deduplicates (first wins),
+    auto-assigns colours for invalid/missing values.
+    Raises ValueError if 'name' column is missing.
+    """
     path = Path(path)
     with open(path, newline="", encoding="utf-8-sig") as f:
         reader = csv.DictReader(f)
         if reader.fieldnames is None or "name" not in reader.fieldnames:
             raise ValueError("CSV must have a 'name' column")
 
-        rows_to_insert = []
+        rows: list[dict] = []
         seen_names: set[str] = set()
         for row in reader:
             name = row.get("name", "").strip()
@@ -101,18 +107,75 @@ def import_codebook_from_csv(conn: sqlite3.Connection, path: str | Path) -> int:
 
             colour = row.get("colour", "").strip()
             if not _COLOUR_RE.match(colour):
-                colour = next_colour(len(rows_to_insert))
+                colour = next_colour(len(rows))
 
-            rows_to_insert.append((name, colour))
+            rows.append({"name": name, "colour": colour})
+    return rows
+
+
+def preview_codebook_csv(conn: sqlite3.Connection, path: str | Path) -> list[dict]:
+    """Parse a codebook CSV and mark which codes already exist in the project.
+
+    Returns list of {"name": str, "colour": str, "exists": bool} dicts.
+    """
+    rows = _parse_codebook_csv(path)
+    existing = {
+        r["name"] for r in conn.execute("SELECT name FROM codebook_code").fetchall()
+    }
+    return [
+        {"name": r["name"], "colour": r["colour"], "exists": r["name"] in existing}
+        for r in rows
+    ]
+
+
+def import_selected_codes(conn: sqlite3.Connection, codes: list[dict]) -> int:
+    """Import a pre-filtered list of codes into the codebook.
+
+    Each dict must have 'name' and 'colour' keys.
+    Skips codes whose name already exists (safety net).
+    All inserts in a single transaction with rollback on failure.
+    Returns count of codes actually inserted.
+    """
+    if not codes:
+        return 0
+
+    existing = {
+        r["name"] for r in conn.execute("SELECT name FROM codebook_code").fetchall()
+    }
+    to_insert = [c for c in codes if c["name"] not in existing]
+    if not to_insert:
+        return 0
+
+    max_order = conn.execute(
+        "SELECT COALESCE(MAX(sort_order), 0) FROM codebook_code"
+    ).fetchone()[0]
+    now = datetime.now(timezone.utc).isoformat()
+
+    try:
+        for i, code in enumerate(to_insert):
+            conn.execute(
+                "INSERT INTO codebook_code (id, name, colour, sort_order, created_at) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (uuid.uuid4().hex, code["name"], code["colour"], max_order + i + 1, now),
+            )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    return len(to_insert)
+
+
+def import_codebook_from_csv(conn: sqlite3.Connection, path: str | Path) -> int:
+    rows_to_insert = _parse_codebook_csv(path)
 
     now = datetime.now(timezone.utc).isoformat()
     try:
-        for i, (name, colour) in enumerate(rows_to_insert):
+        for i, row in enumerate(rows_to_insert):
             code_id = uuid.uuid4().hex
             conn.execute(
                 "INSERT INTO codebook_code (id, name, colour, sort_order, created_at) "
                 "VALUES (?, ?, ?, ?, ?)",
-                (code_id, name, colour, i + 1, now),
+                (code_id, row["name"], row["colour"], i + 1, now),
             )
         conn.commit()
     except Exception:

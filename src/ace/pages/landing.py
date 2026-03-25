@@ -175,7 +175,7 @@ def register() -> None:
 async def _open_new_dialog() -> None:
     """Show a dialog to create a new project."""
     with ui.dialog() as dialog, ui.card().classes("q-pa-md").style(
-        "min-width: 380px;"
+        "min-width: 300px;"
     ):
         ui.label("New Project").classes("text-subtitle1 text-weight-medium q-mb-sm")
         name_input = ui.input(placeholder="Project name").props("outlined dense").classes("full-width")
