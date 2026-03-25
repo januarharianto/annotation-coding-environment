@@ -15,7 +15,7 @@ from ace.models.annotation import (
     get_annotations_for_source,
 )
 from ace.models.assignment import get_assignments_for_coder
-from ace.models.codebook import add_code, export_codebook_to_csv, import_codebook_from_csv, list_codes
+from ace.models.codebook import add_code, export_codebook_to_csv, import_selected_codes, list_codes, preview_codebook_csv
 from ace.models.coder import add_coder, list_coders, update_coder
 from ace.models.project import get_project
 from ace.pages.header import build_header
@@ -210,6 +210,8 @@ def build(conn: sqlite3.Connection) -> None:
                 ).tooltip("Sort codes by name")
 
                 # Import / Export menu
+                import_dialog = ui.dialog()
+
                 def _import_codes():
                     upload_el.run_method("pickFiles")
 
@@ -225,9 +227,7 @@ def build(conn: sqlite3.Connection) -> None:
 
                 with ui.button(icon="more_vert").props("flat round dense size=sm").classes("text-grey-7"):
                     with ui.menu():
-                        ui.menu_item("Import CSV...", on_click=lambda: _import_codes()).props(
-                            "disable" if codes else ""
-                        )
+                        ui.menu_item("Import Codes", on_click=lambda: _import_codes())
                         ui.menu_item("Export CSV", on_click=lambda: _export_codes()).props(
                             "disable" if not codes else ""
                         )
@@ -240,14 +240,87 @@ def build(conn: sqlite3.Connection) -> None:
                         )
                         tmp.write(content)
                         tmp.close()
-                        count = import_codebook_from_csv(conn, tmp.name)
+                        preview = preview_codebook_csv(conn, tmp.name)
                         Path(tmp.name).unlink(missing_ok=True)
-                        _refresh_codes()
-                        code_list.refresh()
-                        render_text(conn, current_source_id(), coder_id, codes_by_id, text_container)
-                        ui.notify(f"Imported {count} code(s).", type="positive", position="bottom")
+                    except ValueError as exc:
+                        ui.notify(str(exc), type="negative", position="bottom")
+                        return
+                    except Exception:
+                        ui.notify("Could not read CSV file.", type="negative", position="bottom")
+                        return
+
+                    if not preview:
+                        ui.notify("No valid codes found (check CSV format).", type="info", position="bottom")
+                        return
+
+                    _show_import_dialog(preview)
+
+                def _show_import_dialog(preview):
+                    selected = {}
+                    import_dialog.clear()
+
+                    with import_dialog, ui.card().classes("q-pa-md").style("min-width: 300px;"):
+                        ui.label("Import Codes").classes("text-subtitle1 text-weight-medium q-mb-sm")
+
+                        all_exist = all(p["exists"] for p in preview)
+                        if all_exist:
+                            ui.label("All codes in this file already exist.").classes(
+                                "text-body2 text-grey-6 q-mb-sm"
+                            )
+
+                        with ui.column().classes("full-width").style("max-height: 300px; overflow-y: auto;"):
+                            for p in preview:
+                                checked = not p["exists"]
+                                label = p["name"] if not p["exists"] else f'{p["name"]} (already exists)'
+                                with ui.row().classes("items-center full-width no-wrap"):
+                                    ui.element("div").style(
+                                        f"background: {p['colour']}; width: 14px; height: 14px; "
+                                        "border-radius: 50%; flex-shrink: 0;"
+                                    )
+                                    cb = ui.checkbox(
+                                        label,
+                                        value=checked,
+                                        on_change=lambda e, name=p["name"]: _toggle(name, e.value),
+                                    ).classes("" + (" text-grey-5" if p["exists"] else ""))
+                                    if p["exists"]:
+                                        cb.props("disable")
+                                selected[p["name"]] = checked
+
+                        with ui.row().classes("q-mt-md justify-end full-width gap-2"):
+                            ui.button("Cancel", on_click=import_dialog.close).props("flat")
+                            import_btn = ui.button(
+                                f"Import {sum(selected.values())}",
+                                on_click=lambda: _do_import(preview, selected),
+                            ).props("unelevated color=primary")
+                            if sum(selected.values()) == 0:
+                                import_btn.props("disable")
+
+                    def _toggle(name, value):
+                        selected[name] = value
+                        count = sum(selected.values())
+                        import_btn.set_text(f"Import {count}")
+                        if count == 0:
+                            import_btn.props("disable")
+                        else:
+                            import_btn.props(remove="disable")
+
+                    import_dialog.open()
+
+                def _do_import(preview, selected):
+                    to_import = [
+                        {"name": p["name"], "colour": p["colour"]}
+                        for p in preview if selected.get(p["name"])
+                    ]
+                    try:
+                        count = import_selected_codes(conn, to_import)
                     except Exception as exc:
                         ui.notify(f"Import failed: {exc}", type="negative", position="bottom")
+                        return
+                    import_dialog.close()
+                    _refresh_codes()
+                    code_list.refresh()
+                    render_text(conn, current_source_id(), coder_id, codes_by_id, text_container)
+                    ui.notify(f"Imported {count} code(s).", type="positive", position="bottom")
 
                 upload_el = ui.upload(on_upload=_handle_upload, auto_upload=True).props(
                     'accept=".csv" max-files=1'
