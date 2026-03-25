@@ -20,6 +20,7 @@ app.add_static_files("/static", str(static_dir))
 
 @app.on_connect
 def _inject_theme():
+    ui.colors(primary="#212121", info="#546e7a")
     ui.add_head_html('<link rel="stylesheet" href="/static/css/theme.css">')
 
 
