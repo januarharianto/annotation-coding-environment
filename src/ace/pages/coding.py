@@ -470,7 +470,7 @@ def build(conn: sqlite3.Connection) -> None:
 
         # ── Right Panel (flex) ───────────────────────────────────────
         with splitter.after:
-          with ui.column().classes("col q-pa-md").style("overflow-y: auto;"):
+          with ui.column().classes("q-pa-md").style("width: 100%; overflow-y: auto;"):
 
             # Source header
             @ui.refreshable
