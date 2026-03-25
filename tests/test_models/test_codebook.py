@@ -10,6 +10,7 @@ from ace.models.codebook import (
     delete_code,
     export_codebook_to_csv,
     import_codebook_from_csv,
+    import_selected_codes,
     list_codes,
     preview_codebook_csv,
     update_code,
@@ -184,3 +185,58 @@ def test_export_codebook_to_csv(tmp_db, tmp_path):
     assert "name,colour" in content
     assert "Alpha,#FF0000" in content
     assert "Beta,#00FF00" in content
+
+
+def test_import_selected_codes(tmp_db):
+    """Import a list of codes into an empty project."""
+    conn = create_project(tmp_db, "Test")
+    codes_to_import = [
+        {"name": "Alpha", "colour": "#FF0000"},
+        {"name": "Beta", "colour": "#00FF00"},
+    ]
+    count = import_selected_codes(conn, codes_to_import)
+    assert count == 2
+    codes = list_codes(conn)
+    assert len(codes) == 2
+    assert codes[0]["name"] == "Alpha"
+    assert codes[1]["name"] == "Beta"
+
+
+def test_import_selected_appends_sort_order(tmp_db):
+    """Imported codes get sort_order after existing max."""
+    conn = create_project(tmp_db, "Test")
+    add_code(conn, "Existing", "#999999")  # sort_order = 1
+
+    codes_to_import = [{"name": "New", "colour": "#FF0000"}]
+    import_selected_codes(conn, codes_to_import)
+
+    codes = list_codes(conn)
+    assert len(codes) == 2
+    assert codes[0]["name"] == "Existing"
+    assert codes[0]["sort_order"] == 1
+    assert codes[1]["name"] == "New"
+    assert codes[1]["sort_order"] == 2
+
+
+def test_import_selected_skips_existing(tmp_db):
+    """Codes whose name already exists in DB are skipped (safety net)."""
+    conn = create_project(tmp_db, "Test")
+    add_code(conn, "Alpha", "#FF0000")
+
+    codes_to_import = [
+        {"name": "Alpha", "colour": "#00FF00"},  # exists — skip
+        {"name": "Beta", "colour": "#0000FF"},    # new — insert
+    ]
+    count = import_selected_codes(conn, codes_to_import)
+    assert count == 1
+    codes = list_codes(conn)
+    assert len(codes) == 2
+    assert codes[0]["colour"] == "#FF0000"  # original colour kept
+
+
+def test_import_selected_empty_list(tmp_db):
+    """Empty list returns 0, no DB changes."""
+    conn = create_project(tmp_db, "Test")
+    count = import_selected_codes(conn, [])
+    assert count == 0
+    assert list_codes(conn) == []

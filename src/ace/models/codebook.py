@@ -128,6 +128,43 @@ def preview_codebook_csv(conn: sqlite3.Connection, path: str | Path) -> list[dic
     ]
 
 
+def import_selected_codes(conn: sqlite3.Connection, codes: list[dict]) -> int:
+    """Import a pre-filtered list of codes into the codebook.
+
+    Each dict must have 'name' and 'colour' keys.
+    Skips codes whose name already exists (safety net).
+    All inserts in a single transaction with rollback on failure.
+    Returns count of codes actually inserted.
+    """
+    if not codes:
+        return 0
+
+    existing = {
+        r["name"] for r in conn.execute("SELECT name FROM codebook_code").fetchall()
+    }
+    to_insert = [c for c in codes if c["name"] not in existing]
+    if not to_insert:
+        return 0
+
+    max_order = conn.execute(
+        "SELECT COALESCE(MAX(sort_order), 0) FROM codebook_code"
+    ).fetchone()[0]
+    now = datetime.now(timezone.utc).isoformat()
+
+    try:
+        for i, code in enumerate(to_insert):
+            conn.execute(
+                "INSERT INTO codebook_code (id, name, colour, sort_order, created_at) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (uuid.uuid4().hex, code["name"], code["colour"], max_order + i + 1, now),
+            )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    return len(to_insert)
+
+
 def import_codebook_from_csv(conn: sqlite3.Connection, path: str | Path) -> int:
     rows_to_insert = _parse_codebook_csv(path)
 
