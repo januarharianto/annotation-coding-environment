@@ -232,21 +232,21 @@ def build(conn: sqlite3.Connection) -> None:
                             "disable" if not codes else ""
                         )
 
-                def _handle_upload(e: events.UploadEventArguments):
+                async def _handle_upload(e: events.UploadEventArguments):
+                    upload_el.reset()
                     try:
-                        content = e.content.read().decode("utf-8-sig")
-                        tmp = tempfile.NamedTemporaryFile(
-                            suffix=".csv", delete=False, prefix="ace_import_", mode="w", encoding="utf-8",
-                        )
-                        tmp.write(content)
-                        tmp.close()
-                        preview = preview_codebook_csv(conn, tmp.name)
-                        Path(tmp.name).unlink(missing_ok=True)
+                        content = await e.file.read()
+                        tmp_dir = Path(tempfile.mkdtemp(prefix="ace_import_"))
+                        tmp_path = tmp_dir / e.file.name
+                        tmp_path.write_bytes(content)
+                        preview = preview_codebook_csv(conn, str(tmp_path))
+                        tmp_path.unlink(missing_ok=True)
+                        tmp_dir.rmdir()
                     except ValueError as exc:
                         ui.notify(str(exc), type="negative", position="bottom")
                         return
-                    except Exception:
-                        ui.notify("Could not read CSV file.", type="negative", position="bottom")
+                    except Exception as exc:
+                        ui.notify(f"Could not read CSV file: {exc}", type="negative", position="bottom")
                         return
 
                     if not preview:
@@ -257,52 +257,108 @@ def build(conn: sqlite3.Connection) -> None:
 
                 def _show_import_dialog(preview):
                     selected = {}
+                    checkboxes = {}
+                    new_codes = [p for p in preview if not p["exists"]]
+                    existing_codes = [p for p in preview if p["exists"]]
                     import_dialog.clear()
 
-                    with import_dialog, ui.card().classes("q-pa-md").style("min-width: 300px;"):
+                    with import_dialog, ui.card().classes("q-pa-md").style("min-width: 340px;"):
                         ui.label("Import Codes").classes("text-subtitle1 text-weight-medium q-mb-sm")
 
-                        all_exist = all(p["exists"] for p in preview)
-                        if all_exist:
+                        # Summary line
+                        if existing_codes:
+                            ui.label(
+                                f"{len(new_codes)} new \u00b7 {len(existing_codes)} already in project"
+                            ).classes("text-caption text-grey-7 q-mb-sm")
+
+                        if not new_codes:
                             ui.label("All codes in this file already exist.").classes(
                                 "text-body2 text-grey-6 q-mb-sm"
                             )
 
                         with ui.column().classes("full-width").style("max-height: 300px; overflow-y: auto;"):
-                            for p in preview:
-                                checked = not p["exists"]
-                                label = p["name"] if not p["exists"] else f'{p["name"]} (already exists)'
-                                with ui.row().classes("items-center full-width no-wrap"):
-                                    ui.element("div").style(
-                                        f"background: {p['colour']}; width: 14px; height: 14px; "
-                                        "border-radius: 50%; flex-shrink: 0;"
+                            # New codes section
+                            if new_codes:
+                                with ui.row().classes("items-center full-width justify-between q-mb-xs"):
+                                    ui.label(f"New codes ({len(new_codes)})").classes(
+                                        "text-caption text-weight-medium text-grey-8"
                                     )
-                                    cb = ui.checkbox(
-                                        label,
-                                        value=checked,
-                                        on_change=lambda e, name=p["name"]: _toggle(name, e.value),
-                                    ).classes("" + (" text-grey-5" if p["exists"] else ""))
-                                    if p["exists"]:
-                                        cb.props("disable")
-                                selected[p["name"]] = checked
+                                    toggle_link = ui.button(
+                                        "none", on_click=lambda: _toggle_all(False),
+                                    ).props("flat dense no-caps size=xs").classes("text-caption text-grey-6")
+
+                                for p in new_codes:
+                                    selected[p["name"]] = True
+                                    with ui.row().classes("items-center full-width no-wrap"):
+                                        ui.element("div").style(
+                                            f"background: {p['colour']}; width: 14px; height: 14px; "
+                                            "border-radius: 50%; flex-shrink: 0;"
+                                        )
+                                        cb = ui.checkbox(
+                                            p["name"],
+                                            value=True,
+                                            on_change=lambda e, name=p["name"]: _toggle(name, e.value),
+                                        )
+                                        checkboxes[p["name"]] = cb
+
+                            # Existing codes section (collapsed)
+                            if existing_codes:
+                                with ui.expansion(
+                                    f"Already in project ({len(existing_codes)})",
+                                ).props("dense header-class='text-caption text-grey-6 q-pa-none'").classes(
+                                    "full-width q-mt-sm"
+                                ):
+                                    for p in existing_codes:
+                                        selected[p["name"]] = False
+                                        with ui.row().classes("items-center full-width no-wrap"):
+                                            ui.element("div").style(
+                                                f"background: {p['colour']}; width: 14px; height: 14px; "
+                                                "border-radius: 50%; flex-shrink: 0;"
+                                            )
+                                            ui.label(p["name"]).classes("text-grey-5")
 
                         with ui.row().classes("q-mt-md justify-end full-width gap-2"):
                             ui.button("Cancel", on_click=import_dialog.close).props("flat")
+                            new_count = len(new_codes)
+                            btn_label = f"Import All {new_count}" if new_count > 0 else "Import 0"
                             import_btn = ui.button(
-                                f"Import {sum(selected.values())}",
+                                btn_label,
                                 on_click=lambda: _do_import(preview, selected),
                             ).props("unelevated color=primary")
-                            if sum(selected.values()) == 0:
+                            if new_count == 0:
                                 import_btn.props("disable")
 
-                    def _toggle(name, value):
-                        selected[name] = value
+                    def _update_btn():
                         count = sum(selected.values())
-                        import_btn.set_text(f"Import {count}")
+                        new_total = len(new_codes)
+                        if count == new_total and new_total > 0:
+                            import_btn.set_text(f"Import All {count}")
+                        else:
+                            import_btn.set_text(f"Import {count}")
                         if count == 0:
                             import_btn.props("disable")
                         else:
                             import_btn.props(remove="disable")
+
+                    def _toggle(name, value):
+                        selected[name] = value
+                        _update_btn()
+                        # Update toggle link text
+                        if all(selected.get(p["name"]) for p in new_codes):
+                            toggle_link.set_text("none")
+                            toggle_link._props["onClick"] = None
+                            toggle_link.on("click", lambda: _toggle_all(False))
+                        else:
+                            toggle_link.set_text("all")
+                            toggle_link.on("click", lambda: _toggle_all(True))
+
+                    def _toggle_all(value):
+                        for p in new_codes:
+                            selected[p["name"]] = value
+                            if p["name"] in checkboxes:
+                                checkboxes[p["name"]].value = value
+                        toggle_link.set_text("all" if not value else "none")
+                        _update_btn()
 
                     import_dialog.open()
 
@@ -451,6 +507,7 @@ def build(conn: sqlite3.Connection) -> None:
             source_header()
 
             # Text content area
+            ui.label("Source").classes("text-subtitle2 text-weight-medium q-mt-sm")
             text_container = ui.html("", sanitize=False).classes("full-width ace-text-content")
 
             ui.separator().classes("q-my-sm")
