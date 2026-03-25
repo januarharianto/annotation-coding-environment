@@ -1,7 +1,6 @@
 """New two-pane coding interface with inline code creation."""
 
 import hashlib
-import html
 import json
 import sqlite3
 import tempfile
@@ -13,20 +12,27 @@ from nicegui import app, events, ui
 
 from ace.db.connection import checkpoint_and_close, open_project
 from ace.models.annotation import (
-    add_annotation,
-    delete_annotation,
-    get_annotation_counts_by_source,
     get_annotations_for_source,
-    undelete_annotation,
 )
-from ace.models.assignment import get_assignments_for_coder, update_assignment_status
-from ace.models.codebook import add_code, delete_code, export_codebook_to_csv, import_codebook_from_csv, list_codes, reorder_codes, update_code
+from ace.models.assignment import get_assignments_for_coder
+from ace.models.codebook import add_code, export_codebook_to_csv, import_selected_codes, list_codes, preview_codebook_csv
 from ace.models.coder import add_coder, list_coders, update_coder
 from ace.models.project import get_project
 from ace.pages.header import build_header
-from ace.models.source import get_source, get_source_content, list_sources
-from ace.services.offset import utf16_to_codepoint
-from ace.services.palette import COLOUR_PALETTE, next_colour
+from ace.models.source import get_source, list_sources
+from ace.pages.coding_actions import (
+    apply_code,
+    auto_transition,
+    delete_annotation_action,
+    navigate_to,
+    render_text,
+    toggle_flag,
+)
+from ace.pages.coding_bottom_bar import build_bottom_bar
+from ace.pages.coding_dialogs import open_colour_dialog, open_delete_dialog, open_rename_dialog
+from ace.pages.coding_render import render_annotated_text  # noqa: F401 — re-exported for tests
+from ace.pages.coding_shortcuts import register_shortcuts
+from ace.services.palette import next_colour
 from ace.services.undo import UndoManager
 
 _STATIC_DIR = Path(__file__).parent.parent / "static"
@@ -35,82 +41,6 @@ _CSS_HASH = hashlib.md5((_STATIC_DIR / "css" / "annotator.css").read_bytes()).he
 _SORTABLE_HASH = hashlib.md5((_STATIC_DIR / "js" / "Sortable.min.js").read_bytes()).hexdigest()[:8]
 
 
-# ---------------------------------------------------------------------------
-# Annotation rendering
-# ---------------------------------------------------------------------------
-
-def _annotation_span(data: dict) -> str:
-    hex_c = data["colour"].lstrip("#")
-    if len(hex_c) == 6:
-        r, g, b = int(hex_c[0:2], 16), int(hex_c[2:4], 16), int(hex_c[4:6], 16)
-    else:
-        r, g, b = 153, 153, 153
-    return (
-        f'<span class="ace-annotation" '
-        f'data-annotation-id="{html.escape(data["id"])}" '
-        f'title="{html.escape(data["code_name"])}" '
-        f'aria-label="{html.escape(data["code_name"])}" '
-        f'style="background-color: rgba({r},{g},{b},0.3);">'
-    )
-
-
-def render_annotated_text(text: str, annotations: list, codes_by_id: dict) -> str:
-    if not text:
-        return ""
-
-    events_list: list[tuple[int, int, str, dict | None]] = []
-    for ann in annotations:
-        start = ann["start_offset"]
-        end = ann["end_offset"]
-        code = codes_by_id.get(ann["code_id"])
-        colour = code["colour"] if code else "#999999"
-        code_name = code["name"] if code else "Unknown"
-        events_list.append((start, 0, "open", {
-            "id": ann["id"],
-            "colour": colour,
-            "code_name": code_name,
-        }))
-        events_list.append((end, 1, "close", {"id": ann["id"]}))
-
-    events_list.sort(key=lambda e: (e[0], e[1]))
-
-    parts: list[str] = []
-    pos = 0
-    open_stack: list[dict] = []
-
-    for offset, kind_order, kind, data in events_list:
-        if offset > pos:
-            parts.append(html.escape(text[pos:offset]))
-            pos = offset
-
-        if kind == "open":
-            parts.append(_annotation_span(data))
-            open_stack.append(data)
-        else:
-            target_id = data["id"]
-            idx = None
-            for i in range(len(open_stack) - 1, -1, -1):
-                if open_stack[i]["id"] == target_id:
-                    idx = i
-                    break
-            if idx is not None:
-                to_reopen = []
-                for i in range(len(open_stack) - 1, idx, -1):
-                    parts.append("</span>")
-                    to_reopen.append(open_stack[i])
-                parts.append("</span>")
-                open_stack.pop(idx)
-                for item in reversed(to_reopen):
-                    parts.append(_annotation_span(item))
-
-    if pos < len(text):
-        parts.append(html.escape(text[pos:]))
-
-    for _ in open_stack:
-        parts.append("</span>")
-
-    return "".join(parts)
-
 
 # ---------------------------------------------------------------------------
 # Status icon helper
@@ -118,7 +48,7 @@ def render_annotated_text(text: str, annotations: list, codes_by_id: dict) -> st
 
 _STATUS_ICONS = {
     "pending": ("radio_button_unchecked", "#757575"),
-    "in_progress": ("edit", "#1565c0"),
+    "in_progress": ("edit", "#546e7a"),
     "complete": ("check_circle", "#2e7d32"),
     "flagged": ("flag", "#c62828"),
 }
@@ -198,12 +128,6 @@ def build(conn: sqlite3.Connection) -> None:
 
     def current_source_id():
         return current_assignment()["source_id"]
-
-    def _auto_transition():
-        asn = current_assignment()
-        if asn["status"] == "pending":
-            update_assignment_status(conn, asn["source_id"], coder_id, "in_progress")
-            _reload_assignments()
 
     def _reload_assignments():
         fresh = get_assignments_for_coder(conn, coder_id)
@@ -286,6 +210,8 @@ def build(conn: sqlite3.Connection) -> None:
                 ).tooltip("Sort codes by name")
 
                 # Import / Export menu
+                import_dialog = ui.dialog()
+
                 def _import_codes():
                     upload_el.run_method("pickFiles")
 
@@ -301,29 +227,156 @@ def build(conn: sqlite3.Connection) -> None:
 
                 with ui.button(icon="more_vert").props("flat round dense size=sm").classes("text-grey-7"):
                     with ui.menu():
-                        ui.menu_item("Import CSV...", on_click=lambda: _import_codes()).props(
-                            "disable" if codes else ""
-                        )
+                        ui.menu_item("Import Codes", on_click=lambda: _import_codes())
                         ui.menu_item("Export CSV", on_click=lambda: _export_codes()).props(
                             "disable" if not codes else ""
                         )
 
-                def _handle_upload(e: events.UploadEventArguments):
+                async def _handle_upload(e: events.UploadEventArguments):
+                    upload_el.reset()
                     try:
-                        content = e.content.read().decode("utf-8-sig")
-                        tmp = tempfile.NamedTemporaryFile(
-                            suffix=".csv", delete=False, prefix="ace_import_", mode="w", encoding="utf-8",
-                        )
-                        tmp.write(content)
-                        tmp.close()
-                        count = import_codebook_from_csv(conn, tmp.name)
-                        Path(tmp.name).unlink(missing_ok=True)
-                        _refresh_codes()
-                        code_list.refresh()
-                        _render_text(conn, current_source_id(), coder_id, codes_by_id, text_container)
-                        ui.notify(f"Imported {count} code(s).", type="positive", position="bottom")
+                        content = await e.file.read()
+                        tmp_dir = Path(tempfile.mkdtemp(prefix="ace_import_"))
+                        tmp_path = tmp_dir / e.file.name
+                        tmp_path.write_bytes(content)
+                        preview = preview_codebook_csv(conn, str(tmp_path))
+                        tmp_path.unlink(missing_ok=True)
+                        tmp_dir.rmdir()
+                    except ValueError as exc:
+                        ui.notify(str(exc), type="negative", position="bottom")
+                        return
+                    except Exception as exc:
+                        ui.notify(f"Could not read CSV file: {exc}", type="negative", position="bottom")
+                        return
+
+                    if not preview:
+                        ui.notify("No valid codes found (check CSV format).", type="info", position="bottom")
+                        return
+
+                    _show_import_dialog(preview)
+
+                def _show_import_dialog(preview):
+                    selected = {}
+                    checkboxes = {}
+                    new_codes = [p for p in preview if not p["exists"]]
+                    existing_codes = [p for p in preview if p["exists"]]
+                    import_dialog.clear()
+
+                    with import_dialog, ui.card().classes("q-pa-md").style("min-width: 340px;"):
+                        ui.label("Import Codes").classes("text-subtitle1 text-weight-medium q-mb-sm")
+
+                        # Summary line
+                        if existing_codes:
+                            ui.label(
+                                f"{len(new_codes)} new \u00b7 {len(existing_codes)} already in project"
+                            ).classes("text-caption text-grey-7 q-mb-sm")
+
+                        if not new_codes:
+                            ui.label("All codes in this file already exist.").classes(
+                                "text-body2 text-grey-6 q-mb-sm"
+                            )
+
+                        with ui.column().classes("full-width").style("max-height: 300px; overflow-y: auto;"):
+                            # New codes section
+                            if new_codes:
+                                with ui.row().classes("items-center full-width justify-between q-mb-xs"):
+                                    ui.label(f"New codes ({len(new_codes)})").classes(
+                                        "text-caption text-weight-medium text-grey-8"
+                                    )
+                                    toggle_link = ui.button(
+                                        "none", on_click=lambda: _toggle_all(False),
+                                    ).props("flat dense no-caps size=xs").classes("text-caption text-grey-6")
+
+                                for p in new_codes:
+                                    selected[p["name"]] = True
+                                    with ui.row().classes("items-center full-width no-wrap"):
+                                        ui.element("div").style(
+                                            f"background: {p['colour']}; width: 14px; height: 14px; "
+                                            "border-radius: 50%; flex-shrink: 0;"
+                                        )
+                                        cb = ui.checkbox(
+                                            p["name"],
+                                            value=True,
+                                            on_change=lambda e, name=p["name"]: _toggle(name, e.value),
+                                        )
+                                        checkboxes[p["name"]] = cb
+
+                            # Existing codes section (collapsed)
+                            if existing_codes:
+                                with ui.expansion(
+                                    f"Already in project ({len(existing_codes)})",
+                                ).props("dense header-class='text-caption text-grey-6 q-pa-none'").classes(
+                                    "full-width q-mt-sm"
+                                ):
+                                    for p in existing_codes:
+                                        selected[p["name"]] = False
+                                        with ui.row().classes("items-center full-width no-wrap"):
+                                            ui.element("div").style(
+                                                f"background: {p['colour']}; width: 14px; height: 14px; "
+                                                "border-radius: 50%; flex-shrink: 0;"
+                                            )
+                                            ui.label(p["name"]).classes("text-grey-5")
+
+                        with ui.row().classes("q-mt-md justify-end full-width gap-2"):
+                            ui.button("Cancel", on_click=import_dialog.close).props("flat")
+                            new_count = len(new_codes)
+                            btn_label = f"Import All {new_count}" if new_count > 0 else "Import 0"
+                            import_btn = ui.button(
+                                btn_label,
+                                on_click=lambda: _do_import(preview, selected),
+                            ).props("unelevated color=primary")
+                            if new_count == 0:
+                                import_btn.props("disable")
+
+                    def _update_btn():
+                        count = sum(selected.values())
+                        new_total = len(new_codes)
+                        if count == new_total and new_total > 0:
+                            import_btn.set_text(f"Import All {count}")
+                        else:
+                            import_btn.set_text(f"Import {count}")
+                        if count == 0:
+                            import_btn.props("disable")
+                        else:
+                            import_btn.props(remove="disable")
+
+                    def _toggle(name, value):
+                        selected[name] = value
+                        _update_btn()
+                        # Update toggle link text
+                        if all(selected.get(p["name"]) for p in new_codes):
+                            toggle_link.set_text("none")
+                            toggle_link._props["onClick"] = None
+                            toggle_link.on("click", lambda: _toggle_all(False))
+                        else:
+                            toggle_link.set_text("all")
+                            toggle_link.on("click", lambda: _toggle_all(True))
+
+                    def _toggle_all(value):
+                        for p in new_codes:
+                            selected[p["name"]] = value
+                            if p["name"] in checkboxes:
+                                checkboxes[p["name"]].value = value
+                        toggle_link.set_text("all" if not value else "none")
+                        _update_btn()
+
+                    import_dialog.open()
+
+                def _do_import(preview, selected):
+                    to_import = [
+                        {"name": p["name"], "colour": p["colour"]}
+                        for p in preview if selected.get(p["name"])
+                    ]
+                    try:
+                        count = import_selected_codes(conn, to_import)
                     except Exception as exc:
                         ui.notify(f"Import failed: {exc}", type="negative", position="bottom")
+                        return
+                    import_dialog.close()
+                    _refresh_codes()
+                    code_list.refresh()
+                    render_text(conn, current_source_id(), coder_id, codes_by_id, text_container)
+                    ui.notify(f"Imported {count} code(s).", type="positive", position="bottom")
 
                 upload_el = ui.upload(on_upload=_handle_upload, auto_upload=True).props(
                     'accept=".csv" max-files=1'
@@ -343,7 +396,7 @@ def build(conn: sqlite3.Connection) -> None:
                 new_code_input.value = ""
                 _refresh_codes()
                 code_list.refresh()
-                _render_text(conn, current_source_id(), coder_id, codes_by_id, text_container)
+                render_text(conn, current_source_id(), coder_id, codes_by_id, text_container)
 
             new_code_input.on("keydown.enter", _on_new_code_enter)
 
@@ -402,22 +455,22 @@ def build(conn: sqlite3.Connection) -> None:
                                 with ui.menu():
                                     ui.menu_item(
                                         "Rename",
-                                        on_click=lambda _e, c=code: _open_rename_dialog(c),
+                                        on_click=lambda _e, c=code: open_rename_dialog(conn, rename_dialog, c, _refresh_all),
                                     )
                                     ui.menu_item(
                                         "Change colour",
-                                        on_click=lambda _e, c=code: _open_colour_dialog(c),
+                                        on_click=lambda _e, c=code: open_colour_dialog(conn, colour_dialog, c, _refresh_all),
                                     )
                                     ui.menu_item(
                                         "Delete",
-                                        on_click=lambda _e, c=code: _open_delete_dialog(c),
+                                        on_click=lambda _e, c=code: open_delete_dialog(conn, delete_dialog, c, _refresh_all),
                                     )
 
             code_list()
 
         # ── Right Panel (flex) ───────────────────────────────────────
         with splitter.after:
-          with ui.column().classes("col q-pa-md").style("overflow-y: auto;"):
+          with ui.column().classes("q-pa-md").style("width: 100%; overflow-y: auto;"):
 
             # Source header
             @ui.refreshable
@@ -454,6 +507,7 @@ def build(conn: sqlite3.Connection) -> None:
             source_header()
 
             # Text content area
+            ui.label("Source").classes("text-subtitle2 text-weight-medium q-mt-sm")
             text_container = ui.html("", sanitize=False).classes("full-width ace-text-content")
 
             ui.separator().classes("q-my-sm")
@@ -501,407 +555,68 @@ def build(conn: sqlite3.Connection) -> None:
             annotation_list_display()
 
 
-    # ── Source Grid Navigator ────────────────────────────────────────
-
-    grid_container = ui.column().classes("full-width").style(
-        "border-top: 1px solid #bdbdbd; background: #f5f5f5;"
+    # ── Source Grid Navigator + Bottom Bar ──────────────────────────
+    grid_container, bottom_bar, _toggle_grid = build_bottom_bar(
+        conn=conn,
+        coder_id=coder_id,
+        assignments=assignments,
+        state=state,
+        sources=sources,
+        navigate_to_fn=lambda idx: _navigate_to(idx),
     )
-    grid_container.set_visibility(False)
-
-    sources_by_id = {s["id"]: s for s in sources}
-
-    def _build_grid_html():
-        counts = get_annotation_counts_by_source(conn, coder_id)
-        max_count = max(counts.values()) if counts else 1
-        total = len(assignments)
-        cell_size = max(10, min(24, int((700 * 200 / max(total, 1)) ** 0.5)))
-        cells = []
-        for i, asn in enumerate(assignments):
-            sid = asn["source_id"]
-            count = counts.get(sid, 0)
-            is_current = i == state["current_index"]
-            is_flagged = asn["status"] == "flagged"
-            if is_current:
-                bg = "#222"
-            else:
-                lightness = 95 - int(65 * count / max_count) if max_count else 95
-                bg = f"hsl(210, 70%, {lightness}%)"
-            border = "2px solid #d84315" if is_flagged else ("2px solid white" if is_current else "1px solid #bdbdbd")
-            src = sources_by_id.get(sid)
-            display_id = src["display_id"] if src else f"Source {i + 1}"
-            safe_title = html.escape(f"{display_id} ({count} annotations)", quote=True)
-            cells.append(
-                f'<span class="ace-grid-cell" data-idx="{i}" '
-                f'title="{safe_title}" '
-                f'style="width:{cell_size}px;height:{cell_size}px;background:{bg};'
-                f'border:{border};display:inline-block;"></span>'
-            )
-        legend = (
-            '<div class="ace-grid-legend">'
-            f'<span><span style="display:inline-block;width:10px;height:10px;background:hsl(210,70%,95%);border:1px solid #ccc;"></span> 0</span>'
-            f'<span><span style="display:inline-block;width:10px;height:10px;background:hsl(210,70%,60%);border:1px solid #ccc;"></span> some</span>'
-            f'<span><span style="display:inline-block;width:10px;height:10px;background:hsl(210,70%,30%);border:1px solid #ccc;"></span> most</span>'
-            f'<span><span style="display:inline-block;width:10px;height:10px;background:#222;border:2px solid white;"></span> current</span>'
-            f'<span><span style="display:inline-block;width:10px;height:10px;background:hsl(210,70%,80%);border:2px solid #d84315;"></span> flagged</span>'
-            '</div>'
-        )
-        return legend + '<div class="ace-source-grid">' + "".join(cells) + "</div>"
-
-    grid_html = ui.html("", sanitize=False)
-    grid_html.move(grid_container)
-
-    def _toggle_grid():
-        visible = grid_container.visible
-        if not visible:
-            grid_html.content = _build_grid_html()
-        grid_container.set_visibility(not visible)
-
-    def _on_grid_cell_clicked(e):
-        idx = e.args.get("index")
-        if idx is not None and 0 <= idx < len(assignments):
-            grid_container.set_visibility(False)
-            _navigate_to(idx)
-
-    ui.on("grid_cell_clicked", _on_grid_cell_clicked)
-
-    # ── Bottom Bar ────────────────────────────────────────────────────
-    @ui.refreshable
-    def bottom_bar():
-        total = len(assignments)
-        complete_count = sum(1 for a in assignments if a["status"] == "complete")
-        pct = round(complete_count / total * 100) if total else 0
-        idx = state["current_index"]
-
-        with ui.row().classes(
-            "items-center full-width q-pa-sm justify-between"
-        ).style(
-            "border-top: 1px solid #bdbdbd; background: #f5f5f5;"
-        ):
-            # Nav buttons
-            with ui.row().classes("items-center gap-2"):
-                ui.button(
-                    "Prev",
-                    icon="chevron_left",
-                    on_click=lambda: _navigate_to(max(0, idx - 1)),
-                ).props("flat dense" + (" disable" if idx == 0 else "")).tooltip("Alt+\u2190")
-
-                ui.button(
-                    f"Source {idx + 1} of {total} ({pct}% complete) \u25BE",
-                    on_click=_toggle_grid,
-                ).props("flat dense no-caps").classes("text-body2 text-grey-8").tooltip("G")
-
-                ui.button(
-                    "Next",
-                    icon="chevron_right",
-                    on_click=lambda: _navigate_to(min(total - 1, idx + 1)),
-                ).props("flat dense" + (" disable" if idx >= total - 1 else "")).tooltip("Alt+\u2192")
-
-    bottom_bar()
 
     # ── Helpers ────────────────────────────────────────────────────────
 
     def _refresh_all():
         _refresh_codes()
         code_list.refresh()
-        _render_text(conn, current_source_id(), coder_id, codes_by_id, text_container)
+        render_text(conn, current_source_id(), coder_id, codes_by_id, text_container)
         annotation_list_display.refresh()
-
-    # ── Code management dialogs ──────────────────────────────────────
-
-    def _open_code_dialog(dlg, title, content_fn, action_label=None, action_fn=None, action_props="unelevated color=primary"):
-        dlg.clear()
-        with dlg, ui.card().classes("q-pa-md").style("min-width: 300px;"):
-            ui.label(title).classes("text-subtitle1 text-weight-medium q-mb-sm")
-            content_fn()
-            with ui.row().classes("q-mt-md justify-end full-width gap-2"):
-                ui.button("Cancel", on_click=dlg.close).props("flat")
-                if action_label:
-                    ui.button(action_label, on_click=action_fn).props(action_props)
-        dlg.open()
-
-    def _open_rename_dialog(code):
-        name_input = None
-
-        def _content():
-            nonlocal name_input
-            name_input = ui.input("Name", value=code["name"]).props("autofocus outlined dense")
-
-        def _save():
-            new_name = name_input.value.strip()
-            if not new_name:
-                return
-            update_code(conn, code["id"], name=new_name)
-            rename_dialog.close()
-            _refresh_all()
-
-        _open_code_dialog(rename_dialog, "Rename Code", _content, "Save", _save)
-
-    def _open_colour_dialog(code):
-        def _content():
-            ui.label(code["name"]).classes("text-body2 text-grey-7 q-mb-sm")
-            with ui.row().classes("gap-2").style("flex-wrap: wrap;"):
-                for hex_colour, colour_name in COLOUR_PALETTE:
-                    def _pick(c=hex_colour):
-                        update_code(conn, code["id"], colour=c)
-                        colour_dialog.close()
-                        _refresh_all()
-
-                    is_current = (code["colour"] or "").lower() == hex_colour.lower()
-                    ui.element("div").classes("ace-code-dot cursor-pointer").style(
-                        f"background-color: {hex_colour}; width: 28px; height: 28px; "
-                        f"border: {'3px solid #333' if is_current else '2px solid transparent'};"
-                    ).tooltip(hex_colour).on("click", _pick)
-
-        _open_code_dialog(colour_dialog, "Change Colour", _content)
-
-    def _open_delete_dialog(code):
-        def _content():
-            ui.label(
-                f'Are you sure you want to delete "{code["name"]}"?'
-            ).classes("text-body2 q-mb-sm")
-            ui.label(
-                "All annotations using this code will be permanently deleted."
-            ).classes("text-caption text-grey-7 q-mb-md")
-
-        def _confirm():
-            delete_code(conn, code["id"])
-            delete_dialog.close()
-            _refresh_all()
-
-        _open_code_dialog(delete_dialog, "Delete Code", _content, "Delete", _confirm, "unelevated color=negative")
 
     # ── Apply code (no dialog) ───────────────────────────────────────
 
     async def _apply_code(code):
-        sel = state.get("pending_selection")
-        if not sel:
-            # Fallback: read snapshot captured on last mousedown
-            sel = await ui.run_javascript("window.__aceLastSelection")
-            if sel:
-                state["pending_selection"] = sel
-        if not sel:
-            ui.notify("Select text first, then click a code.", type="info", position="bottom", timeout=2000)
-            return
-
-        source_id = current_source_id()
-        content_row = get_source_content(conn, source_id)
-        text = content_row["content_text"] if content_row else ""
-
-        start_cp = utf16_to_codepoint(text, sel["start"])
-        end_cp = utf16_to_codepoint(text, sel["end"])
-        selected_text = text[start_cp:end_cp]
-
-        ann_id = add_annotation(
-            conn,
-            source_id=source_id,
-            coder_id=coder_id,
-            code_id=code["id"],
-            start_offset=start_cp,
-            end_offset=end_cp,
-            selected_text=selected_text,
-        )
-        undo_mgr.record_add(source_id, ann_id)
-
-        state["pending_selection"] = None
-        _render_text(conn, source_id, coder_id, codes_by_id, text_container)
-        annotation_list_display.refresh()
+        await apply_code(state, conn, coder_id, current_source_id, codes_by_id, text_container, annotation_list_display.refresh, undo_mgr, code)
 
     # ── Delete annotation ────────────────────────────────────────────
 
     def _delete_annotation(ann, dialog=None):
-        source_id = ann["source_id"]
-        undo_mgr.record_delete(source_id, ann["id"])
-        delete_annotation(conn, ann["id"])
-        if dialog:
-            dialog.close()
-        _render_text(conn, source_id, coder_id, codes_by_id, text_container)
-        annotation_list_display.refresh()
-        ui.notify("Annotation removed.", type="info", position="bottom", timeout=1500)
-
-    # ── Annotation info dialog ───────────────────────────────────────
-
-    def _open_annotation_info(ann_ids):
-        anns = []
-        for aid in ann_ids:
-            row = conn.execute(
-                "SELECT * FROM annotation WHERE id = ? AND deleted_at IS NULL", (aid,)
-            ).fetchone()
-            if row:
-                anns.append(row)
-
-        if not anns:
-            return
-
-        annotation_info_dialog.clear()
-        with annotation_info_dialog, ui.card().classes("q-pa-sm").style("min-width: 250px;"):
-            ui.label("Annotations").classes("text-subtitle2 text-weight-medium q-mb-xs")
-
-            for ann in anns:
-                code = codes_by_id.get(ann["code_id"])
-                colour = code["colour"] if code else "#999999"
-                code_name = code["name"] if code else "Unknown"
-                selected = ann["selected_text"] or ""
-                truncated = selected[:60] + ("..." if len(selected) > 60 else "")
-
-                with ui.row().classes("items-center q-py-xs full-width").style("gap: 8px;"):
-                    ui.element("div").classes("ace-code-dot").style(
-                        f"background-color: {colour};"
-                    )
-                    with ui.column().classes("col").style("min-width: 0;"):
-                        ui.label(code_name).classes("text-body2 text-weight-medium")
-                        ui.label(f'"{truncated}"').classes("text-caption text-grey-7 ellipsis")
-                    ui.button(
-                        icon="delete",
-                        on_click=lambda _e, a=ann: _delete_annotation(a, annotation_info_dialog),
-                    ).props("flat round dense size=sm color=negative")
-
-            ui.button("Close", on_click=annotation_info_dialog.close).props("flat dense").classes("q-mt-xs")
-
-        annotation_info_dialog.open()
+        delete_annotation_action(conn, ann, undo_mgr, codes_by_id, coder_id, text_container, annotation_list_display.refresh, dialog)
 
     # ── Navigation ───────────────────────────────────────────────────
 
     def _navigate_to(idx):
-        if idx == state["current_index"]:
-            return
-
-        # Auto-complete the departing source (unless already complete or flagged)
-        departing = current_assignment()
-        if departing["status"] not in ("complete", "flagged"):
-            update_assignment_status(conn, departing["source_id"], coder_id, "complete")
-
-        state["current_index"] = idx
-        state["pending_selection"] = None
-
-        asn = assignments[idx]
-        source_id = asn["source_id"]
-
-        if asn["status"] == "pending":
-            update_assignment_status(conn, source_id, coder_id, "in_progress")
-
-        _reload_assignments()
-
-        _render_text(conn, source_id, coder_id, codes_by_id, text_container)
-        source_header.refresh()
-        bottom_bar.refresh()
-        annotation_list_display.refresh()
+        navigate_to(conn, coder_id, state, assignments, codes_by_id, text_container, source_header.refresh, bottom_bar.refresh, annotation_list_display.refresh, _reload_assignments, idx)
 
     # ── Status toggles ───────────────────────────────────────────────
 
     def _toggle_flag():
-        asn = current_assignment()
-        new_status = "in_progress" if asn["status"] == "flagged" else "flagged"
-        update_assignment_status(conn, asn["source_id"], coder_id, new_status)
-        _reload_assignments()
-        source_header.refresh()
-        bottom_bar.refresh()
+        toggle_flag(conn, coder_id, state, assignments, source_header.refresh, bottom_bar.refresh, _reload_assignments)
 
-    # ── Event handlers from JS ───────────────────────────────────────
-
-    def _on_text_selected(e):
-        data = e.args
-        state["pending_selection"] = {
-            "start": data["start"],
-            "end": data["end"],
-            "text": data["text"],
-        }
-
-    def _on_annotation_clicked(e):
-        data = e.args
-        ann_ids = data.get("annotation_ids", [])
-        if ann_ids:
-            _open_annotation_info(ann_ids)
-
-    ui.on("text_selected", _on_text_selected)
-    ui.on("annotation_clicked", _on_annotation_clicked)
-
-    # ── Keyboard shortcut handlers ───────────────────────────────────
-
-    def _on_shortcut_undo(_e):
-        _do_undo_redo(conn, coder_id, codes_by_id, text_container, annotation_list_display, undo_mgr, current_source_id())
-
-    def _on_shortcut_redo(_e):
-        _do_undo_redo(conn, coder_id, codes_by_id, text_container, annotation_list_display, undo_mgr, current_source_id(), redo=True)
-
-    def _on_shortcut_escape(_e):
-        if grid_container.visible:
-            grid_container.set_visibility(False)
-            return
-        state["pending_selection"] = None
-        annotation_info_dialog.close()
-
-    def _on_shortcut_prev(_e):
-        idx = state["current_index"]
-        if idx > 0:
-            _navigate_to(idx - 1)
-
-    def _on_shortcut_next(_e):
-        idx = state["current_index"]
-        if idx < len(assignments) - 1:
-            _navigate_to(idx + 1)
-
-    async def _on_shortcut_apply_code(e):
-        code_idx = e.args.get("index", -1)
-        if 0 <= code_idx < len(codes):
-            await _apply_code(codes[code_idx])
-
-    def _on_codes_reordered(e):
-        code_ids = e.args.get("code_ids", [])
-        if code_ids:
-            reorder_codes(conn, code_ids)
-            _refresh_codes()
-            code_list.refresh()
-
-    ui.on("codes_reordered", _on_codes_reordered)
-    ui.on("shortcut_undo", _on_shortcut_undo)
-    ui.on("shortcut_redo", _on_shortcut_redo)
-    ui.on("shortcut_escape", _on_shortcut_escape)
-    ui.on("shortcut_prev_source", _on_shortcut_prev)
-    ui.on("shortcut_next_source", _on_shortcut_next)
-    ui.on("shortcut_apply_code", _on_shortcut_apply_code)
-    ui.on("shortcut_toggle_grid", lambda _e: _toggle_grid())
+    # ── Event handlers & keyboard shortcuts ───────────────────────────
+    register_shortcuts(
+        state=state,
+        conn=conn,
+        coder_id=coder_id,
+        codes=codes,
+        codes_by_id=codes_by_id,
+        undo_mgr=undo_mgr,
+        text_container=text_container,
+        annotation_list_refresh=annotation_list_display.refresh,
+        grid_container=grid_container,
+        annotation_info_dialog=annotation_info_dialog,
+        assignments=assignments,
+        current_source_id=current_source_id,
+        navigate_to_fn=_navigate_to,
+        toggle_grid_fn=_toggle_grid,
+        refresh_codes_fn=_refresh_codes,
+        code_list_refresh=code_list.refresh,
+        delete_annotation_fn=_delete_annotation,
+    )
 
     # ── Initial render ───────────────────────────────────────────────
-    _render_text(conn, current_source_id(), coder_id, codes_by_id, text_container)
-    _auto_transition()
-
-
-# ---------------------------------------------------------------------------
-# Text rendering
-# ---------------------------------------------------------------------------
-
-def _render_text(conn, source_id, coder_id, codes_by_id, text_container):
-    content_row = get_source_content(conn, source_id)
-    text = content_row["content_text"] if content_row else ""
-    annotations = get_annotations_for_source(conn, source_id, coder_id)
-    rendered = render_annotated_text(text, annotations, codes_by_id)
-    text_container.content = rendered
-
-
-
-# ---------------------------------------------------------------------------
-# Undo / redo
-# ---------------------------------------------------------------------------
-
-_UNDO_OPS = {"undo_add": "delete", "undo_delete": "undelete"}
-_REDO_OPS = {"redo_add": "undelete", "redo_delete": "delete"}
-
-
-def _do_undo_redo(conn, coder_id, codes_by_id, text_container, annotation_list_display, undo_mgr, source_id, *, redo=False):
-    label = "redo" if redo else "undo"
-    action = (undo_mgr.redo if redo else undo_mgr.undo)(source_id)
-    if action is None:
-        ui.notify(f"Nothing to {label}.", type="info", position="bottom", timeout=1000)
-        return
-    ops = _REDO_OPS if redo else _UNDO_OPS
-    op = ops.get(action["type"])
-    if op == "delete":
-        delete_annotation(conn, action["annotation_id"])
-    elif op == "undelete":
-        undelete_annotation(conn, action["annotation_id"])
-    _render_text(conn, source_id, coder_id, codes_by_id, text_container)
-    annotation_list_display.refresh()
-    ui.notify(f"{label.title()}.", type="info", position="bottom", timeout=1000)
+    render_text(conn, current_source_id(), coder_id, codes_by_id, text_container)
+    auto_transition(conn, coder_id, state, assignments, _reload_assignments)
 
 
 # ---------------------------------------------------------------------------

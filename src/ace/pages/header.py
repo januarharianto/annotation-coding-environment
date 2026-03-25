@@ -33,7 +33,9 @@ def build_header(*, project_name: str | None = None, conn=None) -> None:
                     "text-subtitle2 text-weight-bold text-grey-8"
                 ).tooltip("Back to home")
             else:
-                ui.label("ACE").classes("text-subtitle2 text-weight-bold text-grey-8")
+                ui.button("ACE", on_click=lambda: ui.navigate.to("/")).props(
+                    "flat dense no-caps"
+                ).classes("text-subtitle2 text-weight-bold text-grey-8")
 
             ui.space()
 
