@@ -1,7 +1,6 @@
 """Agreement dashboard page — /agreement route."""
 
 import html as html_mod
-import json
 import platform
 import subprocess
 from pathlib import Path
@@ -27,7 +26,9 @@ def register():
             ui.button(
                 "Compute Agreement",
                 icon="calculate",
-                on_click=lambda: _run_computation(loader, results_container),
+                on_click=lambda: _run_computation(
+                    loader, results_container,
+                ),
             ).props("unelevated color=primary no-caps").classes("q-mt-md")
         compute_wrapper.set_visibility(False)
         results_container = ui.column().classes("items-center full-width")
@@ -121,11 +122,15 @@ async def _run_computation(loader, results_container):
         ui.notify(str(e), type="negative")
         return
 
-    ui.notify("Computing agreement metrics...", type="info")
     result = compute_agreement(ds)
 
     results_container.clear()
     with results_container:
+        ui.button(
+            "Start Over",
+            icon="refresh",
+            on_click=lambda: ui.navigate.reload(),
+        ).props("flat dense no-caps").classes("text-grey-8")
         _render_dashboard(result, ds)
 
 
@@ -173,10 +178,6 @@ def _render_dashboard(result, dataset):
     # ── Agreement by Code ─────────────────────────────────────
     ui.separator().classes("q-my-md")
     _render_per_code_table(result)
-
-    # ── Methods paragraph ─────────────────────────────────────
-    ui.separator().classes("q-my-md")
-    _render_methods_paragraph(result)
 
     # ── Export ────────────────────────────────────────────────
     ui.separator().classes("q-my-md")
@@ -310,64 +311,6 @@ def _heatmap_color(value: float) -> tuple[str, str]:
     text = "#ffffff" if value > 0.55 else "#212121"
     return bg, text
 
-
-def _render_methods_paragraph(result):
-    """Render the methods paragraph inline with a copy button."""
-    para = _build_methods_text(result)
-
-    with ui.column().classes("items-center full-width"):
-        with ui.row().classes("items-center gap-2 q-mb-sm"):
-            ui.label("Methods Paragraph").classes("ace-section-header")
-            ui.button(
-                icon="content_copy",
-                on_click=lambda: _copy_to_clipboard(para),
-            ).props("flat dense round").classes("text-grey-7")
-
-        ui.label(para).classes("text-body2 text-grey-8").style(
-            "line-height: 1.6; font-style: italic; max-width: 72ch; text-align: center;"
-        )
-
-
-def _build_methods_text(result) -> str:
-    """Generate a publication-ready methods paragraph."""
-    alpha = result.overall.krippendorffs_alpha
-    alpha_str = f"{alpha:.2f}" if alpha is not None else "N/A"
-
-    if result.n_coders == 2:
-        kappa = result.overall.cohens_kappa
-        kappa_label = "Cohen's kappa"
-    else:
-        kappa = result.overall.fleiss_kappa
-        kappa_label = "Fleiss' kappa"
-    kappa_str = f"{kappa:.2f}" if kappa is not None else "N/A"
-
-    code_kappas = []
-    for m in result.per_code.values():
-        k = m.cohens_kappa if result.n_coders == 2 else m.fleiss_kappa
-        if k is not None:
-            code_kappas.append(k)
-
-    range_str = ""
-    if code_kappas:
-        range_str = (
-            f" Per-code agreement ranged from "
-            f"\u03BA = {min(code_kappas):.2f} to \u03BA = {max(code_kappas):.2f}."
-        )
-
-    return (
-        f"Inter-coder reliability was assessed using Krippendorff's alpha "
-        f"(\u03B1 = {alpha_str}) and {kappa_label} "
-        f"(\u03BA = {kappa_str}) across {result.n_coders} coders "
-        f"and {result.n_sources} source texts.{range_str}"
-    )
-
-
-async def _copy_to_clipboard(text: str):
-    """Copy text to clipboard via browser API."""
-    await ui.run_javascript(
-        f"navigator.clipboard.writeText({json.dumps(text)})"
-    )
-    ui.notify("Copied to clipboard", type="positive")
 
 
 
