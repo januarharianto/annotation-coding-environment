@@ -5,10 +5,16 @@ from typing import Callable
 
 from ace.db.schema import SCHEMA_VERSION
 
+def _migrate_v1_to_v2(conn: sqlite3.Connection) -> None:
+    """Add group_name column to codebook_code."""
+    conn.execute("ALTER TABLE codebook_code ADD COLUMN group_name TEXT")
+
+
 # Registry of migration functions keyed by target version.
 # Each function takes a connection and migrates from version (key - 1) to key.
-# Empty for schema version 1 -- no migrations needed yet.
-MIGRATIONS: dict[int, Callable[[sqlite3.Connection], None]] = {}
+MIGRATIONS: dict[int, Callable[[sqlite3.Connection], None]] = {
+    2: _migrate_v1_to_v2,
+}
 
 
 def check_and_migrate(conn: sqlite3.Connection) -> int:
