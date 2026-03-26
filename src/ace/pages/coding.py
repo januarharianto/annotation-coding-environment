@@ -15,7 +15,7 @@ from ace.models.annotation import (
     get_annotations_for_source,
 )
 from ace.models.assignment import get_assignments_for_coder
-from ace.models.codebook import add_code, export_codebook_to_csv, import_selected_codes, list_codes, preview_codebook_csv
+from ace.models.codebook import add_code, export_codebook_to_csv, import_selected_codes, list_codes, preview_codebook_csv, update_code
 from ace.models.coder import add_coder, list_coders, update_coder
 from ace.models.project import get_project
 from ace.pages.header import build_header
@@ -29,7 +29,7 @@ from ace.pages.coding_actions import (
     toggle_flag,
 )
 from ace.pages.coding_bottom_bar import build_bottom_bar
-from ace.pages.coding_dialogs import open_colour_dialog, open_delete_dialog, open_rename_dialog
+from ace.pages.coding_dialogs import open_colour_dialog, open_delete_dialog, open_new_group_dialog, open_rename_dialog
 from ace.pages.coding_render import render_annotated_text  # noqa: F401 — re-exported for tests
 from ace.pages.coding_shortcuts import register_shortcuts
 from ace.services.palette import next_colour
@@ -158,6 +158,8 @@ def build(conn: sqlite3.Connection) -> None:
     rename_dialog = ui.dialog()
     colour_dialog = ui.dialog()
     delete_dialog = ui.dialog()
+    move_dialog = ui.dialog()
+    new_group_dialog = ui.dialog()
 
     # ── Main two-pane container (resizable) ─────────────────────────
     _DEFAULT_WIDTH = 280
@@ -197,7 +199,11 @@ def build(conn: sqlite3.Connection) -> None:
                 def _toggle_sort():
                     state["sort_codes"] = not state.get("sort_codes", False)
                     if state["sort_codes"]:
-                        codes.sort(key=lambda c: c["name"].lower())
+                        has_groups = any(c["group_name"] for c in codes)
+                        if has_groups:
+                            codes.sort(key=lambda c: (c["group_name"] or "", c["name"].lower()))
+                        else:
+                            codes.sort(key=lambda c: c["name"].lower())
                     else:
                         _refresh_codes()  # restore DB order
                     code_list.refresh()
@@ -258,9 +264,58 @@ def build(conn: sqlite3.Connection) -> None:
                 def _show_import_dialog(preview):
                     selected = {}
                     checkboxes = {}
+                    group_checkboxes = {}  # group_name -> ui.checkbox
                     new_codes = [p for p in preview if not p["exists"]]
                     existing_codes = [p for p in preview if p["exists"]]
                     import_dialog.clear()
+
+                    # Detect whether any code has a group
+                    has_groups = any(p.get("group_name") for p in preview)
+
+                    # Group codes by group_name (preserving insertion order)
+                    def _group_by(codes):
+                        grouped = {}
+                        for p in codes:
+                            grp = p.get("group_name") or ""
+                            grouped.setdefault(grp, []).append(p)
+                        return grouped
+
+                    grouped_new = _group_by(new_codes) if has_groups else {"": new_codes}
+                    grouped_existing = _group_by(existing_codes) if has_groups else {"": existing_codes}
+
+                    def _update_group_checkbox(grp):
+                        """Update a group header checkbox to reflect its children."""
+                        if grp not in group_checkboxes:
+                            return
+                        codes_in_grp = grouped_new.get(grp, [])
+                        checked = sum(1 for p in codes_in_grp if selected.get(p["name"]))
+                        total = len(codes_in_grp)
+                        gcb = group_checkboxes[grp]
+                        if checked == total:
+                            gcb.value = True
+                            gcb.props(remove="indeterminate")
+                        elif checked == 0:
+                            gcb.value = False
+                            gcb.props(remove="indeterminate")
+                        else:
+                            gcb.value = False
+                            gcb.props("indeterminate")
+
+                    def _toggle_group(grp, value):
+                        """Toggle all codes in a group on/off."""
+                        for p in grouped_new.get(grp, []):
+                            selected[p["name"]] = value
+                            if p["name"] in checkboxes:
+                                checkboxes[p["name"]].value = value
+                        gcb = group_checkboxes[grp]
+                        gcb.props(remove="indeterminate")
+                        gcb.value = value
+                        _update_btn()
+                        _update_toggle_link()
+
+                    def _on_group_checkbox(grp, e):
+                        """Handle group checkbox click — indeterminate→all, checked→none, unchecked→all."""
+                        _toggle_group(grp, e.value)
 
                     with import_dialog, ui.card().classes("q-pa-md").style("min-width: 340px;"):
                         ui.label("Import Codes").classes("text-subtitle1 text-weight-medium q-mb-sm")
@@ -283,23 +338,40 @@ def build(conn: sqlite3.Connection) -> None:
                                     ui.label(f"New codes ({len(new_codes)})").classes(
                                         "text-caption text-weight-medium text-grey-8"
                                     )
+                                    def _on_toggle_link():
+                                        all_checked = all(selected.get(p["name"]) for p in new_codes)
+                                        _toggle_all(not all_checked)
+
                                     toggle_link = ui.button(
-                                        "none", on_click=lambda: _toggle_all(False),
+                                        "none", on_click=_on_toggle_link,
                                     ).props("flat dense no-caps size=xs").classes("text-caption text-grey-6")
 
-                                for p in new_codes:
-                                    selected[p["name"]] = True
-                                    with ui.row().classes("items-center full-width no-wrap"):
-                                        ui.element("div").style(
-                                            f"background: {p['colour']}; width: 14px; height: 14px; "
-                                            "border-radius: 50%; flex-shrink: 0;"
-                                        )
-                                        cb = ui.checkbox(
-                                            p["name"],
+                                for grp, codes_in_grp in grouped_new.items():
+                                    # Group header (only for named groups)
+                                    if grp:
+                                        gcb = ui.checkbox(
+                                            grp.upper(),
                                             value=True,
-                                            on_change=lambda e, name=p["name"]: _toggle(name, e.value),
+                                            on_change=lambda e, g=grp: _on_group_checkbox(g, e),
+                                        ).classes("text-weight-medium").style(
+                                            "font-size: 12px; color: #757575;"
                                         )
-                                        checkboxes[p["name"]] = cb
+                                        group_checkboxes[grp] = gcb
+
+                                    indent = "padding-left: 24px;" if grp and has_groups else ""
+                                    for p in codes_in_grp:
+                                        selected[p["name"]] = True
+                                        with ui.row().classes("items-center full-width no-wrap").style(indent):
+                                            ui.element("div").style(
+                                                f"background: {p['colour']}; width: 14px; height: 14px; "
+                                                "border-radius: 50%; flex-shrink: 0;"
+                                            )
+                                            cb = ui.checkbox(
+                                                p["name"],
+                                                value=True,
+                                                on_change=lambda e, name=p["name"], g=grp: _toggle(name, e.value, g),
+                                            )
+                                            checkboxes[p["name"]] = cb
 
                             # Existing codes section (collapsed)
                             if existing_codes:
@@ -308,14 +380,20 @@ def build(conn: sqlite3.Connection) -> None:
                                 ).props("dense header-class='text-caption text-grey-6 q-pa-none'").classes(
                                     "full-width q-mt-sm"
                                 ):
-                                    for p in existing_codes:
-                                        selected[p["name"]] = False
-                                        with ui.row().classes("items-center full-width no-wrap"):
-                                            ui.element("div").style(
-                                                f"background: {p['colour']}; width: 14px; height: 14px; "
-                                                "border-radius: 50%; flex-shrink: 0;"
-                                            )
-                                            ui.label(p["name"]).classes("text-grey-5")
+                                    for grp, codes_in_grp in grouped_existing.items():
+                                        if grp:
+                                            ui.label(grp.upper()).style(
+                                                "font-size: 12px; color: #757575;"
+                                            ).classes("text-weight-medium q-mt-xs")
+                                        indent = "padding-left: 24px;" if grp and has_groups else ""
+                                        for p in codes_in_grp:
+                                            selected[p["name"]] = False
+                                            with ui.row().classes("items-center full-width no-wrap").style(indent):
+                                                ui.element("div").style(
+                                                    f"background: {p['colour']}; width: 14px; height: 14px; "
+                                                    "border-radius: 50%; flex-shrink: 0;"
+                                                )
+                                                ui.label(p["name"]).classes("text-grey-5")
 
                         with ui.row().classes("q-mt-md justify-end full-width gap-2"):
                             ui.button("Cancel", on_click=import_dialog.close).props("flat")
@@ -340,23 +418,28 @@ def build(conn: sqlite3.Connection) -> None:
                         else:
                             import_btn.props(remove="disable")
 
-                    def _toggle(name, value):
-                        selected[name] = value
-                        _update_btn()
-                        # Update toggle link text
+                    def _update_toggle_link():
                         if all(selected.get(p["name"]) for p in new_codes):
                             toggle_link.set_text("none")
-                            toggle_link._props["onClick"] = None
-                            toggle_link.on("click", lambda: _toggle_all(False))
                         else:
                             toggle_link.set_text("all")
-                            toggle_link.on("click", lambda: _toggle_all(True))
+
+                    def _toggle(name, value, grp=""):
+                        selected[name] = value
+                        _update_btn()
+                        _update_group_checkbox(grp)
+                        _update_toggle_link()
 
                     def _toggle_all(value):
                         for p in new_codes:
                             selected[p["name"]] = value
                             if p["name"] in checkboxes:
                                 checkboxes[p["name"]].value = value
+                        # Update all group checkboxes
+                        for grp in group_checkboxes:
+                            gcb = group_checkboxes[grp]
+                            gcb.props(remove="indeterminate")
+                            gcb.value = value
                         toggle_link.set_text("all" if not value else "none")
                         _update_btn()
 
@@ -364,7 +447,7 @@ def build(conn: sqlite3.Connection) -> None:
 
                 def _do_import(preview, selected):
                     to_import = [
-                        {"name": p["name"], "colour": p["colour"]}
+                        {"name": p["name"], "colour": p["colour"], "group_name": p.get("group_name")}
                         for p in preview if selected.get(p["name"])
                     ]
                     try:
@@ -401,6 +484,117 @@ def build(conn: sqlite3.Connection) -> None:
             new_code_input.on("keydown.enter", _on_new_code_enter)
 
             # ── Code list (refreshable) ──────────────────────────────
+            def _shortcut_label(i: int) -> str:
+                if i < 9:
+                    return str(i + 1)
+                if i == 9:
+                    return "0"
+                if i < 36:
+                    return chr(ord("a") + i - 10)
+                return ""
+
+            def _move_to_group(code, group_name):
+                old_group = code["group_name"]
+                move_dialog.close()
+                update_code(conn, code["id"], group_name=group_name if group_name else "")
+                _refresh_codes()
+                code_list.refresh()
+                render_text(conn, current_source_id(), coder_id, codes_by_id, text_container)
+                if old_group and not any(c["group_name"] == old_group for c in codes):
+                    ui.notify(f"'{old_group}' group removed (no remaining codes).", type="info", position="bottom")
+
+            def _open_new_group(code):
+                move_dialog.close()
+                def _on_create(name):
+                    _move_to_group(code, name)
+                open_new_group_dialog(new_group_dialog, _on_create)
+
+            def _show_move_to_group(code):
+                move_dialog.clear()
+                existing_groups = sorted({c["group_name"] for c in codes if c["group_name"]})
+
+                with move_dialog, ui.card().classes("q-pa-md").style("min-width: 250px;"):
+                    ui.label("Move to Group").classes("text-subtitle1 text-weight-medium q-mb-sm")
+
+                    for g in existing_groups:
+                        with ui.row().classes("items-center full-width cursor-pointer q-py-xs").on(
+                            "click", lambda _e, grp=g: _move_to_group(code, grp)
+                        ):
+                            if code["group_name"] == g:
+                                ui.icon("check", size="xs").classes("text-grey-7")
+                            else:
+                                ui.element("div").style("width: 18px;")
+                            ui.label(g).classes("text-body2")
+
+                    if existing_groups:
+                        ui.separator().classes("q-my-xs")
+
+                    with ui.row().classes("items-center full-width cursor-pointer q-py-xs").on(
+                        "click", lambda _e: _open_new_group(code)
+                    ):
+                        ui.icon("add", size="xs").classes("text-grey-7")
+                        ui.label("New Group...").classes("text-body2")
+
+                    with ui.row().classes("items-center full-width cursor-pointer q-py-xs").on(
+                        "click", lambda _e: _move_to_group(code, None)
+                    ):
+                        if code["group_name"] is None:
+                            ui.icon("check", size="xs").classes("text-grey-7")
+                        else:
+                            ui.element("div").style("width: 18px;")
+                        ui.label("Ungrouped").classes("text-body2")
+
+                move_dialog.open()
+
+            def _render_code_row(code, shortcut: str, sorting: bool, pad_left: str = "2px 4px"):
+                colour = code["colour"] or "#999999"
+
+                async def _click_apply(_e, c=code):
+                    await _apply_code(c)
+
+                with ui.row().classes(
+                    "items-center full-width no-wrap ace-hover-row ace-code-row"
+                ).style(
+                    f"gap: 4px; padding: {pad_left}; flex-shrink: 0; overflow: hidden;"
+                    f" border-left: 4px solid {colour};"
+                ) as row:
+                    row.props(f'data-code-id={code["id"]}')
+                    if not sorting:
+                        ui.icon("drag_indicator", size="xs").classes(
+                            "ace-drag-handle text-grey-5"
+                        )
+                    lbl = ui.label(code["name"]).classes(
+                        "text-body2 col cursor-pointer ellipsis"
+                    ).style(
+                        "min-width: 0; line-height: 1.4;"
+                    ).on("click", _click_apply)
+                    with lbl:
+                        ui.tooltip(code["name"]).props(":delay=1000")
+                    if shortcut:
+                        ui.label(shortcut).classes("ace-keycap")
+                    with ui.button(icon="more_horiz").props(
+                        "flat round dense size=xs"
+                    ).classes("ace-hover-action"):
+                        with ui.menu():
+                            ui.menu_item(
+                                "Rename",
+                                on_click=lambda _e, c=code: open_rename_dialog(conn, rename_dialog, c, _refresh_all),
+                            )
+                            ui.menu_item(
+                                "Change colour",
+                                on_click=lambda _e, c=code: open_colour_dialog(conn, colour_dialog, c, _refresh_all),
+                            )
+                            ui.separator()
+                            ui.menu_item(
+                                "Move to Group",
+                                on_click=lambda _e, c=code: _show_move_to_group(c),
+                            )
+                            ui.separator()
+                            ui.menu_item(
+                                "Delete",
+                                on_click=lambda _e, c=code: open_delete_dialog(conn, delete_dialog, c, _refresh_all),
+                            )
+
             @ui.refreshable
             def code_list():
                 sorting = state.get("sort_codes", False)
@@ -411,60 +605,96 @@ def build(conn: sqlite3.Connection) -> None:
                             "click", lambda: _import_codes(), []
                         )
                     return
-                with ui.element("div").classes("full-width ace-code-list").style("flex-shrink: 0;"):
-                    for i, code in enumerate(codes):
-                        if i < 9:
-                            shortcut = str(i + 1)
-                        elif i == 9:
-                            shortcut = "0"
-                        elif i < 36:
-                            shortcut = chr(ord("a") + i - 10)
-                        else:
-                            shortcut = ""
-                        colour = code["colour"] or "#999999"
 
-                        async def _click_apply(_e, c=code):
-                            await _apply_code(c)
+                has_groups = any(c["group_name"] for c in codes)
 
-                        with ui.row().classes(
-                            "items-center full-width no-wrap ace-hover-row ace-code-row"
-                        ).style(
-                            f"gap: 4px; padding: 2px 4px; flex-shrink: 0; overflow: hidden;"
-                            f" border-left: 4px solid {colour};"
-                        ) as row:
-                            row.props(f'data-code-id={code["id"]}')
-                            # Drag handle (hidden when sorting by name)
-                            if not sorting:
-                                ui.icon("drag_indicator", size="xs").classes(
-                                    "ace-drag-handle text-grey-5"
-                                )
-                            # Name (clickable to apply code)
-                            lbl = ui.label(code["name"]).classes(
-                                "text-body2 col cursor-pointer ellipsis"
-                            ).style(
-                                "min-width: 0; line-height: 1.4;"
-                            ).on("click", _click_apply)
-                            with lbl:
-                                ui.tooltip(code["name"]).props(":delay=1000")
-                            if shortcut:
-                                ui.label(shortcut).classes("ace-keycap")
-                            # "..." menu (visible on hover)
-                            with ui.button(icon="more_horiz").props(
-                                "flat round dense size=xs"
-                            ).classes("ace-hover-action"):
-                                with ui.menu():
-                                    ui.menu_item(
-                                        "Rename",
-                                        on_click=lambda _e, c=code: open_rename_dialog(conn, rename_dialog, c, _refresh_all),
-                                    )
-                                    ui.menu_item(
-                                        "Change colour",
-                                        on_click=lambda _e, c=code: open_colour_dialog(conn, colour_dialog, c, _refresh_all),
-                                    )
-                                    ui.menu_item(
-                                        "Delete",
-                                        on_click=lambda _e, c=code: open_delete_dialog(conn, delete_dialog, c, _refresh_all),
-                                    )
+                if not has_groups:
+                    # Flat list — unchanged behaviour
+                    with ui.element("div").classes("full-width ace-code-list").style("flex-shrink: 0;"):
+                        for i, code in enumerate(codes):
+                            _render_code_row(code, _shortcut_label(i), sorting)
+                    return
+
+                # ── Grouped rendering ──────────────────────────────
+                project_path = app.storage.general.get("project_path", "")
+                collapse_key = f"collapsed_groups:{project_path}"
+                collapsed = set(app.storage.general.get(collapse_key, []))
+
+                # Build ordered groups: grouped first (order of first appearance), ungrouped last
+                groups: dict[str | None, list] = {}
+                group_order: list[str | None] = []
+                for code in codes:
+                    gn = code["group_name"] or None
+                    if gn not in groups:
+                        groups[gn] = []
+                        group_order.append(gn)
+                    groups[gn].append(code)
+
+                grouped_items = [(k, groups[k]) for k in group_order if k is not None]
+                ungrouped = groups.get(None, [])
+
+                # Reorder codes list to match display order (grouped first, ungrouped last)
+                # so that codes[i] matches shortcut_label(i)
+                display_order = []
+                for _, group_codes in grouped_items:
+                    display_order.extend(group_codes)
+                display_order.extend(ungrouped)
+                codes.clear()
+                codes.extend(display_order)
+                codes_by_id.clear()
+                codes_by_id.update({c["id"]: c for c in codes})
+
+                def _toggle_group(group_name: str):
+                    current = set(app.storage.general.get(collapse_key, []))
+                    if group_name in current:
+                        current.discard(group_name)
+                    else:
+                        current.add(group_name)
+                    app.storage.general[collapse_key] = list(current)
+                    code_list.refresh()
+
+                global_idx = 0
+                for group_name, group_codes in grouped_items:
+                    is_collapsed = group_name in collapsed
+
+                    # Shortcut range for collapsed header label
+                    first_sc = _shortcut_label(global_idx)
+                    last_sc = _shortcut_label(global_idx + len(group_codes) - 1)
+                    range_str = ""
+                    if first_sc and last_sc and first_sc != last_sc:
+                        range_str = f" [{first_sc}\u2013{last_sc}]"
+                    elif first_sc:
+                        range_str = f" [{first_sc}]"
+
+                    header_classes = "ace-group-header"
+                    if is_collapsed:
+                        header_classes += " collapsed"
+
+                    with ui.element("div").classes(header_classes).on(
+                        "click", lambda _e, gn=group_name: _toggle_group(gn)
+                    ):
+                        icon_name = "chevron_right" if is_collapsed else "expand_more"
+                        ui.icon(icon_name, size="xs").classes("chevron")
+                        label_text = group_name
+                        if is_collapsed:
+                            label_text += range_str
+                        ui.label(label_text)
+
+                    visible = not is_collapsed
+                    with ui.element("div").classes(
+                        "full-width ace-code-list"
+                    ).style("flex-shrink: 0;") as code_div:
+                        for code in group_codes:
+                            _render_code_row(code, _shortcut_label(global_idx), sorting, pad_left="2px 4px 2px 20px")
+                            global_idx += 1
+                    code_div.set_visibility(visible)
+
+                # Ungrouped codes at the bottom (no header, no collapse)
+                if ungrouped:
+                    with ui.element("div").classes("full-width ace-code-list").style("flex-shrink: 0;"):
+                        for code in ungrouped:
+                            _render_code_row(code, _shortcut_label(global_idx), sorting)
+                            global_idx += 1
 
             code_list()
 

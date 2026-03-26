@@ -2,7 +2,6 @@
 
 import csv
 import hashlib
-import re as _re
 import sqlite3
 import uuid
 from datetime import datetime, timezone
@@ -10,13 +9,14 @@ from pathlib import Path
 
 from ace.services.palette import next_colour
 
-_COLOUR_RE = _re.compile(r"^#[0-9A-Fa-f]{6}$")
+_UNSET = object()
 
 
 def add_code(
     conn: sqlite3.Connection,
     name: str,
     colour: str,
+    group_name: str | None = None,
 ) -> str:
     now = datetime.now(timezone.utc).isoformat()
     code_id = uuid.uuid4().hex
@@ -25,9 +25,9 @@ def add_code(
     sort_order = max_order + 1
 
     conn.execute(
-        "INSERT INTO codebook_code (id, name, colour, sort_order, created_at) "
-        "VALUES (?, ?, ?, ?, ?)",
-        (code_id, name, colour, sort_order, now),
+        "INSERT INTO codebook_code (id, name, colour, sort_order, group_name, created_at) "
+        "VALUES (?, ?, ?, ?, ?, ?)",
+        (code_id, name, colour, sort_order, group_name, now),
     )
     conn.commit()
     return code_id
@@ -42,6 +42,7 @@ def update_code(
     code_id: str,
     name: str | None = None,
     colour: str | None = None,
+    group_name: object = _UNSET,
 ) -> None:
     updates = []
     params = []
@@ -51,6 +52,9 @@ def update_code(
     if colour is not None:
         updates.append("colour = ?")
         params.append(colour)
+    if group_name is not _UNSET:
+        updates.append("group_name = ?")
+        params.append(group_name if group_name != "" else None)
     if not updates:
         return
     params.append(code_id)
@@ -78,17 +82,20 @@ def delete_code(conn: sqlite3.Connection, code_id: str) -> None:
 
 def compute_codebook_hash(conn: sqlite3.Connection) -> str:
     rows = conn.execute(
-        "SELECT id, name, colour FROM codebook_code ORDER BY id"
+        "SELECT id, name, colour, group_name FROM codebook_code ORDER BY id"
     ).fetchall()
-    combined = "".join(f"{r['id']}{r['name']}{r['colour']}" for r in rows)
+    combined = "".join(
+        f"{r['id']}{r['name']}{r['colour']}{r['group_name'] or ''}"
+        for r in rows
+    )
     return hashlib.sha256(combined.encode()).hexdigest()
 
 
 def _parse_codebook_csv(path: str | Path) -> list[dict]:
-    """Parse a codebook CSV file into a list of {name, colour} dicts.
+    """Parse a codebook CSV file into a list of {name, colour, group_name} dicts.
 
-    Normalises: skips empty names, deduplicates (first wins),
-    auto-assigns colours for invalid/missing values.
+    Reads 'group' column if present (strips whitespace, preserves casing).
+    Ignores 'colour' column — always auto-assigns from palette.
     Raises ValueError if 'name' column is missing.
     """
     path = Path(path)
@@ -97,6 +104,7 @@ def _parse_codebook_csv(path: str | Path) -> list[dict]:
         if reader.fieldnames is None or "name" not in reader.fieldnames:
             raise ValueError("CSV must have a 'name' column")
 
+        has_group = "group" in (reader.fieldnames or [])
         rows: list[dict] = []
         seen_names: set[str] = set()
         for row in reader:
@@ -105,25 +113,29 @@ def _parse_codebook_csv(path: str | Path) -> list[dict]:
                 continue
             seen_names.add(name)
 
-            colour = row.get("colour", "").strip()
-            if not _COLOUR_RE.match(colour):
-                colour = next_colour(len(rows))
+            colour = next_colour(len(rows))
 
-            rows.append({"name": name, "colour": colour})
+            group_name = None
+            if has_group:
+                g = row.get("group", "").strip()
+                if g:
+                    group_name = g
+
+            rows.append({"name": name, "colour": colour, "group_name": group_name})
     return rows
 
 
 def preview_codebook_csv(conn: sqlite3.Connection, path: str | Path) -> list[dict]:
     """Parse a codebook CSV and mark which codes already exist in the project.
 
-    Returns list of {"name": str, "colour": str, "exists": bool} dicts.
+    Returns list of {"name", "colour", "group_name", "exists"} dicts.
     """
     rows = _parse_codebook_csv(path)
     existing = {
         r["name"] for r in conn.execute("SELECT name FROM codebook_code").fetchall()
     }
     return [
-        {"name": r["name"], "colour": r["colour"], "exists": r["name"] in existing}
+        {**r, "exists": r["name"] in existing}
         for r in rows
     ]
 
@@ -154,9 +166,10 @@ def import_selected_codes(conn: sqlite3.Connection, codes: list[dict]) -> int:
     try:
         for i, code in enumerate(to_insert):
             conn.execute(
-                "INSERT INTO codebook_code (id, name, colour, sort_order, created_at) "
-                "VALUES (?, ?, ?, ?, ?)",
-                (uuid.uuid4().hex, code["name"], code["colour"], max_order + i + 1, now),
+                "INSERT INTO codebook_code (id, name, colour, sort_order, group_name, created_at) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                (uuid.uuid4().hex, code["name"], code["colour"], max_order + i + 1,
+                 code.get("group_name"), now),
             )
         conn.commit()
     except Exception:
@@ -173,9 +186,9 @@ def import_codebook_from_csv(conn: sqlite3.Connection, path: str | Path) -> int:
         for i, row in enumerate(rows_to_insert):
             code_id = uuid.uuid4().hex
             conn.execute(
-                "INSERT INTO codebook_code (id, name, colour, sort_order, created_at) "
-                "VALUES (?, ?, ?, ?, ?)",
-                (code_id, row["name"], row["colour"], i + 1, now),
+                "INSERT INTO codebook_code (id, name, colour, sort_order, group_name, created_at) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                (code_id, row["name"], row["colour"], i + 1, row.get("group_name"), now),
             )
         conn.commit()
     except Exception:
@@ -187,14 +200,14 @@ def import_codebook_from_csv(conn: sqlite3.Connection, path: str | Path) -> int:
 def export_codebook_to_csv(conn: sqlite3.Connection, path: str | Path) -> int:
     path = Path(path)
     codes = conn.execute(
-        "SELECT name, colour FROM codebook_code ORDER BY sort_order"
+        "SELECT name, group_name FROM codebook_code ORDER BY sort_order"
     ).fetchall()
-    with open(path, "w", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=["name", "colour"])
+    with open(path, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=["name", "group"])
         writer.writeheader()
         for code in codes:
             writer.writerow({
                 "name": code["name"],
-                "colour": code["colour"],
+                "group": code["group_name"] or "",
             })
     return len(codes)

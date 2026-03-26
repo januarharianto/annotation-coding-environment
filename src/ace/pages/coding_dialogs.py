@@ -78,6 +78,26 @@ def open_delete_dialog(conn: sqlite3.Connection, dlg, code, refresh_all_fn):
     open_code_dialog(dlg, "Delete Code", _content, "Delete", _confirm, "unelevated color=negative")
 
 
+def open_new_group_dialog(dlg, on_create):
+    """Dialog to create a new group name."""
+    dlg.clear()
+    with dlg, ui.card().classes("q-pa-md").style("min-width: 300px;"):
+        ui.label("New Group").classes("text-subtitle1 text-weight-medium q-mb-sm")
+        name_input = ui.input("Group name").props("autofocus outlined dense")
+
+        def _create():
+            name = name_input.value.strip()
+            if not name:
+                return
+            dlg.close()
+            on_create(name)
+
+        with ui.row().classes("q-mt-md justify-end full-width gap-2"):
+            ui.button("Cancel", on_click=dlg.close).props("flat")
+            ui.button("Create", on_click=_create).props("unelevated color=primary")
+    dlg.open()
+
+
 def open_annotation_info(conn: sqlite3.Connection, dlg, ann_ids, codes_by_id, delete_annotation_fn):
     """Annotation info popup showing stacked annotations at a click point."""
     anns = []
