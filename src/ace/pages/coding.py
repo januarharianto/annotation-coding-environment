@@ -197,7 +197,11 @@ def build(conn: sqlite3.Connection) -> None:
                 def _toggle_sort():
                     state["sort_codes"] = not state.get("sort_codes", False)
                     if state["sort_codes"]:
-                        codes.sort(key=lambda c: c["name"].lower())
+                        has_groups = any(c["group_name"] for c in codes)
+                        if has_groups:
+                            codes.sort(key=lambda c: (c["group_name"] or "", c["name"].lower()))
+                        else:
+                            codes.sort(key=lambda c: c["name"].lower())
                     else:
                         _refresh_codes()  # restore DB order
                     code_list.refresh()
@@ -401,6 +405,58 @@ def build(conn: sqlite3.Connection) -> None:
             new_code_input.on("keydown.enter", _on_new_code_enter)
 
             # ── Code list (refreshable) ──────────────────────────────
+            def _shortcut_label(i: int) -> str:
+                if i < 9:
+                    return str(i + 1)
+                if i == 9:
+                    return "0"
+                if i < 36:
+                    return chr(ord("a") + i - 10)
+                return ""
+
+            def _render_code_row(code, shortcut: str, sorting: bool, pad_left: str = "2px 4px"):
+                colour = code["colour"] or "#999999"
+
+                async def _click_apply(_e, c=code):
+                    await _apply_code(c)
+
+                with ui.row().classes(
+                    "items-center full-width no-wrap ace-hover-row ace-code-row"
+                ).style(
+                    f"gap: 4px; padding: {pad_left}; flex-shrink: 0; overflow: hidden;"
+                    f" border-left: 4px solid {colour};"
+                ) as row:
+                    row.props(f'data-code-id={code["id"]}')
+                    if not sorting:
+                        ui.icon("drag_indicator", size="xs").classes(
+                            "ace-drag-handle text-grey-5"
+                        )
+                    lbl = ui.label(code["name"]).classes(
+                        "text-body2 col cursor-pointer ellipsis"
+                    ).style(
+                        "min-width: 0; line-height: 1.4;"
+                    ).on("click", _click_apply)
+                    with lbl:
+                        ui.tooltip(code["name"]).props(":delay=1000")
+                    if shortcut:
+                        ui.label(shortcut).classes("ace-keycap")
+                    with ui.button(icon="more_horiz").props(
+                        "flat round dense size=xs"
+                    ).classes("ace-hover-action"):
+                        with ui.menu():
+                            ui.menu_item(
+                                "Rename",
+                                on_click=lambda _e, c=code: open_rename_dialog(conn, rename_dialog, c, _refresh_all),
+                            )
+                            ui.menu_item(
+                                "Change colour",
+                                on_click=lambda _e, c=code: open_colour_dialog(conn, colour_dialog, c, _refresh_all),
+                            )
+                            ui.menu_item(
+                                "Delete",
+                                on_click=lambda _e, c=code: open_delete_dialog(conn, delete_dialog, c, _refresh_all),
+                            )
+
             @ui.refreshable
             def code_list():
                 sorting = state.get("sort_codes", False)
@@ -411,60 +467,96 @@ def build(conn: sqlite3.Connection) -> None:
                             "click", lambda: _import_codes(), []
                         )
                     return
-                with ui.element("div").classes("full-width ace-code-list").style("flex-shrink: 0;"):
-                    for i, code in enumerate(codes):
-                        if i < 9:
-                            shortcut = str(i + 1)
-                        elif i == 9:
-                            shortcut = "0"
-                        elif i < 36:
-                            shortcut = chr(ord("a") + i - 10)
-                        else:
-                            shortcut = ""
-                        colour = code["colour"] or "#999999"
 
-                        async def _click_apply(_e, c=code):
-                            await _apply_code(c)
+                has_groups = any(c["group_name"] for c in codes)
 
-                        with ui.row().classes(
-                            "items-center full-width no-wrap ace-hover-row ace-code-row"
-                        ).style(
-                            f"gap: 4px; padding: 2px 4px; flex-shrink: 0; overflow: hidden;"
-                            f" border-left: 4px solid {colour};"
-                        ) as row:
-                            row.props(f'data-code-id={code["id"]}')
-                            # Drag handle (hidden when sorting by name)
-                            if not sorting:
-                                ui.icon("drag_indicator", size="xs").classes(
-                                    "ace-drag-handle text-grey-5"
-                                )
-                            # Name (clickable to apply code)
-                            lbl = ui.label(code["name"]).classes(
-                                "text-body2 col cursor-pointer ellipsis"
-                            ).style(
-                                "min-width: 0; line-height: 1.4;"
-                            ).on("click", _click_apply)
-                            with lbl:
-                                ui.tooltip(code["name"]).props(":delay=1000")
-                            if shortcut:
-                                ui.label(shortcut).classes("ace-keycap")
-                            # "..." menu (visible on hover)
-                            with ui.button(icon="more_horiz").props(
-                                "flat round dense size=xs"
-                            ).classes("ace-hover-action"):
-                                with ui.menu():
-                                    ui.menu_item(
-                                        "Rename",
-                                        on_click=lambda _e, c=code: open_rename_dialog(conn, rename_dialog, c, _refresh_all),
-                                    )
-                                    ui.menu_item(
-                                        "Change colour",
-                                        on_click=lambda _e, c=code: open_colour_dialog(conn, colour_dialog, c, _refresh_all),
-                                    )
-                                    ui.menu_item(
-                                        "Delete",
-                                        on_click=lambda _e, c=code: open_delete_dialog(conn, delete_dialog, c, _refresh_all),
-                                    )
+                if not has_groups:
+                    # Flat list — unchanged behaviour
+                    with ui.element("div").classes("full-width ace-code-list").style("flex-shrink: 0;"):
+                        for i, code in enumerate(codes):
+                            _render_code_row(code, _shortcut_label(i), sorting)
+                    return
+
+                # ── Grouped rendering ──────────────────────────────
+                project_path = app.storage.general.get("project_path", "")
+                collapse_key = f"collapsed_groups:{project_path}"
+                collapsed = set(app.storage.general.get(collapse_key, []))
+
+                # Build ordered groups: grouped first (order of first appearance), ungrouped last
+                groups: dict[str | None, list] = {}
+                group_order: list[str | None] = []
+                for code in codes:
+                    gn = code["group_name"] or None
+                    if gn not in groups:
+                        groups[gn] = []
+                        group_order.append(gn)
+                    groups[gn].append(code)
+
+                grouped_items = [(k, groups[k]) for k in group_order if k is not None]
+                ungrouped = groups.get(None, [])
+
+                # Reorder codes list to match display order (grouped first, ungrouped last)
+                # so that codes[i] matches shortcut_label(i)
+                display_order = []
+                for _, group_codes in grouped_items:
+                    display_order.extend(group_codes)
+                display_order.extend(ungrouped)
+                codes.clear()
+                codes.extend(display_order)
+                codes_by_id.clear()
+                codes_by_id.update({c["id"]: c for c in codes})
+
+                def _toggle_group(group_name: str):
+                    current = set(app.storage.general.get(collapse_key, []))
+                    if group_name in current:
+                        current.discard(group_name)
+                    else:
+                        current.add(group_name)
+                    app.storage.general[collapse_key] = list(current)
+                    code_list.refresh()
+
+                global_idx = 0
+                for group_name, group_codes in grouped_items:
+                    is_collapsed = group_name in collapsed
+
+                    # Shortcut range for collapsed header label
+                    first_sc = _shortcut_label(global_idx)
+                    last_sc = _shortcut_label(global_idx + len(group_codes) - 1)
+                    range_str = ""
+                    if first_sc and last_sc and first_sc != last_sc:
+                        range_str = f" [{first_sc}\u2013{last_sc}]"
+                    elif first_sc:
+                        range_str = f" [{first_sc}]"
+
+                    header_classes = "ace-group-header"
+                    if is_collapsed:
+                        header_classes += " collapsed"
+
+                    with ui.element("div").classes(header_classes).on(
+                        "click", lambda _e, gn=group_name: _toggle_group(gn)
+                    ):
+                        icon_name = "chevron_right" if is_collapsed else "expand_more"
+                        ui.icon(icon_name, size="xs").classes("chevron")
+                        label_text = group_name
+                        if is_collapsed:
+                            label_text += range_str
+                        ui.label(label_text)
+
+                    visible = not is_collapsed
+                    with ui.element("div").classes(
+                        "full-width ace-code-list"
+                    ).style("flex-shrink: 0;") as code_div:
+                        for code in group_codes:
+                            _render_code_row(code, _shortcut_label(global_idx), sorting, pad_left="2px 4px 2px 20px")
+                            global_idx += 1
+                    code_div.set_visibility(visible)
+
+                # Ungrouped codes at the bottom (no header, no collapse)
+                if ungrouped:
+                    with ui.element("div").classes("full-width ace-code-list").style("flex-shrink: 0;"):
+                        for code in ungrouped:
+                            _render_code_row(code, _shortcut_label(global_idx), sorting)
+                            global_idx += 1
 
             code_list()
 

@@ -135,35 +135,53 @@
   }
 
   function setupCodeListSortable() {
-    var _currentContainer = null;
-    var _sortable = null;
+    var _sortables = [];
+    var _containerSignature = "";
+
+    function collectAllCodeIds() {
+      var containers = document.querySelectorAll(".ace-code-list");
+      var ids = [];
+      for (var c = 0; c < containers.length; c++) {
+        var items = containers[c].querySelectorAll("[data-code-id]");
+        for (var i = 0; i < items.length; i++) {
+          ids.push(items[i].dataset.codeId);
+        }
+      }
+      return ids;
+    }
 
     function initSortable() {
-      var container = document.querySelector(".ace-code-list");
-      if (!container || container === _currentContainer) return;
+      var containers = document.querySelectorAll(".ace-code-list");
+      if (containers.length === 0) return;
 
-      if (_sortable) {
-        _sortable.destroy();
-        _sortable = null;
+      // Build a signature to detect DOM changes
+      var sig = "";
+      for (var c = 0; c < containers.length; c++) {
+        sig += containers[c].id + ":" + containers[c].children.length + ";";
       }
-      _currentContainer = container;
+      if (sig === _containerSignature) return;
+      _containerSignature = sig;
 
-      // Only init if drag handles are present (not in sort-by-name mode)
-      if (!container.querySelector(".ace-drag-handle")) return;
+      // Destroy old instances
+      for (var s = 0; s < _sortables.length; s++) {
+        _sortables[s].destroy();
+      }
+      _sortables = [];
 
-      _sortable = Sortable.create(container, {
-        animation: 150,
-        handle: ".ace-drag-handle",
-        ghostClass: "ace-drag-ghost",
-        onEnd: function () {
-          var items = container.querySelectorAll("[data-code-id]");
-          var ids = [];
-          for (var i = 0; i < items.length; i++) {
-            ids.push(items[i].dataset.codeId);
-          }
-          emitEvent("codes_reordered", { code_ids: ids });
-        },
-      });
+      for (var c = 0; c < containers.length; c++) {
+        var container = containers[c];
+        // Only init if drag handles are present (not in sort-by-name mode)
+        if (!container.querySelector(".ace-drag-handle")) continue;
+
+        _sortables.push(Sortable.create(container, {
+          animation: 150,
+          handle: ".ace-drag-handle",
+          ghostClass: "ace-drag-ghost",
+          onEnd: function () {
+            emitEvent("codes_reordered", { code_ids: collectAllCodeIds() });
+          },
+        }));
+      }
     }
 
     new MutationObserver(initSortable).observe(document.body, {
