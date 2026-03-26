@@ -105,11 +105,12 @@ def test_import_csv_dedup_names(tmp_db, tmp_path):
     count = import_codebook_from_csv(conn, csv_path)
     assert count == 2
     codes = list_codes(conn)
-    assert codes[0]["colour"] == "#FF0000"  # first occurrence kept
+    assert codes[0]["name"] == "Alpha"  # first occurrence kept
+    assert codes[1]["name"] == "Beta"
 
 
-def test_import_csv_invalid_colour_auto_assigns(tmp_db, tmp_path):
-    """Invalid colour values get auto-assigned from palette."""
+def test_import_csv_colour_column_ignored_auto_assigns(tmp_db, tmp_path):
+    """Colour column in CSV is ignored — colours always auto-assigned from palette."""
     conn = create_project(tmp_db, "Test")
     csv_path = tmp_path / "codes.csv"
     csv_path.write_text("name,colour\nAlpha,red\nBeta,#00FF00\n")
@@ -117,7 +118,7 @@ def test_import_csv_invalid_colour_auto_assigns(tmp_db, tmp_path):
     assert count == 2
     codes = list_codes(conn)
     assert re.match(r"^#[0-9A-F]{6}$", codes[0]["colour"])  # auto-assigned
-    assert codes[1]["colour"] == "#00FF00"  # valid, kept
+    assert re.match(r"^#[0-9A-F]{6}$", codes[1]["colour"])  # also auto-assigned
 
 
 def test_import_csv_atomic_rollback(tmp_db, tmp_path):
@@ -146,12 +147,14 @@ def test_preview_marks_existing_codes(tmp_db, tmp_path):
     add_code(conn, "Alpha", "#FF0000")
 
     csv_path = tmp_path / "codes.csv"
-    csv_path.write_text("name,colour\nAlpha,#FF0000\nBeta,#00FF00\n")
+    csv_path.write_text("name\nAlpha\nBeta\n")
 
     preview = preview_codebook_csv(conn, csv_path)
     assert len(preview) == 2
-    assert preview[0] == {"name": "Alpha", "colour": "#FF0000", "exists": True}
-    assert preview[1] == {"name": "Beta", "colour": "#00FF00", "exists": False}
+    assert preview[0]["name"] == "Alpha"
+    assert preview[0]["exists"] is True
+    assert preview[1]["name"] == "Beta"
+    assert preview[1]["exists"] is False
 
 
 def test_preview_empty_csv(tmp_db, tmp_path):
@@ -182,9 +185,9 @@ def test_export_codebook_to_csv(tmp_db, tmp_path):
     count = export_codebook_to_csv(conn, out)
     assert count == 2
     content = out.read_text()
-    assert "name,colour" in content
-    assert "Alpha,#FF0000" in content
-    assert "Beta,#00FF00" in content
+    assert "name,group" in content
+    assert "Alpha," in content
+    assert "Beta," in content
 
 
 def test_import_selected_codes(tmp_db):
@@ -284,3 +287,97 @@ def test_codebook_hash_includes_group(tmp_db):
     update_code(conn, cid, group_name="Emotions")
     h2 = compute_codebook_hash(conn)
     assert h1 != h2
+
+
+def test_parse_csv_with_group_column(tmp_db, tmp_path):
+    """CSV with name + group columns parses correctly."""
+    conn = create_project(tmp_db, "Test")
+    csv_path = tmp_path / "codes.csv"
+    csv_path.write_text("name,group\nHappy,Emotions\nSad,Emotions\nIdentity,Themes\n")
+    count = import_codebook_from_csv(conn, csv_path)
+    assert count == 3
+    codes = list_codes(conn)
+    assert codes[0]["group_name"] == "Emotions"
+    assert codes[2]["group_name"] == "Themes"
+
+
+def test_parse_csv_strips_group_whitespace(tmp_db, tmp_path):
+    """Group names have whitespace stripped, casing preserved."""
+    conn = create_project(tmp_db, "Test")
+    csv_path = tmp_path / "codes.csv"
+    csv_path.write_text("name,group\nHappy,  Emotions  \nSad,ICR Codes\n")
+    count = import_codebook_from_csv(conn, csv_path)
+    codes = list_codes(conn)
+    assert codes[0]["group_name"] == "Emotions"
+    assert codes[1]["group_name"] == "ICR Codes"
+
+
+def test_parse_csv_empty_group_is_null(tmp_db, tmp_path):
+    """Empty group value in CSV becomes NULL."""
+    conn = create_project(tmp_db, "Test")
+    csv_path = tmp_path / "codes.csv"
+    csv_path.write_text("name,group\nHappy,Emotions\nUngrouped,\n")
+    count = import_codebook_from_csv(conn, csv_path)
+    codes = list_codes(conn)
+    assert codes[0]["group_name"] == "Emotions"
+    assert codes[1]["group_name"] is None
+
+
+def test_parse_csv_colour_column_ignored(tmp_db, tmp_path):
+    """Old CSV with colour column — colour ignored, auto-assigned."""
+    conn = create_project(tmp_db, "Test")
+    csv_path = tmp_path / "codes.csv"
+    csv_path.write_text("name,colour,group\nHappy,#FF0000,Emotions\n")
+    count = import_codebook_from_csv(conn, csv_path)
+    codes = list_codes(conn)
+    assert codes[0]["group_name"] == "Emotions"
+
+
+def test_parse_csv_duplicate_names_different_groups(tmp_db, tmp_path):
+    """Same code name in different groups — first kept, second skipped."""
+    conn = create_project(tmp_db, "Test")
+    csv_path = tmp_path / "codes.csv"
+    csv_path.write_text("name,group\nHappy,Emotions\nHappy,Wellbeing\nSad,Emotions\n")
+    count = import_codebook_from_csv(conn, csv_path)
+    assert count == 2
+    codes = list_codes(conn)
+    assert len(codes) == 2
+    assert codes[0]["name"] == "Happy"
+    assert codes[0]["group_name"] == "Emotions"
+
+
+def test_preview_includes_group_name(tmp_db, tmp_path):
+    """preview_codebook_csv includes group_name in output."""
+    conn = create_project(tmp_db, "Test")
+    csv_path = tmp_path / "codes.csv"
+    csv_path.write_text("name,group\nHappy,Emotions\nSad,Emotions\n")
+    preview = preview_codebook_csv(conn, csv_path)
+    assert preview[0]["group_name"] == "Emotions"
+    assert preview[1]["group_name"] == "Emotions"
+
+
+def test_import_selected_with_group(tmp_db):
+    """import_selected_codes stores group_name."""
+    conn = create_project(tmp_db, "Test")
+    codes = [
+        {"name": "Happy", "colour": "#FF0000", "group_name": "Emotions"},
+        {"name": "Identity", "colour": "#00FF00", "group_name": "Themes"},
+    ]
+    import_selected_codes(conn, codes)
+    result = list_codes(conn)
+    assert result[0]["group_name"] == "Emotions"
+    assert result[1]["group_name"] == "Themes"
+
+
+def test_export_csv_includes_group(tmp_db, tmp_path):
+    """export_codebook_to_csv writes name,group columns (no colour)."""
+    conn = create_project(tmp_db, "Test")
+    add_code(conn, "Happy", "#FF0000", group_name="Emotions")
+    add_code(conn, "Ungrouped", "#00FF00")
+    out = tmp_path / "out.csv"
+    export_codebook_to_csv(conn, out)
+    content = out.read_text()
+    assert "name,group" in content
+    assert "Happy,Emotions" in content
+    assert "Ungrouped," in content
+    assert "colour" not in content
