@@ -262,9 +262,58 @@ def build(conn: sqlite3.Connection) -> None:
                 def _show_import_dialog(preview):
                     selected = {}
                     checkboxes = {}
+                    group_checkboxes = {}  # group_name -> ui.checkbox
                     new_codes = [p for p in preview if not p["exists"]]
                     existing_codes = [p for p in preview if p["exists"]]
                     import_dialog.clear()
+
+                    # Detect whether any code has a group
+                    has_groups = any(p.get("group_name") for p in preview)
+
+                    # Group codes by group_name (preserving insertion order)
+                    def _group_by(codes):
+                        grouped = {}
+                        for p in codes:
+                            grp = p.get("group_name") or ""
+                            grouped.setdefault(grp, []).append(p)
+                        return grouped
+
+                    grouped_new = _group_by(new_codes) if has_groups else {"": new_codes}
+                    grouped_existing = _group_by(existing_codes) if has_groups else {"": existing_codes}
+
+                    def _update_group_checkbox(grp):
+                        """Update a group header checkbox to reflect its children."""
+                        if grp not in group_checkboxes:
+                            return
+                        codes_in_grp = grouped_new.get(grp, [])
+                        checked = sum(1 for p in codes_in_grp if selected.get(p["name"]))
+                        total = len(codes_in_grp)
+                        gcb = group_checkboxes[grp]
+                        if checked == total:
+                            gcb.value = True
+                            gcb.props(remove="indeterminate")
+                        elif checked == 0:
+                            gcb.value = False
+                            gcb.props(remove="indeterminate")
+                        else:
+                            gcb.value = False
+                            gcb.props("indeterminate")
+
+                    def _toggle_group(grp, value):
+                        """Toggle all codes in a group on/off."""
+                        for p in grouped_new.get(grp, []):
+                            selected[p["name"]] = value
+                            if p["name"] in checkboxes:
+                                checkboxes[p["name"]].value = value
+                        gcb = group_checkboxes[grp]
+                        gcb.props(remove="indeterminate")
+                        gcb.value = value
+                        _update_btn()
+                        _update_toggle_link()
+
+                    def _on_group_checkbox(grp, e):
+                        """Handle group checkbox click — indeterminate→all, checked→none, unchecked→all."""
+                        _toggle_group(grp, e.value)
 
                     with import_dialog, ui.card().classes("q-pa-md").style("min-width: 340px;"):
                         ui.label("Import Codes").classes("text-subtitle1 text-weight-medium q-mb-sm")
@@ -291,19 +340,32 @@ def build(conn: sqlite3.Connection) -> None:
                                         "none", on_click=lambda: _toggle_all(False),
                                     ).props("flat dense no-caps size=xs").classes("text-caption text-grey-6")
 
-                                for p in new_codes:
-                                    selected[p["name"]] = True
-                                    with ui.row().classes("items-center full-width no-wrap"):
-                                        ui.element("div").style(
-                                            f"background: {p['colour']}; width: 14px; height: 14px; "
-                                            "border-radius: 50%; flex-shrink: 0;"
-                                        )
-                                        cb = ui.checkbox(
-                                            p["name"],
+                                for grp, codes_in_grp in grouped_new.items():
+                                    # Group header (only for named groups)
+                                    if grp:
+                                        gcb = ui.checkbox(
+                                            grp.upper(),
                                             value=True,
-                                            on_change=lambda e, name=p["name"]: _toggle(name, e.value),
+                                            on_change=lambda e, g=grp: _on_group_checkbox(g, e),
+                                        ).classes("text-weight-medium").style(
+                                            "font-size: 12px; color: #757575;"
                                         )
-                                        checkboxes[p["name"]] = cb
+                                        group_checkboxes[grp] = gcb
+
+                                    indent = "padding-left: 24px;" if grp and has_groups else ""
+                                    for p in codes_in_grp:
+                                        selected[p["name"]] = True
+                                        with ui.row().classes("items-center full-width no-wrap").style(indent):
+                                            ui.element("div").style(
+                                                f"background: {p['colour']}; width: 14px; height: 14px; "
+                                                "border-radius: 50%; flex-shrink: 0;"
+                                            )
+                                            cb = ui.checkbox(
+                                                p["name"],
+                                                value=True,
+                                                on_change=lambda e, name=p["name"], g=grp: _toggle(name, e.value, g),
+                                            )
+                                            checkboxes[p["name"]] = cb
 
                             # Existing codes section (collapsed)
                             if existing_codes:
@@ -312,14 +374,20 @@ def build(conn: sqlite3.Connection) -> None:
                                 ).props("dense header-class='text-caption text-grey-6 q-pa-none'").classes(
                                     "full-width q-mt-sm"
                                 ):
-                                    for p in existing_codes:
-                                        selected[p["name"]] = False
-                                        with ui.row().classes("items-center full-width no-wrap"):
-                                            ui.element("div").style(
-                                                f"background: {p['colour']}; width: 14px; height: 14px; "
-                                                "border-radius: 50%; flex-shrink: 0;"
-                                            )
-                                            ui.label(p["name"]).classes("text-grey-5")
+                                    for grp, codes_in_grp in grouped_existing.items():
+                                        if grp:
+                                            ui.label(grp.upper()).style(
+                                                "font-size: 12px; color: #757575;"
+                                            ).classes("text-weight-medium q-mt-xs")
+                                        indent = "padding-left: 24px;" if grp and has_groups else ""
+                                        for p in codes_in_grp:
+                                            selected[p["name"]] = False
+                                            with ui.row().classes("items-center full-width no-wrap").style(indent):
+                                                ui.element("div").style(
+                                                    f"background: {p['colour']}; width: 14px; height: 14px; "
+                                                    "border-radius: 50%; flex-shrink: 0;"
+                                                )
+                                                ui.label(p["name"]).classes("text-grey-5")
 
                         with ui.row().classes("q-mt-md justify-end full-width gap-2"):
                             ui.button("Cancel", on_click=import_dialog.close).props("flat")
@@ -344,10 +412,7 @@ def build(conn: sqlite3.Connection) -> None:
                         else:
                             import_btn.props(remove="disable")
 
-                    def _toggle(name, value):
-                        selected[name] = value
-                        _update_btn()
-                        # Update toggle link text
+                    def _update_toggle_link():
                         if all(selected.get(p["name"]) for p in new_codes):
                             toggle_link.set_text("none")
                             toggle_link._props["onClick"] = None
@@ -356,11 +421,22 @@ def build(conn: sqlite3.Connection) -> None:
                             toggle_link.set_text("all")
                             toggle_link.on("click", lambda: _toggle_all(True))
 
+                    def _toggle(name, value, grp=""):
+                        selected[name] = value
+                        _update_btn()
+                        _update_group_checkbox(grp)
+                        _update_toggle_link()
+
                     def _toggle_all(value):
                         for p in new_codes:
                             selected[p["name"]] = value
                             if p["name"] in checkboxes:
                                 checkboxes[p["name"]].value = value
+                        # Update all group checkboxes
+                        for grp in group_checkboxes:
+                            gcb = group_checkboxes[grp]
+                            gcb.props(remove="indeterminate")
+                            gcb.value = value
                         toggle_link.set_text("all" if not value else "none")
                         _update_btn()
 
@@ -368,7 +444,7 @@ def build(conn: sqlite3.Connection) -> None:
 
                 def _do_import(preview, selected):
                     to_import = [
-                        {"name": p["name"], "colour": p["colour"]}
+                        {"name": p["name"], "colour": p["colour"], "group_name": p.get("group_name")}
                         for p in preview if selected.get(p["name"])
                     ]
                     try:
