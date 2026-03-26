@@ -15,7 +15,7 @@ from ace.models.annotation import (
     get_annotations_for_source,
 )
 from ace.models.assignment import get_assignments_for_coder
-from ace.models.codebook import add_code, export_codebook_to_csv, import_selected_codes, list_codes, preview_codebook_csv
+from ace.models.codebook import add_code, export_codebook_to_csv, import_selected_codes, list_codes, preview_codebook_csv, update_code
 from ace.models.coder import add_coder, list_coders, update_coder
 from ace.models.project import get_project
 from ace.pages.header import build_header
@@ -29,7 +29,7 @@ from ace.pages.coding_actions import (
     toggle_flag,
 )
 from ace.pages.coding_bottom_bar import build_bottom_bar
-from ace.pages.coding_dialogs import open_colour_dialog, open_delete_dialog, open_rename_dialog
+from ace.pages.coding_dialogs import open_colour_dialog, open_delete_dialog, open_new_group_dialog, open_rename_dialog
 from ace.pages.coding_render import render_annotated_text  # noqa: F401 — re-exported for tests
 from ace.pages.coding_shortcuts import register_shortcuts
 from ace.services.palette import next_colour
@@ -158,6 +158,8 @@ def build(conn: sqlite3.Connection) -> None:
     rename_dialog = ui.dialog()
     colour_dialog = ui.dialog()
     delete_dialog = ui.dialog()
+    move_dialog = ui.dialog()
+    new_group_dialog = ui.dialog()
 
     # ── Main two-pane container (resizable) ─────────────────────────
     _DEFAULT_WIDTH = 280
@@ -490,6 +492,59 @@ def build(conn: sqlite3.Connection) -> None:
                     return chr(ord("a") + i - 10)
                 return ""
 
+            def _move_to_group(code, group_name):
+                old_group = code["group_name"]
+                move_dialog.close()
+                update_code(conn, code["id"], group_name=group_name if group_name else "")
+                _refresh_codes()
+                code_list.refresh()
+                render_text(conn, current_source_id(), coder_id, codes_by_id, text_container)
+                if old_group and not any(c["group_name"] == old_group for c in codes):
+                    ui.notify(f"'{old_group}' group removed (no remaining codes).", type="info", position="bottom")
+
+            def _open_new_group(code):
+                move_dialog.close()
+                def _on_create(name):
+                    _move_to_group(code, name)
+                open_new_group_dialog(new_group_dialog, _on_create)
+
+            def _show_move_to_group(code):
+                move_dialog.clear()
+                existing_groups = sorted({c["group_name"] for c in codes if c["group_name"]})
+
+                with move_dialog, ui.card().classes("q-pa-md").style("min-width: 250px;"):
+                    ui.label("Move to Group").classes("text-subtitle1 text-weight-medium q-mb-sm")
+
+                    for g in existing_groups:
+                        with ui.row().classes("items-center full-width cursor-pointer q-py-xs").on(
+                            "click", lambda _e, grp=g: _move_to_group(code, grp)
+                        ):
+                            if code["group_name"] == g:
+                                ui.icon("check", size="xs").classes("text-grey-7")
+                            else:
+                                ui.element("div").style("width: 18px;")
+                            ui.label(g).classes("text-body2")
+
+                    if existing_groups:
+                        ui.separator().classes("q-my-xs")
+
+                    with ui.row().classes("items-center full-width cursor-pointer q-py-xs").on(
+                        "click", lambda _e: _open_new_group(code)
+                    ):
+                        ui.icon("add", size="xs").classes("text-grey-7")
+                        ui.label("New Group...").classes("text-body2")
+
+                    with ui.row().classes("items-center full-width cursor-pointer q-py-xs").on(
+                        "click", lambda _e: _move_to_group(code, None)
+                    ):
+                        if code["group_name"] is None:
+                            ui.icon("check", size="xs").classes("text-grey-7")
+                        else:
+                            ui.element("div").style("width: 18px;")
+                        ui.label("Ungrouped").classes("text-body2")
+
+                move_dialog.open()
+
             def _render_code_row(code, shortcut: str, sorting: bool, pad_left: str = "2px 4px"):
                 colour = code["colour"] or "#999999"
 
@@ -528,6 +583,12 @@ def build(conn: sqlite3.Connection) -> None:
                                 "Change colour",
                                 on_click=lambda _e, c=code: open_colour_dialog(conn, colour_dialog, c, _refresh_all),
                             )
+                            ui.separator()
+                            ui.menu_item(
+                                "Move to Group",
+                                on_click=lambda _e, c=code: _show_move_to_group(c),
+                            )
+                            ui.separator()
                             ui.menu_item(
                                 "Delete",
                                 on_click=lambda _e, c=code: open_delete_dialog(conn, delete_dialog, c, _refresh_all),
