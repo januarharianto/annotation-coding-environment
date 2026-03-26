@@ -2,7 +2,6 @@
 
 import csv
 import hashlib
-import re as _re
 import sqlite3
 import uuid
 from datetime import datetime, timezone
@@ -10,7 +9,6 @@ from pathlib import Path
 
 from ace.services.palette import next_colour
 
-_COLOUR_RE = _re.compile(r"^#[0-9A-Fa-f]{6}$")
 _UNSET = object()
 
 
@@ -204,7 +202,7 @@ def export_codebook_to_csv(conn: sqlite3.Connection, path: str | Path) -> int:
     codes = conn.execute(
         "SELECT name, group_name FROM codebook_code ORDER BY sort_order"
     ).fetchall()
-    with open(path, "w", newline="") as f:
+    with open(path, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=["name", "group"])
         writer.writeheader()
         for code in codes:

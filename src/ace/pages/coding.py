@@ -338,8 +338,12 @@ def build(conn: sqlite3.Connection) -> None:
                                     ui.label(f"New codes ({len(new_codes)})").classes(
                                         "text-caption text-weight-medium text-grey-8"
                                     )
+                                    def _on_toggle_link():
+                                        all_checked = all(selected.get(p["name"]) for p in new_codes)
+                                        _toggle_all(not all_checked)
+
                                     toggle_link = ui.button(
-                                        "none", on_click=lambda: _toggle_all(False),
+                                        "none", on_click=_on_toggle_link,
                                     ).props("flat dense no-caps size=xs").classes("text-caption text-grey-6")
 
                                 for grp, codes_in_grp in grouped_new.items():
@@ -417,11 +421,8 @@ def build(conn: sqlite3.Connection) -> None:
                     def _update_toggle_link():
                         if all(selected.get(p["name"]) for p in new_codes):
                             toggle_link.set_text("none")
-                            toggle_link._props["onClick"] = None
-                            toggle_link.on("click", lambda: _toggle_all(False))
                         else:
                             toggle_link.set_text("all")
-                            toggle_link.on("click", lambda: _toggle_all(True))
 
                     def _toggle(name, value, grp=""):
                         selected[name] = value
