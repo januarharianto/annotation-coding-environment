@@ -5,6 +5,7 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
+from ace.db.migrations import check_and_migrate
 from ace.db.schema import ACE_APPLICATION_ID, create_schema
 from ace.models.coder import add_coder
 
@@ -60,6 +61,7 @@ def open_project(path: str | Path) -> sqlite3.Connection:
 
     conn.execute("PRAGMA foreign_keys = ON")
     conn.execute("PRAGMA journal_mode = WAL")
+    check_and_migrate(conn)
     return conn
 
 

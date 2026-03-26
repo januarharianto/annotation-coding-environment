@@ -3,7 +3,7 @@
 import sqlite3
 
 ACE_APPLICATION_ID = 0x41434500  # "ACE\0"
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 _SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS project (
@@ -40,6 +40,7 @@ CREATE TABLE IF NOT EXISTS codebook_code (
     name        TEXT NOT NULL UNIQUE,
     colour      TEXT NOT NULL,
     sort_order  INTEGER NOT NULL,
+    group_name  TEXT,
     created_at  TEXT NOT NULL
 );
 
