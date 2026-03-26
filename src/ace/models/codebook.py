@@ -11,12 +11,14 @@ from pathlib import Path
 from ace.services.palette import next_colour
 
 _COLOUR_RE = _re.compile(r"^#[0-9A-Fa-f]{6}$")
+_UNSET = object()
 
 
 def add_code(
     conn: sqlite3.Connection,
     name: str,
     colour: str,
+    group_name: str | None = None,
 ) -> str:
     now = datetime.now(timezone.utc).isoformat()
     code_id = uuid.uuid4().hex
@@ -25,9 +27,9 @@ def add_code(
     sort_order = max_order + 1
 
     conn.execute(
-        "INSERT INTO codebook_code (id, name, colour, sort_order, created_at) "
-        "VALUES (?, ?, ?, ?, ?)",
-        (code_id, name, colour, sort_order, now),
+        "INSERT INTO codebook_code (id, name, colour, sort_order, group_name, created_at) "
+        "VALUES (?, ?, ?, ?, ?, ?)",
+        (code_id, name, colour, sort_order, group_name, now),
     )
     conn.commit()
     return code_id
@@ -42,6 +44,7 @@ def update_code(
     code_id: str,
     name: str | None = None,
     colour: str | None = None,
+    group_name: object = _UNSET,
 ) -> None:
     updates = []
     params = []
@@ -51,6 +54,9 @@ def update_code(
     if colour is not None:
         updates.append("colour = ?")
         params.append(colour)
+    if group_name is not _UNSET:
+        updates.append("group_name = ?")
+        params.append(group_name if group_name != "" else None)
     if not updates:
         return
     params.append(code_id)
@@ -78,9 +84,12 @@ def delete_code(conn: sqlite3.Connection, code_id: str) -> None:
 
 def compute_codebook_hash(conn: sqlite3.Connection) -> str:
     rows = conn.execute(
-        "SELECT id, name, colour FROM codebook_code ORDER BY id"
+        "SELECT id, name, colour, group_name FROM codebook_code ORDER BY id"
     ).fetchall()
-    combined = "".join(f"{r['id']}{r['name']}{r['colour']}" for r in rows)
+    combined = "".join(
+        f"{r['id']}{r['name']}{r['colour']}{r['group_name'] or ''}"
+        for r in rows
+    )
     return hashlib.sha256(combined.encode()).hexdigest()
 
 

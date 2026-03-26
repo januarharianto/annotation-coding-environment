@@ -240,3 +240,47 @@ def test_import_selected_empty_list(tmp_db):
     count = import_selected_codes(conn, [])
     assert count == 0
     assert list_codes(conn) == []
+
+
+def test_add_code_with_group(tmp_db):
+    """add_code accepts optional group_name."""
+    conn = create_project(tmp_db, "Test")
+    cid = add_code(conn, "Happy", "#FF0000", group_name="Emotions")
+    row = conn.execute("SELECT group_name FROM codebook_code WHERE id = ?", (cid,)).fetchone()
+    assert row["group_name"] == "Emotions"
+
+
+def test_add_code_without_group(tmp_db):
+    """add_code without group_name stores NULL."""
+    conn = create_project(tmp_db, "Test")
+    cid = add_code(conn, "Happy", "#FF0000")
+    row = conn.execute("SELECT group_name FROM codebook_code WHERE id = ?", (cid,)).fetchone()
+    assert row["group_name"] is None
+
+
+def test_update_code_group_name(tmp_db):
+    """update_code can set group_name."""
+    conn = create_project(tmp_db, "Test")
+    cid = add_code(conn, "Happy", "#FF0000")
+    update_code(conn, cid, group_name="Emotions")
+    row = conn.execute("SELECT group_name FROM codebook_code WHERE id = ?", (cid,)).fetchone()
+    assert row["group_name"] == "Emotions"
+
+
+def test_update_code_clear_group(tmp_db):
+    """update_code with group_name='' clears group to NULL."""
+    conn = create_project(tmp_db, "Test")
+    cid = add_code(conn, "Happy", "#FF0000", group_name="Emotions")
+    update_code(conn, cid, group_name="")
+    row = conn.execute("SELECT group_name FROM codebook_code WHERE id = ?", (cid,)).fetchone()
+    assert row["group_name"] is None
+
+
+def test_codebook_hash_includes_group(tmp_db):
+    """Hash changes when group_name is different."""
+    conn = create_project(tmp_db, "Test")
+    cid = add_code(conn, "Happy", "#FF0000")
+    h1 = compute_codebook_hash(conn)
+    update_code(conn, cid, group_name="Emotions")
+    h2 = compute_codebook_hash(conn)
+    assert h1 != h2
