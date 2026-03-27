@@ -1,0 +1,78 @@
+/* ACE design tokens and base styles */
+
+:root {
+  --ace-primary: #212121;
+  --ace-primary-light: #424242;
+  --ace-bg: #ffffff;
+  --ace-bg-muted: #f5f5f5;
+  --ace-text: #212121;
+  --ace-text-muted: #757575;
+  --ace-border: #bdbdbd;
+  --ace-border-light: #e0e0e0;
+  --ace-focus: #546e7a;
+  --ace-danger: #c62828;
+  --ace-success: #2e7d32;
+  --ace-transition: 0.15s ease;
+}
+
+/* Reset */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+  color: var(--ace-text);
+  background: var(--ace-bg);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Focus styles */
+:focus-visible {
+  outline: 2px solid var(--ace-focus);
+  outline-offset: 2px;
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Toast container */
+#toast {
+  position: fixed;
+  bottom: 1rem;
+  right: 1rem;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  pointer-events: none;
+}
+
+#toast .toast-msg {
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--ace-border);
+  background: var(--ace-bg);
+  color: var(--ace-text);
+  font-size: 0.875rem;
+  pointer-events: auto;
+  opacity: 1;
+  transition: opacity var(--ace-transition);
+}
+
+#toast .toast-msg.fade-out {
+  opacity: 0;
+}

@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}ACE{% endblock %}</title>
+  <link rel="stylesheet" href="/static/css/ace.css">
+  {% block head %}{% endblock %}
+</head>
+<body>
+  {% block content %}{% endblock %}
+  <div id="toast"></div>
+  <script src="/static/js/htmx.min.js"></script>
+  <script src="/static/js/bridge.js"></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>
