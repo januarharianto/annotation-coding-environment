@@ -16,12 +16,12 @@
 
 | File | Action | Responsibility |
 |------|--------|---------------|
-| `src/ace/models/codebook.py` | Modify | Add `reorder_codes_with_groups()` |
-| `tests/test_models/test_codebook.py` | Modify | Tests for new model function |
+| `src/ace/models/codebook.py` | Modify | Add `reorder_codes_with_groups()`, reserve "Ungrouped" name |
+| `tests/test_models/test_codebook.py` | Modify | Tests for new model function + reserved name |
 | `src/ace/static/js/bridge.js` | Modify | Two-level Sortable setup + reorg event payload |
-| `src/ace/static/css/annotator.css` | Modify | Reorg-mode styles |
-| `src/ace/pages/coding.py` | Modify | Toggle button, reorg render path, "Ungrouped" validation |
-| `src/ace/pages/coding_shortcuts.py` | Modify | Handle reorg payload + Escape exits reorg |
+| `src/ace/static/css/annotator.css` | Modify | Reorg-mode styles + drop insertion line |
+| `src/ace/pages/coding.py` | Modify | Toggle button, reorg render path |
+| `src/ace/pages/coding_shortcuts.py` | Modify | Handle reorg payload + Escape exits reorg + empty group notification |
 | `src/ace/pages/coding_dialogs.py` | Modify | Validate reserved "Ungrouped" name |
 
 ---
@@ -34,11 +34,26 @@
 
 - [ ] **Step 1: Write failing test**
 
-Add to `tests/test_models/test_codebook.py`:
+Add `reorder_codes_with_groups` to the existing import block at the top of `tests/test_models/test_codebook.py`:
 
 ```python
-from ace.models.codebook import reorder_codes_with_groups
+from ace.models.codebook import (
+    add_code,
+    compute_codebook_hash,
+    delete_code,
+    export_codebook_to_csv,
+    import_codebook_from_csv,
+    import_selected_codes,
+    list_codes,
+    preview_codebook_csv,
+    reorder_codes_with_groups,
+    update_code,
+)
+```
 
+Then add the test function at the end of the file:
+
+```python
 def test_reorder_codes_with_groups(tmp_db):
     conn = create_project(tmp_db, "Test")
     a = add_code(conn, "Alpha", "#FF0000", group_name="G1")
@@ -70,7 +85,7 @@ Expected: FAIL with `ImportError: cannot import name 'reorder_codes_with_groups'
 
 - [ ] **Step 3: Write implementation**
 
-Add to `src/ace/models/codebook.py`:
+Add to `src/ace/models/codebook.py` after the existing `reorder_codes` function:
 
 ```python
 def reorder_codes_with_groups(conn: sqlite3.Connection, groups: list[dict]) -> None:
@@ -107,12 +122,13 @@ git commit -m "feat: add reorder_codes_with_groups model function"
 ### Task 2: Validate reserved "Ungrouped" group name
 
 **Files:**
+- Modify: `src/ace/models/codebook.py`
 - Modify: `src/ace/pages/coding_dialogs.py`
 - Modify: `tests/test_models/test_codebook.py`
 
 - [ ] **Step 1: Write failing test**
 
-Add to `tests/test_models/test_codebook.py`:
+Add at the end of `tests/test_models/test_codebook.py`:
 
 ```python
 def test_add_code_ungrouped_group_name_rejected(tmp_db):
@@ -131,22 +147,14 @@ Expected: FAIL — `assert "Ungrouped" is None`
 
 - [ ] **Step 3: Implement in model layer**
 
-In `src/ace/models/codebook.py`, modify `add_code()` — add after the `group_name` parameter is received:
+In `src/ace/models/codebook.py`, modify `add_code()` — add after the function signature, before `now = ...`:
 
 ```python
-def add_code(
-    conn: sqlite3.Connection,
-    name: str,
-    colour: str,
-    group_name: str | None = None,
-) -> str:
     if group_name and group_name.strip().lower() == "ungrouped":
         group_name = None
-    now = datetime.now(timezone.utc).isoformat()
-    # ... rest unchanged
 ```
 
-Also modify `update_code()` — in the `group_name` handling block:
+Also modify `update_code()` — replace the existing `if group_name is not _UNSET:` block:
 
 ```python
     if group_name is not _UNSET:
@@ -158,7 +166,7 @@ Also modify `update_code()` — in the `group_name` handling block:
 
 - [ ] **Step 4: Update the "New Group" dialog validation**
 
-In `src/ace/pages/coding_dialogs.py`, modify `open_new_group_dialog` — update the `_create` function:
+In `src/ace/pages/coding_dialogs.py`, modify the `_create` function inside `open_new_group_dialog`:
 
 ```python
         def _create():
@@ -218,16 +226,21 @@ Append to `src/ace/static/css/annotator.css`:
     opacity: 0.4;
 }
 .ace-reorg-btn-active {
-    background: #e0e0e0 !important;
+    background: #eeeeee !important;
     border-radius: 4px;
 }
+.ace-sortable-chosen {
+    border-top: 2px solid #bdbdbd;
+}
 ```
+
+Note: `#eeeeee` matches Quasar's `bg-grey-3` per the spec. The `ace-sortable-chosen` class provides the drop insertion line.
 
 - [ ] **Step 2: Commit**
 
 ```bash
 git add src/ace/static/css/annotator.css
-git commit -m "style: add reorg mode CSS classes"
+git commit -m "style: add reorg mode CSS classes and drop insertion line"
 ```
 
 ---
@@ -237,9 +250,9 @@ git commit -m "style: add reorg mode CSS classes"
 **Files:**
 - Modify: `src/ace/static/js/bridge.js`
 
-- [ ] **Step 1: Add reorg Sortable setup to `setupCodeListSortable()`**
+- [ ] **Step 1: Replace the `setupCodeListSortable` function**
 
-Replace the `setupCodeListSortable` function in `src/ace/static/js/bridge.js` with:
+Replace the entire `setupCodeListSortable` function in `src/ace/static/js/bridge.js` with:
 
 ```javascript
   function setupCodeListSortable() {
@@ -266,7 +279,10 @@ Replace the `setupCodeListSortable` function in `src/ace/static/js/bridge.js` wi
       var wrappers = container.querySelectorAll(":scope > .ace-reorg-group");
       for (var w = 0; w < wrappers.length; w++) {
         var header = wrappers[w].querySelector(".ace-group-header");
-        var groupName = header ? header.dataset.groupName || null : null;
+        // Named groups have data-group-name; ungrouped header has none → null
+        var groupName = header && header.hasAttribute("data-group-name")
+          ? header.getAttribute("data-group-name")
+          : null;
         var codeList = wrappers[w].querySelector(".ace-reorg-code-list");
         var codeIds = [];
         if (codeList) {
@@ -315,6 +331,7 @@ Replace the `setupCodeListSortable` function in `src/ace/static/js/bridge.js` wi
           animation: 150,
           handle: ".ace-group-header",
           ghostClass: "ace-drag-ghost",
+          chosenClass: "ace-sortable-chosen",
           onStart: function () { _dragging = true; },
           onEnd: function () {
             _dragging = false;
@@ -330,6 +347,9 @@ Replace the `setupCodeListSortable` function in `src/ace/static/js/bridge.js` wi
             animation: 150,
             group: { name: "codes", pull: true, put: true },
             ghostClass: "ace-drag-ghost",
+            chosenClass: "ace-sortable-chosen",
+            fallbackOnBody: true,
+            swapThreshold: 0.65,
             onStart: function () { _dragging = true; },
             onEnd: function () {
               _dragging = false;
@@ -363,6 +383,11 @@ Replace the `setupCodeListSortable` function in `src/ace/static/js/bridge.js` wi
   }
 ```
 
+Key differences from original plan (audit fixes):
+- `collectReorgPayload` uses `hasAttribute`/`getAttribute` instead of `dataset.groupName || null` for explicit null handling
+- Inner Sortables include `fallbackOnBody: true` and `swapThreshold: 0.65` (SortableJS recommendation for nested instances)
+- Both outer and inner use `chosenClass: "ace-sortable-chosen"` for the drop insertion line
+
 - [ ] **Step 2: Verify no JS syntax errors**
 
 Run: `node -c src/ace/static/js/bridge.js` (or open the coding page in browser and check console for errors)
@@ -381,9 +406,9 @@ git commit -m "feat: two-level Sortable for reorg mode with dragging guard"
 **Files:**
 - Modify: `src/ace/pages/coding_shortcuts.py`
 
-- [ ] **Step 1: Update the `_on_codes_reordered` handler**
+- [ ] **Step 1: Update the import, handler, and Escape**
 
-In `src/ace/pages/coding_shortcuts.py`, update the import and handler:
+In `src/ace/pages/coding_shortcuts.py`, update the import:
 
 ```python
 from ace.models.codebook import reorder_codes, reorder_codes_with_groups
@@ -396,24 +421,29 @@ Replace the `_on_codes_reordered` function:
         groups = e.args.get("groups")
         if groups:
             # Reorg mode: nested payload with group names
+            # Detect emptied groups for notification
+            old_group_names = {c["group_name"] for c in codes if c["group_name"]}
             reorder_codes_with_groups(conn, groups)
+            refresh_codes_fn()
+            new_group_names = {c["group_name"] for c in codes if c["group_name"]}
+            for gone in old_group_names - new_group_names:
+                ui.notify(f"'{gone}' group removed (no remaining codes).", type="info", position="bottom")
         else:
             # Normal mode: flat code_ids list
             code_ids = e.args.get("code_ids", [])
             if code_ids:
                 reorder_codes(conn, code_ids)
-        refresh_codes_fn()
+            refresh_codes_fn()
         code_list_refresh()
 ```
 
-- [ ] **Step 2: Add Escape exits reorg mode**
-
-In the `_on_shortcut_escape` function, add reorg exit before the existing logic:
+Replace the `_on_shortcut_escape` function:
 
 ```python
     def _on_shortcut_escape(_e):
         if state.get("reorg_mode"):
             state["reorg_mode"] = False
+            refresh_codes_fn()
             code_list_refresh()
             return
         if grid_container.visible:
@@ -422,11 +452,13 @@ In the `_on_shortcut_escape` function, add reorg exit before the existing logic:
         state["pending_selection"] = None
 ```
 
-- [ ] **Step 3: Commit**
+Note: `refresh_codes_fn()` is called on Escape exit to ensure in-memory codes match DB after exiting reorg mode.
+
+- [ ] **Step 2: Commit**
 
 ```bash
 git add src/ace/pages/coding_shortcuts.py
-git commit -m "feat: handle reorg payload in codes_reordered event, Escape exits reorg"
+git commit -m "feat: handle reorg payload, empty group notification, Escape exits reorg"
 ```
 
 ---
@@ -438,7 +470,7 @@ git commit -m "feat: handle reorg payload in codes_reordered event, Escape exits
 
 - [ ] **Step 1: Add the reorg toggle button**
 
-In `src/ace/pages/coding.py`, after the sort button (around line 215), add the reorg toggle button. The button should only appear when groups exist, and be inside the header row:
+In `src/ace/pages/coding.py`, after the sort button and its tooltip (around line 215), add within the same header row:
 
 ```python
                 def _toggle_reorg():
@@ -446,7 +478,7 @@ In `src/ace/pages/coding.py`, after the sort button (around line 215), add the r
                     state["reorg_mode"] = entering
                     if entering:
                         state["sort_codes"] = False
-                        _refresh_codes()
+                    _refresh_codes()
                     code_list.refresh()
 
                 reorg_btn = ui.button(
@@ -457,6 +489,8 @@ In `src/ace/pages/coding.py`, after the sort button (around line 215), add the r
                 ).tooltip("Reorganise codes and groups")
 ```
 
+Note: `_refresh_codes()` is called on both enter AND exit to ensure in-memory codes match DB state.
+
 - [ ] **Step 2: Add the reorg render path in `code_list()`**
 
 In the `code_list()` refreshable function, after the `has_groups` check (around line 606), add a branch for reorg mode. Insert this block right after the `has_groups` computation and before the existing `if not has_groups:` block:
@@ -464,7 +498,7 @@ In the `code_list()` refreshable function, after the `has_groups` check (around 
 ```python
                 reorg = state.get("reorg_mode", False)
 
-                # Show/hide reorg button based on whether groups exist
+                # Show/hide reorg and sort buttons based on mode and groups
                 reorg_btn.set_visibility(has_groups)
                 if reorg and has_groups:
                     reorg_btn.classes(add="ace-reorg-btn-active")
@@ -504,8 +538,9 @@ In the `code_list()` refreshable function, after the `has_groups` check (around 
                     with ui.element("div").classes("ace-reorg-container"):
                         for group_name, grp_codes in named_groups:
                             with ui.element("div").classes("ace-reorg-group"):
+                                safe_name = html.escape(group_name, quote=True)
                                 with ui.element("div").classes("ace-group-header").props(
-                                    f'data-group-name="{group_name}"'
+                                    f'data-group-name="{safe_name}"'
                                 ).style("cursor: grab;"):
                                     ui.icon("drag_indicator", size="xs").classes("text-grey-5")
                                     ui.label(group_name)
@@ -514,19 +549,20 @@ In the `code_list()` refreshable function, after the `has_groups` check (around 
                                         _render_code_row(code, _shortcut_label(global_idx), sorting=False, reorg=True)
                                         global_idx += 1
 
-                        # Ungrouped section with explicit header
-                        if ungrouped_codes or True:  # Always show Ungrouped section as drop target
-                            with ui.element("div").classes("ace-reorg-group"):
-                                with ui.element("div").classes("ace-group-header").style("cursor: grab;"):
-                                    ui.icon("drag_indicator", size="xs").classes("text-grey-5")
-                                    ui.label("Ungrouped")
-                                with ui.element("div").classes("ace-reorg-code-list"):
-                                    for code in ungrouped_codes:
-                                        _render_code_row(code, _shortcut_label(global_idx), sorting=False, reorg=True)
-                                        global_idx += 1
+                        # Ungrouped section — always shown as drop target
+                        with ui.element("div").classes("ace-reorg-group"):
+                            with ui.element("div").classes("ace-group-header").style("cursor: grab;"):
+                                ui.icon("drag_indicator", size="xs").classes("text-grey-5")
+                                ui.label("Ungrouped")
+                            with ui.element("div").classes("ace-reorg-code-list"):
+                                for code in ungrouped_codes:
+                                    _render_code_row(code, _shortcut_label(global_idx), sorting=False, reorg=True)
+                                    global_idx += 1
 
                     return
 ```
+
+Note: `html.escape(group_name, quote=True)` prevents XSS via group names with quotes. The `import html` is already at the top of coding.py. The Ungrouped header has no `data-group-name` attribute — the JS explicitly checks `hasAttribute` and returns `null` for it.
 
 - [ ] **Step 3: Update `_render_code_row` to accept `reorg` parameter**
 
@@ -553,36 +589,37 @@ Modify the function signature and body:
                             "ace-drag-handle text-grey-5"
                         )
                     lbl = ui.label(code["name"]).classes(
-                        "text-body2 col cursor-pointer ellipsis" if not reorg else "text-body2 col ellipsis"
+                        "text-body2 col ellipsis" + ("" if reorg else " cursor-pointer")
                     ).style(
                         "min-width: 0; line-height: 1.4;"
                     ).on("click", _click_apply)
                     if shortcut:
                         ui.label(shortcut).classes("ace-keycap")
-                    if not reorg:
-                        with ui.button(icon="more_horiz").props(
-                            "flat round dense size=xs"
-                        ).classes("ace-hover-action"):
-                            with ui.menu():
-                                ui.menu_item(
-                                    "Rename",
-                                    on_click=lambda _e, c=code: open_rename_dialog(conn, rename_dialog, c, _refresh_all),
-                                )
-                                ui.menu_item(
-                                    "Change colour",
-                                    on_click=lambda _e, c=code: open_colour_dialog(conn, colour_dialog, c, _refresh_all),
-                                )
-                                ui.separator()
-                                ui.menu_item(
-                                    "Move to Group",
-                                    on_click=lambda _e, c=code: _show_move_to_group(c),
-                                )
-                                ui.separator()
-                                ui.menu_item(
-                                    "Delete",
-                                    on_click=lambda _e, c=code: open_delete_dialog(conn, delete_dialog, c, _refresh_all),
-                                )
+                    with ui.button(icon="more_horiz").props(
+                        "flat round dense size=xs"
+                    ).classes("ace-hover-action"):
+                        with ui.menu():
+                            ui.menu_item(
+                                "Rename",
+                                on_click=lambda _e, c=code: open_rename_dialog(conn, rename_dialog, c, _refresh_all),
+                            )
+                            ui.menu_item(
+                                "Change colour",
+                                on_click=lambda _e, c=code: open_colour_dialog(conn, colour_dialog, c, _refresh_all),
+                            )
+                            ui.separator()
+                            ui.menu_item(
+                                "Move to Group",
+                                on_click=lambda _e, c=code: _show_move_to_group(c),
+                            )
+                            ui.separator()
+                            ui.menu_item(
+                                "Delete",
+                                on_click=lambda _e, c=code: open_delete_dialog(conn, delete_dialog, c, _refresh_all),
+                            )
 ```
+
+Note: The context menu (including "Move to Group") is kept in reorg mode per the spec. Click-to-apply is suppressed via the early return in `_click_apply`, not by hiding the menu.
 
 - [ ] **Step 4: Run all tests**
 
@@ -615,16 +652,17 @@ Open a project with grouped codes. Confirm:
 - [ ] **Step 3: Enter reorg mode**
 
 Click the reorg button. Confirm:
-- Button gets highlighted background
+- Button gets highlighted background (`#eeeeee`)
 - Drag handles on individual codes disappear
 - Group headers show drag_indicator icons
 - All groups are expanded (regardless of previous collapse state)
 - "Ungrouped" section appears with header
+- Sort button still visible but clicking it exits reorg mode (mutual exclusion)
 
 - [ ] **Step 4: Drag a code between groups**
 
 Drag a code from one group into another group's code list. Confirm:
-- The code moves visually during drag
+- The code moves visually during drag with insertion line visible
 - After drop, the page re-renders with the code in its new group
 - Keyboard shortcuts update to match new positions
 
@@ -638,17 +676,23 @@ Drag a group header to reorder it among other groups. Confirm:
 
 Drag every code out of a group. Confirm:
 - The empty group disappears after re-render
-- A notification appears (matching existing "Move to Group" behaviour)
+- A notification appears: "'GroupName' group removed (no remaining codes)."
 
-- [ ] **Step 7: Exit reorg mode**
+- [ ] **Step 7: Context menu in reorg mode**
+
+Right-click (or click "...") on a code row. Confirm:
+- Context menu appears with Rename, Change colour, Move to Group, Delete
+- "Move to Group" works and triggers re-render with Sortable re-initialisation
+
+- [ ] **Step 8: Exit reorg mode**
 
 Press Escape or click the reorg button again. Confirm:
 - Drag handles reappear on individual codes
 - Click-to-apply works again on code labels
 - Previously collapsed groups are still collapsed
-- Context menus are back
+- Full context menus visible
 
-- [ ] **Step 8: Commit all remaining fixes**
+- [ ] **Step 9: Commit all remaining fixes**
 
 If any issues were found and fixed during manual testing:
 
