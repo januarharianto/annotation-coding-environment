@@ -35,8 +35,10 @@ def test_single_annotation():
     anns = [_ann("a1", "c1", 0, 5)]
     result = render_annotated_text("Hello world", anns, _codes())
     assert "<span" in result
-    assert "data-annotation-id" in result
-    assert "rgba(255,0,0,0.3)" in result
+    assert 'class="ace-annotation ace-code-c1"' in result
+    assert 'id="ann-a1"' in result
+    assert 'data-annotation-id="a1"' in result
+    assert 'title="Red"' in result
     assert "Hello" in result
     assert " world" in result
 
