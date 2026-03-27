@@ -4,14 +4,16 @@ from __future__ import annotations
 
 import asyncio
 import html
+import json
 import platform
+import re
 import sqlite3
 import subprocess
 import tempfile
 from pathlib import Path
 
 from fastapi import APIRouter, Form, Query, Request, UploadFile, File
-from fastapi.responses import HTMLResponse, JSONResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 
 router = APIRouter(prefix="/api")
 
@@ -758,3 +760,471 @@ async def flag_route(
         return HTMLResponse(content)
     finally:
         conn.close()
+
+
+# ---------------------------------------------------------------------------
+# Codebook CRUD helpers
+# ---------------------------------------------------------------------------
+
+
+def _render_code_sidebar(request: Request, conn, coder_id: str, current_index: int) -> str:
+    """Render just the code sidebar block."""
+    from ace.routes.pages import _coding_context
+    from jinja2_fragments import render_block
+
+    templates = request.app.state.templates
+    ctx = _coding_context(conn, coder_id, current_index)
+    ctx["request"] = request
+    return render_block(templates.env, "coding.html", "code_sidebar", ctx)
+
+
+def _render_sidebar_and_text(request: Request, conn, coder_id: str, current_index: int) -> str:
+    """Render code sidebar (primary) + OOB text panel + OOB code-colours style."""
+    from ace.routes.pages import _coding_context
+    from jinja2_fragments import render_block
+
+    templates = request.app.state.templates
+    ctx = _coding_context(conn, coder_id, current_index)
+    ctx["request"] = request
+
+    sidebar_html = render_block(templates.env, "coding.html", "code_sidebar", ctx)
+    text_html = render_block(templates.env, "coding.html", "text_panel", ctx)
+
+    # Regenerate code-colours CSS inline (not a named block in the template)
+    colour_css_parts = []
+    for code in ctx["codes"]:
+        hex_col = code["colour"]
+        r = int(hex_col[1:3], 16)
+        g = int(hex_col[3:5], 16)
+        b = int(hex_col[5:7], 16)
+        colour_css_parts.append(
+            f".ace-code-{code['id']} {{ background-color: rgba({r}, {g}, {b}, var(--ace-annotation-alpha)); }}"
+        )
+    colours_css = "\n".join(colour_css_parts)
+
+    return (
+        sidebar_html
+        + f'<div id="text-panel" hx-swap-oob="innerHTML">{text_html}</div>'
+        + f'<style id="code-colours" hx-swap-oob="innerHTML">{colours_css}</style>'
+    )
+
+
+# ---------------------------------------------------------------------------
+# Codebook CRUD routes
+# ---------------------------------------------------------------------------
+
+
+@router.post("/codes")
+async def create_code(
+    request: Request,
+    name: str = Form(...),
+    current_index: int = Form(default=0),
+):
+    """Create a new code and return updated sidebar."""
+    from ace.models.codebook import add_code, list_codes, next_colour
+
+    coder_id = getattr(request.app.state, "coder_id", None)
+    if coder_id is None:
+        return HTMLResponse("", status_code=400)
+
+    name = name.strip()
+    if not name:
+        return _oob_toast("Code name cannot be empty.")
+
+    conn = _open_project_db(request)
+    try:
+        existing = list_codes(conn)
+        colour = next_colour(len(existing))
+        add_code(conn, name, colour)
+        content = _render_code_sidebar(request, conn, coder_id, current_index)
+        return HTMLResponse(content)
+    finally:
+        conn.close()
+
+
+@router.post("/codes/reorder")
+async def reorder_codes_route(
+    request: Request,
+    code_ids: str = Form(...),
+    current_index: int = Form(default=0),
+):
+    """Reorder codes and return updated sidebar."""
+    from ace.models.codebook import reorder_codes
+
+    coder_id = getattr(request.app.state, "coder_id", None)
+    if coder_id is None:
+        return HTMLResponse("", status_code=400)
+
+    try:
+        ids_list = json.loads(code_ids)
+    except (json.JSONDecodeError, TypeError):
+        return _oob_toast("Invalid code_ids format.")
+
+    conn = _open_project_db(request)
+    try:
+        reorder_codes(conn, ids_list)
+        content = _render_code_sidebar(request, conn, coder_id, current_index)
+        return HTMLResponse(content)
+    finally:
+        conn.close()
+
+
+# ---------------------------------------------------------------------------
+# Codebook import / export  (registered before {code_id} to avoid path clash)
+# ---------------------------------------------------------------------------
+
+
+@router.get("/codes/export")
+async def export_codebook(request: Request):
+    """Export the codebook as a CSV file download."""
+    from ace.models.codebook import export_codebook_to_csv
+
+    conn = _open_project_db(request)
+    try:
+        tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".csv")
+        tmp.close()
+        export_codebook_to_csv(conn, tmp.name)
+    finally:
+        conn.close()
+
+    return FileResponse(
+        tmp.name,
+        media_type="text/csv",
+        filename="codebook.csv",
+    )
+
+
+@router.post("/codes/import/preview")
+async def import_codebook_preview(request: Request, file: UploadFile = File(...)):
+    """Upload a codebook CSV and return a preview dialog."""
+    from ace.models.codebook import preview_codebook_csv
+
+    data = await file.read()
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".csv")
+    try:
+        tmp.write(data)
+        tmp.close()
+
+        conn = _open_project_db(request)
+        try:
+            previewed = preview_codebook_csv(conn, tmp.name)
+        finally:
+            conn.close()
+    except Exception as e:
+        Path(tmp.name).unlink(missing_ok=True)
+        return _oob_toast(f"Could not parse codebook CSV: {e}")
+
+    # Store temp path for the import step
+    request.app.state.codebook_import_tmp = tmp.name
+
+    # Build preview rows
+    rows_html = ""
+    for code in previewed:
+        esc_name = html.escape(code["name"])
+        esc_colour = html.escape(code["colour"])
+        esc_group = html.escape(code.get("group_name") or "")
+        exists = code["exists"]
+        checked = "" if exists else "checked"
+        disabled = "disabled" if exists else ""
+        opacity = "opacity:0.5" if exists else ""
+        label_extra = " (already exists)" if exists else ""
+        rows_html += (
+            f'<label style="display:flex;align-items:center;gap:8px;padding:4px 0;{opacity}">'
+            f'<input type="checkbox" name="selected" value="{esc_name}" {checked} {disabled}>'
+            f'<span class="ace-code-dot" style="background:{esc_colour};width:12px;height:12px;'
+            f'border-radius:50%;display:inline-block;flex-shrink:0"></span>'
+            f'<span>{esc_name}{label_extra}</span>'
+            f'</label>'
+        )
+
+    return HTMLResponse(
+        f'<dialog>'
+        f'<h3 style="font-size:15px;font-weight:500;margin:0 0 16px">Import Codebook</h3>'
+        f'<div style="max-height:300px;overflow-y:auto">{rows_html}</div>'
+        f'<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">'
+        f'<button type="button" class="ace-btn" onclick="this.closest(\'dialog\').close()">Cancel</button>'
+        f'<button type="button" class="ace-btn ace-btn--primary" '
+        f'id="codebook-import-btn" '
+        f'onclick="aceImportCodebook(this)">Import</button>'
+        f'</div>'
+        f'</dialog>'
+    )
+
+
+@router.post("/codes/import")
+async def import_codebook(
+    request: Request,
+    codes_json: str = Form(...),
+    current_index: int = Form(default=0),
+):
+    """Import selected codes from a previously previewed CSV."""
+    from ace.models.codebook import import_selected_codes
+
+    coder_id = getattr(request.app.state, "coder_id", None)
+    if coder_id is None:
+        return HTMLResponse("", status_code=400)
+
+    try:
+        codes_list = json.loads(codes_json)
+    except (json.JSONDecodeError, TypeError):
+        return _oob_toast("Invalid codes_json format.")
+
+    conn = _open_project_db(request)
+    try:
+        import_selected_codes(conn, codes_list)
+        content = _render_code_sidebar(request, conn, coder_id, current_index)
+    finally:
+        conn.close()
+
+    # Clean up temp file
+    tmp_path = getattr(request.app.state, "codebook_import_tmp", None)
+    if tmp_path:
+        Path(tmp_path).unlink(missing_ok=True)
+        request.app.state.codebook_import_tmp = None
+
+    return HTMLResponse(content)
+
+
+# ---------------------------------------------------------------------------
+# Codebook {code_id} routes
+# ---------------------------------------------------------------------------
+
+
+@router.put("/codes/{code_id}")
+async def update_code_route(
+    request: Request,
+    code_id: str,
+    name: str | None = Form(default=None),
+    colour: str | None = Form(default=None),
+    group_name: str | None = Form(default=None),
+    current_index: int = Form(default=0),
+):
+    """Update a code (rename, recolour, move group) and return sidebar + text panel."""
+    from ace.models.codebook import update_code
+
+    coder_id = getattr(request.app.state, "coder_id", None)
+    if coder_id is None:
+        return HTMLResponse("", status_code=400)
+
+    # Validate colour if provided
+    if colour is not None and not re.fullmatch(r"#[0-9a-fA-F]{6}", colour):
+        return _oob_toast("Invalid colour format. Use #RRGGBB.")
+
+    conn = _open_project_db(request)
+    try:
+        kwargs: dict = {}
+        if name is not None:
+            kwargs["name"] = name.strip()
+        if colour is not None:
+            kwargs["colour"] = colour
+        if group_name is not None:
+            kwargs["group_name"] = group_name
+
+        update_code(conn, code_id, **kwargs)
+        content = _render_sidebar_and_text(request, conn, coder_id, current_index)
+        return HTMLResponse(content)
+    finally:
+        conn.close()
+
+
+@router.delete("/codes/{code_id}")
+async def delete_code_route(
+    request: Request,
+    code_id: str,
+    current_index: int = Query(default=0),
+):
+    """Delete a code (cascades annotations) and return sidebar + text panel."""
+    from ace.models.codebook import delete_code
+
+    coder_id = getattr(request.app.state, "coder_id", None)
+    if coder_id is None:
+        return HTMLResponse("", status_code=400)
+
+    conn = _open_project_db(request)
+    try:
+        delete_code(conn, code_id)
+        content = _render_sidebar_and_text(request, conn, coder_id, current_index)
+        return HTMLResponse(content)
+    finally:
+        conn.close()
+
+
+# ---------------------------------------------------------------------------
+# Dialog endpoints
+# ---------------------------------------------------------------------------
+
+
+@router.get("/codes/{code_id}/rename-dialog")
+async def rename_dialog(request: Request, code_id: str):
+    """Return a rename dialog for the given code."""
+    conn = _open_project_db(request)
+    try:
+        row = conn.execute(
+            "SELECT name FROM codebook_code WHERE id = ?", (code_id,)
+        ).fetchone()
+        if row is None:
+            return HTMLResponse("", status_code=404)
+        current_name = html.escape(row["name"])
+    finally:
+        conn.close()
+
+    return HTMLResponse(
+        f'<dialog>'
+        f'<h3 style="font-size:15px;font-weight:500;margin:0 0 16px">Rename Code</h3>'
+        f'<form hx-put="/api/codes/{code_id}" hx-target="#code-sidebar" hx-swap="innerHTML">'
+        f'<input type="text" name="name" value="{current_name}" '
+        f'class="ace-input" style="width:100%" autocomplete="off">'
+        f'<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">'
+        f'<button type="button" class="ace-btn" onclick="this.closest(\'dialog\').close()">Cancel</button>'
+        f'<button type="submit" class="ace-btn ace-btn--primary" '
+        f'onclick="this.closest(\'dialog\').close()">Rename</button>'
+        f'</div>'
+        f'</form>'
+        f'</dialog>'
+    )
+
+
+@router.get("/codes/{code_id}/colour-dialog")
+async def colour_dialog(request: Request, code_id: str):
+    """Return a colour picker dialog with palette swatches."""
+    from ace.models.codebook import COLOUR_PALETTE
+
+    swatches = ""
+    for hex_val, _ in COLOUR_PALETTE:
+        swatches += (
+            f'<button type="button" class="ace-colour-swatch" '
+            f'style="background:{hex_val};width:28px;height:28px;border-radius:4px;border:1px solid #bdbdbd;cursor:pointer;padding:0" '
+            f'hx-put="/api/codes/{code_id}" '
+            f"""hx-vals='{{"colour":"{hex_val}"}}' """
+            f'hx-target="#code-sidebar" hx-swap="innerHTML" '
+            f'onclick="this.closest(\'dialog\').close()"></button>'
+        )
+
+    return HTMLResponse(
+        f'<dialog>'
+        f'<h3 style="font-size:15px;font-weight:500;margin:0 0 16px">Choose Colour</h3>'
+        f'<div style="display:grid;grid-template-columns:repeat(6,1fr);gap:6px">'
+        f'{swatches}'
+        f'</div>'
+        f'<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">'
+        f'<button type="button" class="ace-btn" onclick="this.closest(\'dialog\').close()">Cancel</button>'
+        f'</div>'
+        f'</dialog>'
+    )
+
+
+@router.get("/codes/{code_id}/delete-dialog")
+async def delete_dialog(request: Request, code_id: str):
+    """Return a confirmation dialog for deleting a code."""
+    conn = _open_project_db(request)
+    try:
+        row = conn.execute(
+            "SELECT name FROM codebook_code WHERE id = ?", (code_id,)
+        ).fetchone()
+        if row is None:
+            return HTMLResponse("", status_code=404)
+        code_name = html.escape(row["name"])
+
+        ann_count = conn.execute(
+            "SELECT COUNT(*) AS cnt FROM annotation WHERE code_id = ? AND deleted_at IS NULL",
+            (code_id,),
+        ).fetchone()["cnt"]
+
+        source_count = conn.execute(
+            "SELECT COUNT(DISTINCT source_id) AS cnt FROM annotation WHERE code_id = ? AND deleted_at IS NULL",
+            (code_id,),
+        ).fetchone()["cnt"]
+    finally:
+        conn.close()
+
+    if ann_count > 0:
+        warning = (
+            f"This will remove {ann_count} annotation{'s' if ann_count != 1 else ''} "
+            f"across {source_count} source{'s' if source_count != 1 else ''}."
+        )
+    else:
+        warning = "This code has no annotations."
+
+    return HTMLResponse(
+        f'<dialog>'
+        f'<h3 style="font-size:15px;font-weight:500;margin:0 0 16px">Delete {code_name}?</h3>'
+        f'<p style="margin:0 0 16px;color:var(--ace-text-muted)">{warning}</p>'
+        f'<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">'
+        f'<button type="button" class="ace-btn" onclick="this.closest(\'dialog\').close()">Cancel</button>'
+        f'<button type="button" class="ace-btn ace-btn--danger" '
+        f'hx-delete="/api/codes/{code_id}" '
+        f'hx-target="#code-sidebar" hx-swap="innerHTML" '
+        f'onclick="this.closest(\'dialog\').close()">Delete</button>'
+        f'</div>'
+        f'</dialog>'
+    )
+
+
+@router.get("/codes/{code_id}/move-dialog")
+async def move_dialog(request: Request, code_id: str):
+    """Return a dialog for moving a code to a group."""
+    conn = _open_project_db(request)
+    try:
+        row = conn.execute(
+            "SELECT name, group_name FROM codebook_code WHERE id = ?", (code_id,)
+        ).fetchone()
+        if row is None:
+            return HTMLResponse("", status_code=404)
+        code_name = html.escape(row["name"])
+        current_group = row["group_name"]
+
+        groups = conn.execute(
+            "SELECT DISTINCT group_name FROM codebook_code "
+            "WHERE group_name IS NOT NULL ORDER BY group_name"
+        ).fetchall()
+        group_names = [g["group_name"] for g in groups]
+    finally:
+        conn.close()
+
+    options = ""
+
+    # Ungrouped option
+    active = ' style="font-weight:600"' if current_group is None else ""
+    options += (
+        f'<button type="button" class="ace-btn" style="width:100%;text-align:left;margin-bottom:4px"'
+        f' hx-put="/api/codes/{code_id}"'
+        f""" hx-vals='{{"group_name":""}}'"""
+        f' hx-target="#code-sidebar" hx-swap="innerHTML"'
+        f' onclick="this.closest(\'dialog\').close()"'
+        f'{active}>Ungrouped</button>'
+    )
+
+    # Existing groups
+    for gn in group_names:
+        esc_gn = html.escape(gn)
+        active = ' style="font-weight:600"' if gn == current_group else ""
+        options += (
+            f'<button type="button" class="ace-btn" style="width:100%;text-align:left;margin-bottom:4px"'
+            f' hx-put="/api/codes/{code_id}"'
+            f""" hx-vals='{{"group_name":"{esc_gn}"}}'"""
+            f' hx-target="#code-sidebar" hx-swap="innerHTML"'
+            f' onclick="this.closest(\'dialog\').close()"'
+            f'{active}>{esc_gn}</button>'
+        )
+
+    return HTMLResponse(
+        f'<dialog>'
+        f'<h3 style="font-size:15px;font-weight:500;margin:0 0 16px">Move {code_name} to Group</h3>'
+        f'<div style="display:flex;flex-direction:column">'
+        f'{options}'
+        f'</div>'
+        f'<details style="margin-top:8px">'
+        f'<summary style="cursor:pointer;font-size:13px;color:var(--ace-text-muted)">New Group\u2026</summary>'
+        f'<form hx-put="/api/codes/{code_id}" hx-target="#code-sidebar" hx-swap="innerHTML" '
+        f'style="display:flex;gap:8px;margin-top:8px">'
+        f'<input type="text" name="group_name" placeholder="Group name" '
+        f'class="ace-input" style="flex:1" autocomplete="off">'
+        f'<button type="submit" class="ace-btn ace-btn--primary" '
+        f'onclick="this.closest(\'dialog\').close()">Move</button>'
+        f'</form>'
+        f'</details>'
+        f'<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">'
+        f'<button type="button" class="ace-btn" onclick="this.closest(\'dialog\').close()">Cancel</button>'
+        f'</div>'
+        f'</dialog>'
+    )
