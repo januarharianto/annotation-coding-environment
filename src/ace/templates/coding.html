@@ -23,20 +23,20 @@
   <div id="htmx-triggers" class="ace-hidden">
     <button id="trigger-undo"
             hx-post="/api/code/undo"
-            hx-target="#coding-workspace"
-            hx-swap="morph:innerHTML">Undo</button>
+            hx-target="#text-panel"
+            hx-swap="innerHTML">Undo</button>
     <button id="trigger-redo"
             hx-post="/api/code/redo"
-            hx-target="#coding-workspace"
-            hx-swap="morph:innerHTML">Redo</button>
+            hx-target="#text-panel"
+            hx-swap="innerHTML">Redo</button>
     <button id="trigger-flag"
             hx-post="/api/code/flag"
-            hx-target="#coding-workspace"
-            hx-swap="morph:innerHTML">Flag</button>
+            hx-target="#text-panel"
+            hx-swap="innerHTML">Flag</button>
     <button id="trigger-navigate"
             hx-post="/api/code/navigate"
-            hx-target="#coding-workspace"
-            hx-swap="morph:innerHTML">Navigate</button>
+            hx-target="#text-panel"
+            hx-swap="innerHTML">Navigate</button>
   </div>
 
   {# Page header #}
@@ -63,8 +63,8 @@
       <button class="ace-btn-icon" title="Flag source"
               hx-post="/api/code/flag"
               hx-vals='{"source_index": "{{ current_index }}"}'
-              hx-target="#coding-workspace"
-              hx-swap="morph:innerHTML">&#9873;</button>
+              hx-target="#text-panel"
+              hx-swap="innerHTML">&#9873;</button>
     </div>
     {% endif %}
   </div>
@@ -85,8 +85,8 @@
         <div class="ace-code-row" data-code-id="{{ code['id'] }}"
              hx-post="/api/code/apply"
              hx-vals='{"code_id": "{{ code["id"] }}"}'
-             hx-target="#coding-workspace"
-             hx-swap="morph:innerHTML">
+             hx-target="#text-panel"
+             hx-swap="innerHTML">
           <span class="ace-code-dot" style="background: {{ code['colour'] }};"></span>
           <span class="ace-code-name">{{ code["name"] }}</span>
           <span class="ace-code-count">{{ code_counts.get(code["id"], 0) or "" }}</span>
@@ -131,8 +131,8 @@
           <button class="ace-btn-icon ace-hover-action" title="Delete annotation"
                   hx-post="/api/code/delete-annotation"
                   hx-vals='{"annotation_id": "{{ ann["id"] }}"}'
-                  hx-target="#coding-workspace"
-                  hx-swap="morph:innerHTML">&times;</button>
+                  hx-target="#text-panel"
+                  hx-swap="innerHTML">&times;</button>
         </div>
         {% endfor %}
       </div>
