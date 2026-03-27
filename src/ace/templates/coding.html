@@ -24,19 +24,19 @@
     <button id="trigger-undo"
             hx-post="/api/code/undo"
             hx-target="#text-panel"
-            hx-swap="innerHTML">Undo</button>
+            hx-swap="outerHTML">Undo</button>
     <button id="trigger-redo"
             hx-post="/api/code/redo"
             hx-target="#text-panel"
-            hx-swap="innerHTML">Redo</button>
+            hx-swap="outerHTML">Redo</button>
     <button id="trigger-flag"
             hx-post="/api/code/flag"
             hx-target="#text-panel"
-            hx-swap="innerHTML">Flag</button>
+            hx-swap="outerHTML">Flag</button>
     <button id="trigger-navigate"
             hx-post="/api/code/navigate"
             hx-target="#text-panel"
-            hx-swap="innerHTML">Navigate</button>
+            hx-swap="outerHTML">Navigate</button>
   </div>
 
   {# Page header #}
@@ -64,7 +64,7 @@
               hx-post="/api/code/flag"
               hx-vals='{"source_index": "{{ current_index }}"}'
               hx-target="#text-panel"
-              hx-swap="innerHTML">&#9873;</button>
+              hx-swap="outerHTML">&#9873;</button>
     </div>
     {% endif %}
   </div>
@@ -86,7 +86,7 @@
              hx-post="/api/code/apply"
              hx-vals='{"code_id": "{{ code["id"] }}"}'
              hx-target="#text-panel"
-             hx-swap="innerHTML">
+             hx-swap="outerHTML">
           <span class="ace-code-dot" style="background: {{ code['colour'] }};"></span>
           <span class="ace-code-name">{{ code["name"] }}</span>
           <span class="ace-code-count">{{ code_counts.get(code["id"], 0) or "" }}</span>
@@ -132,7 +132,7 @@
                   hx-post="/api/code/delete-annotation"
                   hx-vals='{"annotation_id": "{{ ann["id"] }}"}'
                   hx-target="#text-panel"
-                  hx-swap="innerHTML">&times;</button>
+                  hx-swap="outerHTML">&times;</button>
         </div>
         {% endfor %}
       </div>
