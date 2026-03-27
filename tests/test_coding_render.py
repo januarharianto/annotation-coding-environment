@@ -1,6 +1,6 @@
 """Tests for CSS-class-based annotation rendering."""
 
-from ace.pages.coding_render import render_annotated_text
+from ace.services.coding_render import render_annotated_text
 
 
 def test_render_plain_text():
