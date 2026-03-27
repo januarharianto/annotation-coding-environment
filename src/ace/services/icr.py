@@ -3,10 +3,9 @@
 Character-level binary agreement with Cohen's kappa per code.
 """
 
+import math
 import sqlite3
 from dataclasses import dataclass, field
-
-from sklearn.metrics import cohen_kappa_score
 
 
 @dataclass
@@ -174,25 +173,37 @@ def compute_icr(conn: sqlite3.Connection) -> ICRResult:
     return result
 
 
+def _cohens_kappa(y1: list, y2: list) -> float | None:
+    """Cohen's kappa for two binary raters."""
+    n = len(y1)
+    if n == 0:
+        return None
+    a11 = a10 = a01 = a00 = 0
+    for i in range(n):
+        if y1[i] and y2[i]:
+            a11 += 1
+        elif y1[i] and not y2[i]:
+            a10 += 1
+        elif not y1[i] and y2[i]:
+            a01 += 1
+        else:
+            a00 += 1
+    po = (a11 + a00) / n
+    pe = ((a11 + a10) * (a11 + a01) + (a01 + a00) * (a10 + a00)) / (n * n)
+    if pe == 1.0:
+        return 1.0 if po == 1.0 else 0.0
+    return (po - pe) / (1 - pe)
+
+
 def _safe_kappa(vec1: list[int], vec2: list[int]) -> float | None:
     """Compute Cohen's kappa, handling edge cases.
 
     If all values are the same for both vectors (perfect agreement),
-    cohen_kappa_score may raise ValueError or return NaN.
-    In that case return 1.0 for perfect agreement.
+    _cohens_kappa returns 1.0 when pe == 1.0 and po == 1.0.
     """
-    import math
-
-    try:
-        k = cohen_kappa_score(vec1, vec2)
-        if math.isnan(k):
-            # NaN occurs when there is no variation — check for perfect agreement
-            if vec1 == vec2:
-                return 1.0
-            return None
-        return k
-    except ValueError:
-        # All values identical — perfect agreement
-        if vec1 == vec2:
-            return 1.0
-        return None
+    k = _cohens_kappa(vec1, vec2)
+    if k is None:
+        return 1.0 if vec1 == vec2 else None
+    if math.isnan(k):
+        return 1.0 if vec1 == vec2 else None
+    return k
