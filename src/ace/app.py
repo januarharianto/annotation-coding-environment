@@ -95,14 +95,34 @@ class _CSRFMiddleware:
 
 
 def get_db(request: Request) -> Generator[sqlite3.Connection, None, None]:
-    """Yield an open SQLite connection for the current project.
+    """Open a per-request SQLite connection for the current project.
 
-    Raises HtmxRedirect("/") if no project is loaded or the file is invalid.
+    Validates that the project path exists and has the correct application_id.
+    Enables foreign keys and WAL mode. Closes the connection when the request
+    is done.
+
+    Raises HtmxRedirect("/") if no project is set, the path doesn't exist,
+    or the file is not a valid ACE database.
     """
-    conn: sqlite3.Connection | None = getattr(request.app.state, "db", None)
-    if conn is None:
+    project_path: str | None = getattr(request.app.state, "project_path", None)
+    if project_path is None:
         raise HtmxRedirect("/")
-    yield conn
+
+    path = Path(project_path)
+    if not path.exists():
+        raise HtmxRedirect("/")
+
+    conn = sqlite3.connect(str(path))
+    try:
+        conn.row_factory = sqlite3.Row
+        app_id = conn.execute("PRAGMA application_id").fetchone()[0]
+        if app_id != ACE_APPLICATION_ID:
+            raise HtmxRedirect("/")
+        conn.execute("PRAGMA foreign_keys = ON")
+        conn.execute("PRAGMA journal_mode = WAL")
+        yield conn
+    finally:
+        conn.close()
 
 
 DbDep = Annotated[sqlite3.Connection, Depends(get_db)]
@@ -118,6 +138,9 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     _DATA_DIR.mkdir(exist_ok=True)
     app.state.db = None
     app.state.project_path = None
+    app.state.undo_managers = {}
+    app.state.migrated_paths = set()
+    app.state.active_projects = set()
     yield
     conn: sqlite3.Connection | None = getattr(app.state, "db", None)
     if conn is not None:
