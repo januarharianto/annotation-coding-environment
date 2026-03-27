@@ -31,7 +31,7 @@ from ace.pages.coding_bottom_bar import build_bottom_bar
 from ace.pages.coding_dialogs import open_colour_dialog, open_delete_dialog, open_new_group_dialog, open_rename_dialog
 from ace.pages.coding_render import render_annotated_text  # noqa: F401 — re-exported for tests
 from ace.pages.coding_shortcuts import register_shortcuts
-from ace.services.palette import next_colour
+from ace.models.codebook import next_colour
 from ace.services.undo import UndoManager
 
 _STATIC_DIR = Path(__file__).parent.parent / "static"

@@ -1,5 +1,6 @@
 """CRUD operations for codebook_code table."""
 
+import colorsys
 import csv
 import hashlib
 import sqlite3
@@ -7,7 +8,30 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
-from ace.services.palette import next_colour
+
+# ---------------------------------------------------------------------------
+# Colour palette — golden-angle hue spacing with alternating lightness bands
+# ---------------------------------------------------------------------------
+
+def _generate_palette(n: int) -> list[tuple[str, str]]:
+    golden_ratio = 0.618033988749895
+    colours = []
+    for i in range(n):
+        hue = (i * golden_ratio) % 1.0
+        lightness = 0.38 if i % 2 == 0 else 0.62
+        saturation = 0.75
+        r, g, b = colorsys.hls_to_rgb(hue, lightness, saturation)
+        hex_val = f"#{int(r * 255):02X}{int(g * 255):02X}{int(b * 255):02X}"
+        colours.append((hex_val, f"Colour {i + 1}"))
+    return colours
+
+
+COLOUR_PALETTE = _generate_palette(36)
+
+
+def next_colour(existing_count: int) -> str:
+    """Return the next colour from the palette, cycling if needed."""
+    return COLOUR_PALETTE[existing_count % len(COLOUR_PALETTE)][0]
 
 _UNSET = object()
 
