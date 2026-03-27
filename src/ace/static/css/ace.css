@@ -76,3 +76,142 @@ body {
 #toast .toast-msg.fade-out {
   opacity: 0;
 }
+
+/* Toast variants */
+.ace-toast--error {
+  border-color: var(--ace-danger);
+  color: var(--ace-danger);
+}
+
+.ace-toast--ok {
+  border-color: var(--ace-success);
+  color: var(--ace-success);
+}
+
+/* Buttons */
+.ace-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  border: 1px solid var(--ace-border);
+  background: var(--ace-bg);
+  color: var(--ace-text);
+  cursor: pointer;
+  transition: background var(--ace-transition), border-color var(--ace-transition);
+}
+
+.ace-btn:hover {
+  background: var(--ace-bg-muted);
+}
+
+.ace-btn--primary {
+  background: var(--ace-primary);
+  color: #fff;
+  border-color: var(--ace-primary);
+}
+
+.ace-btn--primary:hover {
+  background: var(--ace-primary-light);
+  border-color: var(--ace-primary-light);
+}
+
+.ace-btn--danger {
+  background: var(--ace-danger);
+  color: #fff;
+  border-color: var(--ace-danger);
+}
+
+.ace-btn--danger:hover {
+  background: #b71c1c;
+  border-color: #b71c1c;
+}
+
+/* Inputs */
+.ace-input {
+  display: block;
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  border: 1px solid var(--ace-border);
+  background: var(--ace-bg);
+  color: var(--ace-text);
+  transition: border-color var(--ace-transition);
+}
+
+.ace-input:focus {
+  border-color: var(--ace-focus);
+  outline: none;
+}
+
+.ace-input[readonly] {
+  background: var(--ace-bg-muted);
+  color: var(--ace-text-muted);
+}
+
+/* Labels */
+.ace-label {
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ace-text-muted);
+  margin-bottom: 0.25rem;
+}
+
+/* Landing page layout */
+.ace-landing {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 2rem;
+}
+
+.ace-landing-card {
+  width: 100%;
+  max-width: 400px;
+  padding: 2rem;
+  border: 1px solid var(--ace-border);
+  background: var(--ace-bg);
+}
+
+/* Recent file items */
+.ace-recent-item {
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: background var(--ace-transition);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ace-recent-item:hover {
+  background: var(--ace-bg-muted);
+}
+
+/* Dialog styling */
+.ace-dialog {
+  border: 1px solid var(--ace-border);
+  padding: 1.5rem;
+  max-width: 400px;
+  background: var(--ace-bg);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.12);
+}
+
+.ace-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+/* Header bar */
+.ace-header {
+  display: flex;
+  align-items: center;
+  padding: 0.5rem 1rem;
+  border-bottom: 1px solid var(--ace-border);
+  background: var(--ace-bg);
+}
