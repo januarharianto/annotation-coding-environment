@@ -8,12 +8,15 @@ version = "0.1.2"
 description = "Lightweight qualitative coding tool with inter-coder reliability"
 requires-python = ">=3.11"
 dependencies = [
-    "nicegui>=3.0",
-    "pandas>=2.0",
+    "fastapi>=0.115",
+    "uvicorn>=0.34",
+    "jinja2>=3.1",
+    "jinja2-fragments>=1.5",
+    "python-multipart>=0.0.18",
+    "itsdangerous>=2.2",
     "openpyxl>=3.1",
     "irrCAC>=0.4",
     "krippendorff>=0.7",
-    "scikit-learn>=1.0",
 ]
 
 [project.scripts]
