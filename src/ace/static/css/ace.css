@@ -509,3 +509,14 @@ body {
 .ace-role-btn:hover:not(.active) { border-color: var(--ace-text-muted); color: var(--ace-text); }
 .ace-role-btn.active[data-role="id"] { background: var(--ace-text); color: var(--ace-bg); border-color: var(--ace-text); }
 .ace-role-btn.active[data-role="text"] { background: #546e7a; color: #fff; border-color: #546e7a; }
+
+/* Agreement metric cards */
+.ace-metric-card {
+  border: 1px solid var(--ace-border);
+  border-radius: 4px;
+  padding: 12px 16px;
+  min-width: 100px;
+  text-align: center;
+}
+.ace-metric-value { font-size: 20px; font-weight: 600; color: var(--ace-text); }
+.ace-metric-label { font-size: 12px; color: var(--ace-text-muted); margin-top: 2px; }

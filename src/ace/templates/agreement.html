@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+
+{% block title %}Agreement — ACE{% endblock %}
+
+{% block content %}
+<a href="/" class="ace-back">&larr; Home</a>
+<main class="ace-wizard">
+
+  <h1 class="ace-wizard-q" style="font-size:20px;margin-bottom:4px">Inter-Coder Agreement</h1>
+  <p class="ace-wizard-hint" style="margin-bottom:1.5rem">Compare annotations across .ace files</p>
+
+  <!-- File list area -->
+  <div id="agreement-files"></div>
+
+  <!-- Action buttons -->
+  <div style="display:flex;gap:8px;margin-top:1rem;align-items:center">
+    <button class="ace-btn ace-btn--primary" onclick="acePickAgreementFiles()">Add .ace files</button>
+    <button class="ace-btn ace-btn--primary" id="agreement-compute-btn"
+            style="display:none"
+            hx-post="/api/agreement/compute"
+            hx-target="#agreement-results"
+            hx-swap="innerHTML"
+            hx-indicator="#agreement-spinner">Compute agreement</button>
+    <button class="ace-btn" id="agreement-reset-btn"
+            style="display:none"
+            hx-post="/api/agreement/reset"
+            hx-target="#agreement-files"
+            hx-swap="innerHTML"
+            hx-on::after-request="aceResetFileCount()">Reset</button>
+    <span id="agreement-spinner" class="htmx-indicator" style="font-size:13px;color:var(--ace-text-muted)">Computing...</span>
+  </div>
+
+  <!-- Results area -->
+  <div id="agreement-results" style="margin-top:1.5rem"></div>
+
+</main>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+  "use strict";
+
+  var fileCount = 0;
+
+  function updateButtons() {
+    var computeBtn = document.getElementById("agreement-compute-btn");
+    var resetBtn = document.getElementById("agreement-reset-btn");
+    if (computeBtn) computeBtn.style.display = fileCount >= 2 ? "" : "none";
+    if (resetBtn) resetBtn.style.display = fileCount >= 1 ? "" : "none";
+  }
+
+  window.acePickAgreementFiles = function() {
+    fetch("/api/native/pick-files", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: "accept=.ace"
+    })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (!data.paths || !data.paths.length) return;
+        data.paths.forEach(function(path) {
+          htmx.ajax("POST", "/api/agreement/add-file", {
+            values: { path: path },
+            target: "#agreement-files",
+            swap: "beforeend"
+          }).then(function() {
+            fileCount++;
+            updateButtons();
+          });
+        });
+      });
+  };
+
+  window.aceResetFileCount = function() {
+    fileCount = 0;
+    document.getElementById("agreement-results").innerHTML = "";
+    updateButtons();
+  };
+
+  // Also handle direct adds (e.g. from tests) by counting children
+  document.addEventListener("htmx:afterSwap", function(evt) {
+    if (evt.detail.target && evt.detail.target.id === "agreement-files") {
+      fileCount = document.querySelectorAll("#agreement-files .ace-agreement-file").length;
+      updateButtons();
+    }
+  });
+})();
+</script>
+{% endblock %}
