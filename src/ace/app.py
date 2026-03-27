@@ -54,7 +54,7 @@ def _htmx_redirect_handler(request: Request, exc: HtmxRedirect) -> Response:
 # CSRF middleware
 # ---------------------------------------------------------------------------
 
-_ALLOWED_ORIGINS = frozenset()
+_ALLOWED_ORIGINS: frozenset[str] | None = None
 
 
 def _build_allowed_origins(port: int) -> frozenset[str]:
@@ -81,7 +81,10 @@ class _CSRFMiddleware:
         request = Request(scope)
         if request.method not in self._SAFE_METHODS:
             origin = request.headers.get("origin")
-            if origin is not None and origin not in _ALLOWED_ORIGINS:
+            allowed = _ALLOWED_ORIGINS or _build_allowed_origins(
+                int(scope.get("server", ("", 8080))[1])
+            )
+            if origin is not None and origin not in allowed:
                 response = Response("CSRF origin rejected", status_code=403)
                 await response(scope, receive, send)
                 return
