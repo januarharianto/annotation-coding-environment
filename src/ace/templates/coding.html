@@ -1,0 +1,239 @@
+{% extends "base.html" %}
+
+{% block title %}Code — {{ project_name }} — ACE{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="/static/css/coding.css">
+<style id="code-colours">
+{% for code in codes %}
+.ace-code-{{ code["id"] }} {
+  background-color: rgba({{ code["colour"][1:3] | int(base=16) }}, {{ code["colour"][3:5] | int(base=16) }}, {{ code["colour"][5:7] | int(base=16) }}, var(--ace-annotation-alpha));
+}
+{% endfor %}
+</style>
+{% endblock %}
+
+{% block content %}
+<div id="coding-workspace" hx-ext="morph" hx-sync="this:queue all">
+
+  {# Hidden state inputs #}
+  <input type="hidden" id="current-index" name="current_index" value="{{ current_index }}">
+
+  {# Hidden HTMX triggers #}
+  <div id="htmx-triggers" class="ace-hidden">
+    <button id="trigger-undo"
+            hx-post="/api/code/undo"
+            hx-target="#coding-workspace"
+            hx-swap="morph:innerHTML">Undo</button>
+    <button id="trigger-redo"
+            hx-post="/api/code/redo"
+            hx-target="#coding-workspace"
+            hx-swap="morph:innerHTML">Redo</button>
+    <button id="trigger-flag"
+            hx-post="/api/code/flag"
+            hx-target="#coding-workspace"
+            hx-swap="morph:innerHTML">Flag</button>
+    <button id="trigger-navigate"
+            hx-post="/api/code/navigate"
+            hx-target="#coding-workspace"
+            hx-swap="morph:innerHTML">Navigate</button>
+  </div>
+
+  {# Page header #}
+  <div class="ace-coding-header">
+    <a href="/" class="ace-coding-header-back">&larr; Home</a>
+    <span class="ace-coding-header-title">{{ project_name }}</span>
+    <div class="ace-coding-header-right">
+      <span class="ace-completion">{{ complete_count }}/{{ total_sources }} ({{ complete_pct }}%)</span>
+      <a href="/api/export">Export</a>
+      <span>{{ coder_name }}</span>
+    </div>
+  </div>
+
+  {# Source header #}
+  {% block source_header %}
+  <div id="source-header" class="ace-source-header">
+    {% if current_source %}
+    <span class="ace-status-badge ace-status-badge--{{ current_status }}"></span>
+    <span class="ace-source-id">{{ current_source["display_id"] }}</span>
+    <span style="color: var(--ace-text-muted); font-size: 12px;">
+      {{ current_index + 1 }} of {{ total_sources }}
+    </span>
+    <div class="ace-source-header-actions">
+      <button class="ace-btn-icon" title="Flag source"
+              hx-post="/api/code/flag"
+              hx-vals='{"source_index": "{{ current_index }}"}'
+              hx-target="#coding-workspace"
+              hx-swap="morph:innerHTML">&#9873;</button>
+    </div>
+    {% endif %}
+  </div>
+  {% endblock %}
+
+  {# Main two-pane layout #}
+  <div class="ace-split">
+
+    {# Left: code sidebar #}
+    {% block code_sidebar %}
+    <div id="code-sidebar" class="ace-sidebar">
+      <div class="ace-sidebar-header">
+        <input type="text" class="ace-sidebar-filter" placeholder="Filter or create code…"
+               id="code-filter-input" autocomplete="off">
+      </div>
+      <div class="ace-code-list" id="code-list">
+        {% for code in codes %}
+        <div class="ace-code-row" data-code-id="{{ code['id'] }}"
+             hx-post="/api/code/apply"
+             hx-vals='{"code_id": "{{ code["id"] }}"}'
+             hx-target="#coding-workspace"
+             hx-swap="morph:innerHTML">
+          <span class="ace-code-dot" style="background: {{ code['colour'] }};"></span>
+          <span class="ace-code-name">{{ code["name"] }}</span>
+          <span class="ace-code-count">{{ code_counts.get(code["id"], 0) or "" }}</span>
+          {% if loop.index <= 9 %}
+          <span class="ace-keycap">{{ loop.index }}</span>
+          {% endif %}
+          <button class="ace-code-menu-btn" title="Code options"
+                  onclick="event.stopPropagation();">&hellip;</button>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endblock %}
+
+    {# Resize handle #}
+    <div class="ace-resize-handle" id="resize-handle"></div>
+
+    {# Right: main content #}
+    <div class="ace-main">
+
+      {# Text panel #}
+      {% block text_panel %}
+      <div id="text-panel" class="ace-text-content">
+        {% if annotated_html %}
+        {{ annotated_html | safe }}
+        {% elif source_text %}
+        {{ source_text }}
+        {% else %}
+        <p style="color: var(--ace-text-muted);">No source content.</p>
+        {% endif %}
+      </div>
+      {% endblock %}
+
+      {# Annotation list #}
+      {% block annotation_list %}
+      <div id="annotation-list" class="ace-annotation-list">
+        {% for ann in annotations %}
+        <div class="ace-annotation-row" data-annotation-id="{{ ann['id'] }}">
+          <span class="ace-code-dot" style="background: {{ codes_by_id.get(ann['code_id'], {}).get('colour', '#999') if codes_by_id.get(ann['code_id']) else '#999' }};"></span>
+          <span class="ace-annotation-code">{{ codes_by_id.get(ann['code_id'], {}).get('name', 'Unknown') if codes_by_id.get(ann['code_id']) else 'Unknown' }}</span>
+          <span class="ace-annotation-text">"{{ ann['selected_text'][:50] }}{{ '…' if ann['selected_text']|length > 50 else '' }}"</span>
+          <button class="ace-btn-icon ace-hover-action" title="Delete annotation"
+                  hx-post="/api/code/delete-annotation"
+                  hx-vals='{"annotation_id": "{{ ann["id"] }}"}'
+                  hx-target="#coding-workspace"
+                  hx-swap="morph:innerHTML">&times;</button>
+        </div>
+        {% endfor %}
+      </div>
+      {% endblock %}
+
+    </div>
+  </div>
+
+  {# Bottom navigation bar #}
+  {% block bottom_bar %}
+  <div id="bottom-bar" class="ace-bottom-bar">
+    <button class="ace-nav-btn" id="btn-prev"
+            {% if current_index <= 0 %}disabled{% endif %}
+            onclick="aceNavigate({{ current_index - 1 }})">&larr; Prev</button>
+    <span class="ace-nav-counter">{{ current_index + 1 }} / {{ total_sources }}</span>
+    <button class="ace-nav-btn" id="btn-next"
+            {% if current_index >= total_sources - 1 %}disabled{% endif %}
+            onclick="aceNavigate({{ current_index + 1 }})">&rarr; Next</button>
+  </div>
+  {% endblock %}
+
+  {# Source grid (hidden by default) #}
+  {% block source_grid %}
+  <div id="source-grid" class="ace-source-grid ace-hidden">
+    {% for assignment in assignments %}
+    <div class="ace-grid-cell{% if loop.index0 == current_index %} ace-grid-cell--active{% endif %}{% if annotation_counts.get(assignment['source_id'], 0) > 0 %} ace-grid-cell--annotated{% endif %}{% if assignment['status'] == 'complete' %} ace-grid-cell--complete{% endif %}{% if assignment['status'] == 'flagged' %} ace-grid-cell--flagged{% endif %}"
+         title="{{ assignment['display_id'] }}"
+         onclick="aceNavigate({{ loop.index0 }})">
+    </div>
+    {% endfor %}
+  </div>
+  {% endblock %}
+
+  {# Modal container #}
+  <div id="modal-container"></div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/idiomorph-ext.min.js"></script>
+<script>
+(function() {
+  "use strict";
+
+  window.__aceCurrentIndex = {{ current_index }};
+  window.__aceLastSelection = null;
+  window.__aceLastAppliedCodeId = null;
+  window.__aceTotalSources = {{ total_sources }};
+
+  window.aceNavigate = function(index) {
+    if (index < 0 || index >= window.__aceTotalSources) return;
+    window.__aceCurrentIndex = index;
+    window.location.href = "/code?index=" + index;
+  };
+
+  // Resize handle drag
+  var handle = document.getElementById("resize-handle");
+  if (handle) {
+    var split = handle.parentElement;
+    var dragging = false;
+
+    handle.addEventListener("mousedown", function(e) {
+      e.preventDefault();
+      dragging = true;
+      document.body.style.cursor = "col-resize";
+      document.body.style.userSelect = "none";
+    });
+
+    document.addEventListener("mousemove", function(e) {
+      if (!dragging) return;
+      var rect = split.getBoundingClientRect();
+      var x = e.clientX - rect.left;
+      var min = 180;
+      var max = rect.width * 0.5;
+      x = Math.max(min, Math.min(max, x));
+      split.style.gridTemplateColumns = x + "px 1px 1fr";
+    });
+
+    document.addEventListener("mouseup", function() {
+      if (dragging) {
+        dragging = false;
+        document.body.style.cursor = "";
+        document.body.style.userSelect = "";
+      }
+    });
+  }
+
+  // Code filter
+  var filterInput = document.getElementById("code-filter-input");
+  if (filterInput) {
+    filterInput.addEventListener("input", function() {
+      var query = this.value.toLowerCase();
+      var rows = document.querySelectorAll(".ace-code-row");
+      rows.forEach(function(row) {
+        var name = row.querySelector(".ace-code-name");
+        if (!name) return;
+        row.style.display = name.textContent.toLowerCase().indexOf(query) >= 0 ? "" : "none";
+      });
+    });
+  }
+})();
+</script>
+{% endblock %}
