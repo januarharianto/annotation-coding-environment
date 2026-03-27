@@ -215,3 +215,30 @@ body {
   border-bottom: 1px solid var(--ace-border);
   background: var(--ace-bg);
 }
+
+/* Data tables */
+.ace-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.ace-table th {
+  text-align: left;
+  text-transform: uppercase;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  color: var(--ace-text-muted);
+  padding: 0.5rem 0.75rem;
+  border-bottom: 2px solid var(--ace-border);
+}
+
+.ace-table td {
+  padding: 0.4rem 0.75rem;
+  border-bottom: 1px solid var(--ace-border-light);
+}
+
+.ace-table tr:hover td {
+  background: var(--ace-bg-muted);
+}
