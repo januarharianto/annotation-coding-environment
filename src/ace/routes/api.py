@@ -506,7 +506,10 @@ def _render_coding_oob(request: Request, conn, coder_id: str, current_index: int
     text_html = render_block(templates.env, "coding.html", "text_panel", ctx)
     ann_html = render_block(templates.env, "coding.html", "annotation_list", ctx)
 
-    return text_html + f'<div id="annotation-list" hx-swap-oob="innerHTML">{ann_html}</div>'
+    # Block renders its own <div id="annotation-list"> wrapper.
+    # Inject hx-swap-oob into it for OOB replacement.
+    ann_oob = ann_html.replace('id="annotation-list"', 'id="annotation-list" hx-swap-oob="outerHTML"', 1)
+    return text_html + ann_oob
 
 
 def _render_full_coding_oob(request: Request, conn, coder_id: str, target_index: int) -> str:
@@ -531,7 +534,13 @@ def _render_full_coding_oob(request: Request, conn, coder_id: str, target_index:
     parts = [primary]
     for block_name, element_id in oob_blocks:
         block_html = render_block(templates.env, "coding.html", block_name, ctx)
-        parts.append(f'<div id="{element_id}" hx-swap-oob="innerHTML">{block_html}</div>')
+        # Block renders its own wrapper div with the ID — inject hx-swap-oob into it
+        block_oob = block_html.replace(
+            f'id="{element_id}"',
+            f'id="{element_id}" hx-swap-oob="outerHTML"',
+            1,
+        )
+        parts.append(block_oob)
 
     return "".join(parts)
 
@@ -842,10 +851,12 @@ def _render_sidebar_and_text(request: Request, conn, coder_id: str, current_inde
         )
     colours_css = "\n".join(colour_css_parts)
 
+    # Inject OOB into text panel's own wrapper
+    text_oob = text_html.replace('id="text-panel"', 'id="text-panel" hx-swap-oob="outerHTML"', 1)
     return (
         sidebar_html
-        + f'<div id="text-panel" hx-swap-oob="innerHTML">{text_html}</div>'
-        + f'<style id="code-colours" hx-swap-oob="innerHTML">{colours_css}</style>'
+        + text_oob
+        + f'<style id="code-colours" hx-swap-oob="outerHTML">{colours_css}</style>'
     )
 
 
