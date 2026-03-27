@@ -268,58 +268,90 @@ async def import_upload(request: Request, file: UploadFile = File(...)):
                 vals.append(s)
         return html.escape(", ".join(vals)) + " \u2026"
 
-    # Glimpse rows
+    # Glimpse rows with inline role toggles
     glimpse_rows = ""
     for col in columns:
         col_type = _infer_type(col)
         sample = _sample_values(col)
         esc_col = html.escape(str(col))
         glimpse_rows += (
-            f'<div class="ace-glimpse-row">'
+            f'<div class="ace-glimpse-row" data-col="{esc_col}" data-role="" tabindex="0">'
             f'<span class="ace-glimpse-name">{esc_col}</span>'
             f'<span class="ace-glimpse-type">{col_type}</span>'
             f'<span class="ace-glimpse-vals">{sample}</span>'
+            f'<span class="ace-glimpse-roles">'
+            f'<button type="button" class="ace-role-btn" data-role="id">ID</button>'
+            f'<button type="button" class="ace-role-btn" data-role="text">Text</button>'
+            f'</span>'
             f'</div>'
         )
 
-    # Column selection: ID dropdown + text column checkboxes
-    id_options = "".join(
-        f'<option value="{html.escape(str(c))}">{html.escape(str(c))}</option>'
-        for c in columns
-    )
-    text_checks = "".join(
-        f'<label class="ace-glimpse-check">'
-        f'<input type="checkbox" name="text_columns" value="{html.escape(str(c))}"> '
-        f'{html.escape(str(c))}'
-        f'</label>'
-        for c in columns
-    )
-
     fragment = f"""
-    <div class="ace-glimpse">
-      <div class="ace-glimpse-header">
-        <span>{filename}</span>
-        <span>{n_rows:,} rows &times; {n_cols}</span>
-      </div>
-      {glimpse_rows}
-    </div>
-
-    <form hx-post="/api/import/commit" hx-target="#import-preview" hx-swap="innerHTML"
-          style="margin-top:16px">
-      <div style="display:flex;gap:24px;margin-bottom:12px">
-        <div>
-          <label class="ace-label" style="margin-bottom:4px">ID column</label>
-          <select name="id_column" class="ace-input" style="width:auto;font-size:13px">
-            {id_options}
-          </select>
+    <form id="import-form" hx-post="/api/import/commit" hx-target="#import-preview" hx-swap="innerHTML">
+      <div class="ace-glimpse">
+        <div class="ace-glimpse-header">
+          <span>{filename}</span>
+          <span>{n_rows:,} rows &times; {n_cols}</span>
         </div>
-        <div>
-          <label class="ace-label" style="margin-bottom:4px">Text column(s)</label>
-          <div style="display:flex;flex-wrap:wrap;gap:4px 16px">{text_checks}</div>
-        </div>
+        <div class="ace-glimpse-hint">Click to assign: one ID, one or more Text</div>
+        {glimpse_rows}
       </div>
-      <button type="submit" class="ace-btn ace-btn--primary">Import</button>
+      <input type="hidden" name="id_column" id="import-id-col" value="">
+      <input type="hidden" name="text_columns" id="import-text-cols" value="">
+      <button type="submit" class="ace-btn ace-btn--primary" id="import-submit"
+              disabled style="margin-top:12px">Import</button>
     </form>
+
+    <script>
+    (function() {{
+      var form = document.getElementById('import-form');
+      if (!form) return;
+
+      form.addEventListener('click', function(e) {{
+        var btn = e.target.closest('.ace-role-btn');
+        if (!btn) return;
+        var row = btn.closest('.ace-glimpse-row');
+        var role = btn.dataset.role;
+        var wasActive = btn.classList.contains('active');
+
+        if (role === 'id') {{
+          // Radio: clear all other IDs
+          form.querySelectorAll('.ace-role-btn[data-role="id"].active').forEach(function(b) {{
+            b.classList.remove('active');
+            b.closest('.ace-glimpse-row').dataset.role = b.closest('.ace-glimpse-row').querySelector('.ace-role-btn[data-role="text"].active') ? 'text' : '';
+          }});
+          // Clear text on this row if setting ID
+          var textBtn = row.querySelector('.ace-role-btn[data-role="text"]');
+          if (textBtn) {{ textBtn.classList.remove('active'); }}
+        }} else {{
+          // Clear ID on this row if setting text
+          var idBtn = row.querySelector('.ace-role-btn[data-role="id"]');
+          if (idBtn) {{ idBtn.classList.remove('active'); }}
+        }}
+
+        if (wasActive) {{
+          btn.classList.remove('active');
+          row.dataset.role = '';
+        }} else {{
+          btn.classList.add('active');
+          row.dataset.role = role;
+        }}
+
+        // Update hidden inputs
+        var idRow = form.querySelector('.ace-role-btn[data-role="id"].active');
+        document.getElementById('import-id-col').value = idRow ? idRow.closest('.ace-glimpse-row').dataset.col : '';
+
+        var textCols = [];
+        form.querySelectorAll('.ace-role-btn[data-role="text"].active').forEach(function(b) {{
+          textCols.push(b.closest('.ace-glimpse-row').dataset.col);
+        }});
+        document.getElementById('import-text-cols').value = textCols.join(',');
+
+        // Enable/disable submit
+        document.getElementById('import-submit').disabled = !(idRow && textCols.length);
+      }});
+    }})();
+    </script>
     """
     return HTMLResponse(fragment)
 
@@ -328,7 +360,7 @@ async def import_upload(request: Request, file: UploadFile = File(...)):
 async def import_commit(
     request: Request,
     id_column: str = Form(...),
-    text_columns: list[str] = Form(...),
+    text_columns: str = Form(...),
 ):
     """Commit the uploaded file: import selected columns as sources."""
     from ace.app import get_db
@@ -341,7 +373,8 @@ async def import_commit(
     db_gen = get_db(request)
     conn = next(db_gen)
     try:
-        count = import_csv(conn, tmp_path, id_column, text_columns)
+        text_col_list = [c.strip() for c in text_columns.split(",") if c.strip()]
+        count = import_csv(conn, tmp_path, id_column, text_col_list)
     except Exception as e:
         db_gen.close()
         return _oob_toast(f"Import failed: {e}")
