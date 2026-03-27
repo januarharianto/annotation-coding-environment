@@ -7,7 +7,7 @@ from pathlib import Path
 
 from ace.db.migrations import check_and_migrate
 from ace.db.schema import ACE_APPLICATION_ID, create_schema
-from ace.models.coder import add_coder
+from ace.models.project import add_coder
 
 
 def create_project(

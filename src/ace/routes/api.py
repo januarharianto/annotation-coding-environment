@@ -124,7 +124,7 @@ async def project_create(
 ):
     """Create a new .ace project file."""
     from ace.db.connection import create_project
-    from ace.models.coder import list_coders
+    from ace.models.project import list_coders
 
     file_path = Path(path)
 
@@ -175,7 +175,7 @@ async def project_create(
 async def project_open(request: Request, path: str = Form(...)):
     """Open an existing .ace project file."""
     from ace.db.connection import open_project
-    from ace.models.coder import list_coders
+    from ace.models.project import list_coders
     from ace.models.source import list_sources
 
     try:
