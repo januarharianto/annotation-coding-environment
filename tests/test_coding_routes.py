@@ -318,3 +318,128 @@ def test_redo_after_undo(client_with_codes):
     conn.close()
     assert len(active) == 1
     assert active[0]["selected_text"] == "First"
+
+
+# ---------------------------------------------------------------------------
+# Navigation + flag routes
+# ---------------------------------------------------------------------------
+
+
+def test_navigate_next(client_with_sources):
+    """POST /api/code/navigate moves to target source and returns all zones."""
+    client, _ = client_with_sources
+    # Visit /code first so assignments are auto-created
+    client.get("/code")
+    resp = client.post(
+        "/api/code/navigate",
+        data={"current_index": "0", "target_index": "1"},
+    )
+    assert resp.status_code == 200
+    # Should contain the second source's content
+    assert "Second document with different text." in resp.text
+    # Should contain all OOB swap zones
+    assert "source-header" in resp.text
+    assert "annotation-list" in resp.text
+    assert "bottom-bar" in resp.text
+    assert "source-grid" in resp.text
+    assert "code-sidebar" in resp.text
+    # Should have HX-Trigger header with ace-navigate event
+    assert "HX-Trigger" in resp.headers
+    assert "ace-navigate" in resp.headers["HX-Trigger"]
+
+
+def test_navigate_auto_completes_in_progress(client_with_codes):
+    """Navigate away from an in_progress source auto-completes it."""
+    client, coder_id, code_a, _, db_path = client_with_codes
+
+    # Create an annotation on source 0 to make it in_progress
+    client.post(
+        "/api/code/apply",
+        data={
+            "code_id": code_a,
+            "current_index": 0,
+            "start_offset": 0,
+            "end_offset": 5,
+            "selected_text": "First",
+        },
+    )
+
+    # Verify source 0 is now in_progress
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    row = conn.execute(
+        "SELECT status FROM assignment WHERE coder_id = ? ORDER BY rowid LIMIT 1",
+        (coder_id,),
+    ).fetchone()
+    assert row["status"] == "in_progress"
+    conn.close()
+
+    # Navigate from 0 to 1
+    client.post(
+        "/api/code/navigate",
+        data={"current_index": "0", "target_index": "1"},
+    )
+
+    # Source 0 should now be complete
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    rows = conn.execute(
+        "SELECT status FROM assignment WHERE coder_id = ? "
+        "ORDER BY rowid",
+        (coder_id,),
+    ).fetchall()
+    conn.close()
+    assert rows[0]["status"] == "complete"
+    # Source 1 should be in_progress (auto-started)
+    assert rows[1]["status"] == "in_progress"
+
+
+def test_flag_source(client_with_sources):
+    """POST /api/code/flag toggles the flagged status."""
+    client, _ = client_with_sources
+    # Visit /code first so assignments are auto-created
+    client.get("/code")
+
+    # Flag source 0
+    resp = client.post(
+        "/api/code/flag",
+        data={"source_index": "0"},
+    )
+    assert resp.status_code == 200
+    assert "flagged" in resp.text.lower()
+
+    # Flag again to unflag
+    resp = client.post(
+        "/api/code/flag",
+        data={"source_index": "0"},
+    )
+    assert resp.status_code == 200
+
+
+def test_flag_source_toggle_roundtrip(client_with_codes):
+    """Flagging twice returns to in_progress."""
+    client, coder_id, _, _, db_path = client_with_codes
+
+    # Flag
+    client.post("/api/code/flag", data={"source_index": "0"})
+
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    row = conn.execute(
+        "SELECT status FROM assignment WHERE coder_id = ? ORDER BY rowid LIMIT 1",
+        (coder_id,),
+    ).fetchone()
+    assert row["status"] == "flagged"
+    conn.close()
+
+    # Unflag
+    client.post("/api/code/flag", data={"source_index": "0"})
+
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    row = conn.execute(
+        "SELECT status FROM assignment WHERE coder_id = ? ORDER BY rowid LIMIT 1",
+        (coder_id,),
+    ).fetchone()
+    assert row["status"] == "in_progress"
+    conn.close()
