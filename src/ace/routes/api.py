@@ -10,7 +10,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from fastapi import APIRouter, Form, Request, UploadFile, File
+from fastapi import APIRouter, Form, Query, Request, UploadFile, File
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 
 router = APIRouter(prefix="/api")
@@ -423,3 +423,228 @@ async def import_folder(
         f'<p style="color:var(--ace-text-muted);margin:0 0 1.5rem">imported successfully</p>'
         f'<a href="/code" class="ace-wizard-action">Start coding &rarr;</a>'
     )
+
+
+# ---------------------------------------------------------------------------
+# Coding annotation helpers
+# ---------------------------------------------------------------------------
+
+
+def _get_undo_manager(request: Request):
+    """Get or create the UndoManager for the current project."""
+    from ace.services.undo import UndoManager
+
+    project_path = request.app.state.project_path
+    managers = request.app.state.undo_managers
+    if project_path not in managers:
+        managers[project_path] = UndoManager()
+    return managers[project_path]
+
+
+def _open_project_db(request: Request) -> sqlite3.Connection:
+    """Open a direct SQLite connection to the current project."""
+    from ace.db.schema import ACE_APPLICATION_ID
+
+    conn = sqlite3.connect(request.app.state.project_path)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys = ON")
+    conn.execute("PRAGMA journal_mode = WAL")
+    return conn
+
+
+def _render_coding_oob(request: Request, conn, coder_id: str, current_index: int) -> str:
+    """Render the full coding workspace via the coding.html template."""
+    from ace.routes.pages import _coding_context
+    from jinja2_fragments import render_block
+
+    templates = request.app.state.templates
+    ctx = _coding_context(conn, coder_id, current_index)
+    ctx["request"] = request
+
+    text_html = render_block(templates.env, "coding.html", "text_panel", ctx)
+    ann_html = render_block(templates.env, "coding.html", "annotation_list", ctx)
+
+    return text_html + f'<div id="annotation-list" hx-swap-oob="innerHTML">{ann_html}</div>'
+
+
+def _resolve_source_id(conn, coder_id: str, current_index: int) -> str | None:
+    """Get the source_id for the given assignment index."""
+    from ace.models.assignment import get_assignments_for_coder
+
+    assignments = get_assignments_for_coder(conn, coder_id)
+    if not assignments or current_index >= len(assignments):
+        return None
+    return assignments[current_index]["source_id"]
+
+
+# ---------------------------------------------------------------------------
+# Coding annotation routes
+# ---------------------------------------------------------------------------
+
+
+@router.post("/code/apply")
+async def annotate(
+    request: Request,
+    code_id: str = Form(...),
+    current_index: int = Form(default=0),
+    start_offset: int = Form(default=-1),
+    end_offset: int = Form(default=-1),
+    selected_text: str = Form(default=""),
+):
+    """Create an annotation and return updated text panel + annotation list."""
+    from ace.models.annotation import add_annotation
+    from ace.models.assignment import update_assignment_status
+
+    coder_id = getattr(request.app.state, "coder_id", None)
+    if coder_id is None:
+        return HTMLResponse("", status_code=400)
+
+    # If no selection provided, ignore
+    if start_offset < 0 or end_offset < 0 or not selected_text:
+        return HTMLResponse("", status_code=400)
+
+    conn = _open_project_db(request)
+    try:
+        source_id = _resolve_source_id(conn, coder_id, current_index)
+        if source_id is None:
+            return HTMLResponse("", status_code=400)
+
+        ann_id = add_annotation(
+            conn, source_id, coder_id, code_id,
+            start_offset, end_offset, selected_text,
+        )
+
+        # Record for undo
+        undo = _get_undo_manager(request)
+        undo.record_add(source_id, ann_id)
+
+        # Auto-transition pending -> in_progress
+        assignment = conn.execute(
+            "SELECT status FROM assignment WHERE source_id = ? AND coder_id = ?",
+            (source_id, coder_id),
+        ).fetchone()
+        if assignment and assignment["status"] == "pending":
+            update_assignment_status(conn, source_id, coder_id, "in_progress")
+
+        content = _render_coding_oob(request, conn, coder_id, current_index)
+        return HTMLResponse(content)
+    finally:
+        conn.close()
+
+
+@router.post("/code/delete-annotation")
+async def delete_annotation_route(
+    request: Request,
+    annotation_id: str = Form(...),
+    current_index: int = Form(default=0),
+):
+    """Soft-delete an annotation and return updated HTML."""
+    from ace.models.annotation import delete_annotation
+
+    coder_id = getattr(request.app.state, "coder_id", None)
+    if coder_id is None:
+        return HTMLResponse("", status_code=400)
+
+    conn = _open_project_db(request)
+    try:
+        # Look up source_id from the annotation before deleting
+        ann_row = conn.execute(
+            "SELECT source_id FROM annotation WHERE id = ?",
+            (annotation_id,),
+        ).fetchone()
+        if ann_row is None:
+            return HTMLResponse("", status_code=404)
+
+        source_id = ann_row["source_id"]
+        delete_annotation(conn, annotation_id)
+
+        # Record for undo
+        undo = _get_undo_manager(request)
+        undo.record_delete(source_id, annotation_id)
+
+        content = _render_coding_oob(request, conn, coder_id, current_index)
+        return HTMLResponse(content)
+    finally:
+        conn.close()
+
+
+@router.post("/code/undo")
+async def undo_route(
+    request: Request,
+    current_index: int = Form(default=0),
+):
+    """Undo the last annotation action for the current source."""
+    from ace.models.annotation import delete_annotation, undelete_annotation
+
+    coder_id = getattr(request.app.state, "coder_id", None)
+    if coder_id is None:
+        return HTMLResponse("", status_code=400)
+
+    conn = _open_project_db(request)
+    try:
+        source_id = _resolve_source_id(conn, coder_id, current_index)
+        if source_id is None:
+            return HTMLResponse("", status_code=400)
+
+        undo_mgr = _get_undo_manager(request)
+        action = undo_mgr.undo(source_id)
+        if action is None:
+            return HTMLResponse("", status_code=204)
+
+        if action["type"] == "undo_add":
+            delete_annotation(conn, action["annotation_id"])
+            msg = "Annotation removed"
+        elif action["type"] == "undo_delete":
+            undelete_annotation(conn, action["annotation_id"])
+            msg = "Annotation restored"
+        else:
+            msg = "Undo"
+
+        content = _render_coding_oob(request, conn, coder_id, current_index)
+        return HTMLResponse(
+            content,
+            headers={"HX-Trigger": f'{{"ace-toast": "{msg}"}}'},
+        )
+    finally:
+        conn.close()
+
+
+@router.post("/code/redo")
+async def redo_route(
+    request: Request,
+    current_index: int = Form(default=0),
+):
+    """Redo the last undone annotation action for the current source."""
+    from ace.models.annotation import delete_annotation, undelete_annotation
+
+    coder_id = getattr(request.app.state, "coder_id", None)
+    if coder_id is None:
+        return HTMLResponse("", status_code=400)
+
+    conn = _open_project_db(request)
+    try:
+        source_id = _resolve_source_id(conn, coder_id, current_index)
+        if source_id is None:
+            return HTMLResponse("", status_code=400)
+
+        undo_mgr = _get_undo_manager(request)
+        action = undo_mgr.redo(source_id)
+        if action is None:
+            return HTMLResponse("", status_code=204)
+
+        if action["type"] == "redo_add":
+            undelete_annotation(conn, action["annotation_id"])
+            msg = "Annotation re-applied"
+        elif action["type"] == "redo_delete":
+            delete_annotation(conn, action["annotation_id"])
+            msg = "Annotation re-removed"
+        else:
+            msg = "Redo"
+
+        content = _render_coding_oob(request, conn, coder_id, current_index)
+        return HTMLResponse(
+            content,
+            headers={"HX-Trigger": f'{{"ace-toast": "{msg}"}}'},
+        )
+    finally:
+        conn.close()
