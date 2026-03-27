@@ -428,6 +428,46 @@ async def import_folder(
 
 
 # ---------------------------------------------------------------------------
+# Annotation export
+# ---------------------------------------------------------------------------
+
+
+@router.get("/export/annotations")
+async def export_annotations(request: Request):
+    """Export all annotations as CSV download."""
+    from ace.services.exporter import export_annotations_csv
+    from ace.models.project import get_project
+    from datetime import datetime
+
+    project_path = getattr(request.app.state, "project_path", None)
+    if not project_path:
+        return HTMLResponse("No project open", status_code=400)
+
+    conn = sqlite3.connect(project_path, check_same_thread=False)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys = ON")
+
+    try:
+        project = get_project(conn)
+        tmp = tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False)
+        tmp.close()
+        count = export_annotations_csv(conn, tmp.name)
+        content = Path(tmp.name).read_text()
+        Path(tmp.name).unlink(missing_ok=True)
+    finally:
+        conn.close()
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M")
+    filename = f"{project['name']}_annotations_{timestamp}.csv"
+
+    return Response(
+        content=content,
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+# ---------------------------------------------------------------------------
 # Coding annotation helpers
 # ---------------------------------------------------------------------------
 
