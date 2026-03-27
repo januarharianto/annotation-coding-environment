@@ -7,7 +7,6 @@ import krippendorff
 import numpy as np
 import pandas as pd
 from irrCAC.raw import CAC
-from sklearn.metrics import cohen_kappa_score
 
 from ace.services.agreement_types import (
     AgreementDataset,
@@ -158,15 +157,36 @@ def _compute_metrics(vectors: dict[str, list[int]], coder_ids: list[str]) -> Cod
     )
 
 
+def _cohens_kappa(y1: list, y2: list) -> float | None:
+    """Cohen's kappa for two binary raters."""
+    n = len(y1)
+    if n == 0:
+        return None
+    a11 = a10 = a01 = a00 = 0
+    for i in range(n):
+        if y1[i] and y2[i]:
+            a11 += 1
+        elif y1[i] and not y2[i]:
+            a10 += 1
+        elif not y1[i] and y2[i]:
+            a01 += 1
+        else:
+            a00 += 1
+    po = (a11 + a00) / n
+    pe = ((a11 + a10) * (a11 + a01) + (a01 + a00) * (a10 + a00)) / (n * n)
+    if pe == 1.0:
+        return 1.0 if po == 1.0 else 0.0
+    return (po - pe) / (1 - pe)
+
+
 def _safe_kappa(vec1: list[int], vec2: list[int]) -> float | None:
     """Cohen's kappa with edge case handling."""
-    try:
-        k = cohen_kappa_score(vec1, vec2)
-        if math.isnan(k):
-            return 1.0 if vec1 == vec2 else None
-        return k
-    except ValueError:
+    k = _cohens_kappa(vec1, vec2)
+    if k is None:
         return 1.0 if vec1 == vec2 else None
+    if math.isnan(k):
+        return 1.0 if vec1 == vec2 else None
+    return k
 
 
 def _safe_krippendorff(vectors: dict[str, list[int]], coder_ids: list[str]) -> float | None:
