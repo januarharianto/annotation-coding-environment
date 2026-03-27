@@ -1,278 +1,38 @@
 /**
- * ACE Annotation Bridge
- *
- * Handles text selection capture and annotation click events.
- * Communicates with NiceGUI backend via emitEvent.
+ * ACE Bridge — client-side utilities for the FastAPI + HTMX app.
  */
 
 (function () {
   "use strict";
 
   /**
-   * Calculate the text offset of a given DOM node + offset within the
-   * .ace-text-content container.  Walks all text nodes in document order
-   * and sums their lengths until we reach the anchor/focus node.
+   * Show a toast notification.
+   * @param {string} message  Text to display.
+   * @param {number} [duration=3000]  Auto-dismiss milliseconds.
    */
-  function getTextOffset(container, node, offset) {
-    var walker = document.createTreeWalker(
-      container,
-      NodeFilter.SHOW_TEXT,
-      null,
-      false
-    );
-    var pos = 0;
-    var current;
-    while ((current = walker.nextNode())) {
-      if (current === node) {
-        return pos + offset;
-      }
-      pos += current.textContent.length;
-    }
-    // Fallback: if node is an element, try to resolve via child offset
-    if (node.nodeType === Node.ELEMENT_NODE) {
-      var childNodes = [];
-      walker = document.createTreeWalker(
-        container,
-        NodeFilter.SHOW_TEXT,
-        null,
-        false
-      );
-      pos = 0;
-      var idx = 0;
-      while ((current = walker.nextNode())) {
-        // Count how many text nodes we've passed
-        // The offset for an element node means "before the offset-th child"
-        if (current.parentNode === node && idx >= offset) {
-          return pos;
-        }
-        pos += current.textContent.length;
-        if (current.parentNode === node) {
-          idx++;
-        }
-      }
-      return pos;
-    }
-    return pos;
-  }
+  window.aceToast = function (message, duration) {
+    duration = duration || 3000;
+    var container = document.getElementById("toast");
+    if (!container) return;
 
-  function setupSelectionListener() {
-    document.addEventListener("mouseup", function (e) {
-      var container = document.querySelector(".ace-text-content");
-      if (!container) return;
+    var el = document.createElement("div");
+    el.className = "toast-msg";
+    el.textContent = message;
+    container.appendChild(el);
 
-      var sel = window.getSelection();
-      if (!sel || sel.isCollapsed || sel.rangeCount === 0) return;
-
-      var range = sel.getRangeAt(0);
-
-      // Check that the selection is within our container
-      if (
-        !container.contains(range.startContainer) ||
-        !container.contains(range.endContainer)
-      ) {
-        return;
-      }
-
-      var startOffset = getTextOffset(
-        container,
-        range.startContainer,
-        range.startOffset
-      );
-      var endOffset = getTextOffset(
-        container,
-        range.endContainer,
-        range.endOffset
-      );
-      var selectedText = sel.toString();
-
-      if (startOffset === endOffset || !selectedText.trim()) return;
-
-      // Ensure start < end
-      if (startOffset > endOffset) {
-        var tmp = startOffset;
-        startOffset = endOffset;
-        endOffset = tmp;
-      }
-
-      var data = {
-        start: startOffset,
-        end: endOffset,
-        text: selectedText,
-      };
-
-      // Store as fallback for when emitEvent doesn't deliver in time
-      window.__aceLastSelection = data;
-
-      emitEvent("text_selected", data);
-    });
-  }
-
-  function setupCodeListSortable() {
-    var _sortables = [];
-    var _containerSignature = "";
-
-    function collectAllCodeIds() {
-      var containers = document.querySelectorAll(".ace-code-list");
-      var ids = [];
-      for (var c = 0; c < containers.length; c++) {
-        var items = containers[c].querySelectorAll("[data-code-id]");
-        for (var i = 0; i < items.length; i++) {
-          ids.push(items[i].dataset.codeId);
-        }
-      }
-      return ids;
-    }
-
-    function initSortable() {
-      var containers = document.querySelectorAll(".ace-code-list");
-      if (containers.length === 0) return;
-
-      // Build a signature to detect DOM changes
-      var sig = "";
-      for (var c = 0; c < containers.length; c++) {
-        sig += containers[c].id + ":" + containers[c].children.length + ";";
-      }
-      if (sig === _containerSignature) return;
-      _containerSignature = sig;
-
-      // Destroy old instances
-      for (var s = 0; s < _sortables.length; s++) {
-        _sortables[s].destroy();
-      }
-      _sortables = [];
-
-      for (var c = 0; c < containers.length; c++) {
-        var container = containers[c];
-        // Only init if drag handles are present (not in sort-by-name mode)
-        if (!container.querySelector(".ace-drag-handle")) continue;
-
-        _sortables.push(Sortable.create(container, {
-          animation: 150,
-          handle: ".ace-drag-handle",
-          ghostClass: "ace-drag-ghost",
-          onEnd: function () {
-            emitEvent("codes_reordered", { code_ids: collectAllCodeIds() });
-          },
-        }));
-      }
-    }
-
-    new MutationObserver(initSortable).observe(document.body, {
-      childList: true,
-      subtree: true,
-    });
-  }
-
-  function setupKeyboardShortcuts() {
-    document.addEventListener("keydown", function (e) {
-      // Don't capture when typing in input/textarea fields
-      var tag = (e.target.tagName || "").toLowerCase();
-      if (tag === "input" || tag === "textarea" || tag === "select") return;
-      if (e.target.isContentEditable) return;
-
-      // Ctrl/Cmd+Z = undo, Ctrl/Cmd+Shift+Z = redo
-      if ((e.ctrlKey || e.metaKey) && e.key === "z") {
-        e.preventDefault();
-        if (e.shiftKey) {
-          emitEvent("shortcut_redo", {});
-        } else {
-          emitEvent("shortcut_undo", {});
-        }
-        return;
-      }
-
-      // Escape = dismiss (clear selection)
-      if (e.key === "Escape") {
-        emitEvent("shortcut_escape", {});
-        return;
-      }
-
-      // Alt+ArrowLeft / Alt+ArrowRight = prev/next source
-      if (e.altKey && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
-        e.preventDefault();
-        emitEvent(e.key === "ArrowLeft" ? "shortcut_prev_source" : "shortcut_next_source", {});
-        return;
-      }
-
-      // G = toggle source grid
-      if (e.key === "g" && !e.ctrlKey && !e.metaKey && !e.altKey) {
-        emitEvent("shortcut_toggle_grid", {});
-        return;
-      }
-
-      // 1-9, 0, a-z = apply code (only when there is an active text selection)
-      if (!e.ctrlKey && !e.metaKey && !e.altKey) {
-        var codeIndex = -1;
-        if (e.key >= "1" && e.key <= "9") {
-          codeIndex = parseInt(e.key) - 1; // 1-9 → indices 0-8
-        } else if (e.key === "0") {
-          codeIndex = 9; // 0 → index 9
-        } else if (e.key >= "a" && e.key <= "z") {
-          codeIndex = 10 + (e.key.charCodeAt(0) - 97); // a-z → indices 10-35
-        }
-        if (codeIndex >= 0) {
-          var sel = window.getSelection();
-          if (sel && !sel.isCollapsed) {
-            e.preventDefault();
-            emitEvent("shortcut_apply_code", { index: codeIndex });
-          }
-          return;
-        }
-      }
-    });
-  }
-
-  // Scroll to and flash an annotation span by ID
-  window.aceFlashAnnotation = function (annotationId) {
-    var el = document.querySelector(
-      '[data-annotation-id="' + annotationId + '"]'
-    );
-    if (!el) return;
-    el.scrollIntoView({ behavior: "smooth", block: "center" });
-    el.classList.remove("ace-annotation-flash");
-    void el.offsetWidth;
-    el.classList.add("ace-annotation-flash");
-    el.addEventListener(
-      "animationend",
-      function () {
-        el.classList.remove("ace-annotation-flash");
-      },
-      { once: true }
-    );
+    setTimeout(function () {
+      el.classList.add("fade-out");
+      el.addEventListener("transitionend", function () {
+        el.remove();
+      });
+    }, duration);
   };
 
-  // ── Splitter double-click reset ─────────────────────────────────
-  function setupSplitterReset() {
-    document.addEventListener("dblclick", function (e) {
-      if (!e.target.closest(".q-splitter__separator")) return;
-      e.preventDefault();
-      emitEvent("code_bar_reset", {});
-    });
-  }
-
-  // ── Source grid delegated click ──────────────────────────────────
-  function setupGridClickListener() {
-    document.addEventListener("click", function (e) {
-      var cell = e.target.closest(".ace-grid-cell");
-      if (!cell) return;
-      var idx = parseInt(cell.dataset.idx, 10);
-      if (!isNaN(idx)) {
-        emitEvent("grid_cell_clicked", { index: idx });
-      }
-    });
-  }
-
-  // Initialize once DOM is ready
-  function initAll() {
-    setupSelectionListener();
-    setupKeyboardShortcuts();
-    setupCodeListSortable();
-    setupSplitterReset();
-    setupGridClickListener();
-  }
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", initAll);
-  } else {
-    initAll();
-  }
+  // Listen for HTMX custom events that carry toast messages
+  document.addEventListener("htmx:afterRequest", function (e) {
+    var msg = e.detail.xhr && e.detail.xhr.getResponseHeader("X-ACE-Toast");
+    if (msg) {
+      window.aceToast(msg);
+    }
+  });
 })();
