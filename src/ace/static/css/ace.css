@@ -247,7 +247,7 @@ body {
 .ace-glimpse {
   font-family: 'SF Mono', Menlo, Consolas, monospace;
   font-size: 13px;
-  max-width: 500px;
+  max-width: 600px;
 }
 .ace-glimpse-header {
   display: flex;
@@ -258,13 +258,27 @@ body {
   color: var(--ace-text-muted);
   font-size: 11px;
 }
+.ace-glimpse-hint {
+  font-size: 11px;
+  color: var(--ace-text-muted);
+  padding: 2px 0 6px;
+  font-family: inherit;
+}
 .ace-glimpse-row {
   display: grid;
-  grid-template-columns: 120px 36px 1fr;
+  grid-template-columns: 120px 36px 1fr auto;
   gap: 8px;
-  padding: 2px 0;
+  align-items: center;
+  padding: 4px 0;
   line-height: 1.6;
+  border-left: 3px solid transparent;
+  transition: background var(--ace-transition), border-color var(--ace-transition);
 }
+.ace-glimpse-row:hover { background: var(--ace-bg-muted); }
+.ace-glimpse-row[data-role=""] .ace-glimpse-name,
+.ace-glimpse-row[data-role=""] .ace-glimpse-vals { opacity: 0.4; }
+.ace-glimpse-row[data-role="id"] { border-left-color: var(--ace-text); }
+.ace-glimpse-row[data-role="text"] { border-left-color: #546e7a; }
 .ace-glimpse-name {
   font-weight: 500;
   color: var(--ace-text);
@@ -282,9 +296,20 @@ body {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.ace-glimpse-check {
-  display: inline-flex;
-  align-items: center;
+.ace-glimpse-roles {
+  display: flex;
   gap: 4px;
-  font-size: 13px;
 }
+.ace-role-btn {
+  border: 1px solid var(--ace-border);
+  background: var(--ace-bg);
+  padding: 1px 8px;
+  font-size: 11px;
+  font-family: inherit;
+  cursor: pointer;
+  color: var(--ace-text-muted);
+  transition: all var(--ace-transition);
+}
+.ace-role-btn:hover:not(.active) { border-color: var(--ace-text-muted); color: var(--ace-text); }
+.ace-role-btn.active[data-role="id"] { background: var(--ace-text); color: var(--ace-bg); border-color: var(--ace-text); }
+.ace-role-btn.active[data-role="text"] { background: #546e7a; color: #fff; border-color: #546e7a; }
