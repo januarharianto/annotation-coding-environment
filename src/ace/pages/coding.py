@@ -148,7 +148,8 @@ def build(conn: sqlite3.Connection) -> None:
     ui.add_head_html(f'<script src="/static/js/bridge.js?v={_BRIDGE_HASH}" defer></script>')
     ui.add_head_html(
         '<style>'
-        'html, body { overflow: hidden; height: 100vh; } '
+        'html, body, #app, .q-layout, .q-page-container { height: 100vh; } '
+        'html, body { overflow: hidden; } '
         '.q-page { display: flex; flex-direction: column; height: 100%; } '
         '.q-page > .nicegui-content { flex: 1; min-height: 0; display: flex; flex-direction: column; }'
         '</style>'
