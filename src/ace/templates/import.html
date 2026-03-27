@@ -3,7 +3,76 @@
 {% block title %}Import Data — ACE{% endblock %}
 
 {% block content %}
-<main class="ace-import">
-  <h1>Import Data</h1>
+<header class="ace-header">
+  <a href="/" style="text-decoration:none;color:var(--ace-text);font-weight:600;font-size:0.875rem">{{ project_name }}</a>
+</header>
+
+<main style="max-width:720px;margin:2rem auto;padding:0 1rem">
+  <h1 style="font-size:1.5rem;font-weight:700;margin-bottom:1.5rem">Import Data</h1>
+
+  {% if source_count > 0 %}
+  <div style="padding:1rem;border:1px solid var(--ace-border);margin-bottom:1.5rem">
+    <p>{{ source_count }} source{{ "s" if source_count != 1 else "" }} already imported.</p>
+    <a href="/code" class="ace-btn ace-btn--primary" style="margin-top:0.5rem;display:inline-block;text-decoration:none">Start coding &rarr;</a>
+  </div>
+  {% endif %}
+
+  <!-- CSV / Excel upload -->
+  <section style="margin-bottom:2rem">
+    <h2 style="font-size:1rem;font-weight:600;margin-bottom:0.75rem">CSV / Excel file</h2>
+    <form hx-post="/api/import/upload"
+          hx-target="#import-preview"
+          hx-swap="innerHTML"
+          hx-encoding="multipart/form-data"
+          style="display:flex;gap:0.5rem;align-items:flex-end">
+      <input type="file" name="file" accept=".csv,.xlsx" class="ace-input" style="flex:1">
+      <button type="submit" class="ace-btn ace-btn--primary">Upload</button>
+    </form>
+  </section>
+
+  <div id="import-preview"></div>
+
+  <!-- Text folder import -->
+  <section>
+    <h2 style="font-size:1rem;font-weight:600;margin-bottom:0.75rem">Text files from folder</h2>
+    <div style="display:flex;gap:0.5rem;margin-bottom:0.5rem">
+      <input id="folder-path" name="path" class="ace-input" type="text"
+             placeholder="Choose a folder..." readonly style="flex:1">
+      <button class="ace-btn" onclick="pickImportFolder()">Browse</button>
+    </div>
+    <button class="ace-btn ace-btn--primary" onclick="importFolder()">Import Folder</button>
+    <div id="folder-result"></div>
+  </section>
 </main>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+  "use strict";
+
+  window.pickImportFolder = function() {
+    fetch("/api/native/pick-folder", { method: "POST" })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (data.path) {
+          document.getElementById("folder-path").value = data.path;
+        }
+      });
+  };
+
+  window.importFolder = function() {
+    var path = document.getElementById("folder-path").value.trim();
+    if (!path) {
+      window.aceToast("Choose a folder first");
+      return;
+    }
+    htmx.ajax("POST", "/api/import/folder", {
+      values: { path: path },
+      target: "#folder-result",
+      swap: "innerHTML"
+    });
+  };
+})();
+</script>
 {% endblock %}
