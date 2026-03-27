@@ -107,33 +107,6 @@
     });
   }
 
-  function setupAnnotationClickListener() {
-    document.addEventListener("click", function (e) {
-      var span = e.target.closest(".ace-annotation");
-      if (!span) return;
-
-      // Collect all annotation IDs from nested spans at the click point
-      var ids = [];
-      var el = span;
-      while (el) {
-        if (
-          el.classList &&
-          el.classList.contains("ace-annotation") &&
-          el.dataset.annotationId
-        ) {
-          ids.push(el.dataset.annotationId);
-        }
-        el = el.parentElement;
-        if (el && el.classList && el.classList.contains("ace-text-content"))
-          break;
-      }
-
-      if (ids.length > 0) {
-        emitEvent("annotation_clicked", { annotation_ids: ids });
-      }
-    });
-  }
-
   function setupCodeListSortable() {
     var _sortables = [];
     var _containerSignature = "";
@@ -292,7 +265,6 @@
   // Initialize once DOM is ready
   function initAll() {
     setupSelectionListener();
-    setupAnnotationClickListener();
     setupKeyboardShortcuts();
     setupCodeListSortable();
     setupSplitterReset();
