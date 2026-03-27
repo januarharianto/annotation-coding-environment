@@ -1,11 +1,15 @@
 """Import sources from CSV/Excel files and text file folders."""
 
+import csv
 import sqlite3
+from datetime import datetime
 from pathlib import Path
 
-import pandas as pd
+import openpyxl
 
 from ace.models.source import add_source
+
+_CSV_ENCODINGS = ("utf-8", "latin-1", "cp1252")
 
 
 def import_csv(
@@ -21,15 +25,15 @@ def import_csv(
     Returns the number of sources created.
     """
     path = Path(path)
-    df = _read_tabular(path)
+    rows, columns = _read_tabular(path)
 
-    meta_columns = [c for c in df.columns if c != id_column and c not in text_columns]
+    meta_columns = [c for c in columns if c != id_column and c not in text_columns]
     multi = len(text_columns) > 1
     count = 0
 
-    for _, row in df.iterrows():
+    for row in rows:
         display_base = str(row[id_column])
-        metadata = {c: _to_native(row[c]) for c in meta_columns} if meta_columns else None
+        metadata = {c: row[c] for c in meta_columns} if meta_columns else None
 
         for col in text_columns:
             if multi:
@@ -64,7 +68,7 @@ def import_text_files(
     count = 0
 
     for txt_path in sorted(folder.glob("*.txt")):
-        content = txt_path.read_text(encoding="utf-8")
+        content = _read_text_file(txt_path)
         add_source(
             conn,
             display_id=txt_path.stem,
@@ -77,15 +81,26 @@ def import_text_files(
     return count
 
 
-def _read_tabular(path: Path) -> pd.DataFrame:
-    """Read a CSV or Excel file into a DataFrame, trying multiple encodings for CSV."""
+def _read_tabular(path: Path) -> tuple[list[dict], list[str]]:
+    """Read a CSV or Excel file, returning (rows as dicts, column names)."""
     suffix = path.suffix.lower()
-    if suffix in (".xlsx", ".xls"):
-        return pd.read_excel(path)
+    if suffix == ".xlsx":
+        return _read_xlsx(path)
+    return _read_csv(path)
 
-    for encoding in ("utf-8", "latin-1", "cp1252"):
+
+def _read_csv(path: Path) -> tuple[list[dict], list[str]]:
+    """Read CSV with multi-encoding fallback (utf-8, latin-1, cp1252)."""
+    for encoding in _CSV_ENCODINGS:
         try:
-            return pd.read_csv(path, encoding=encoding)
+            with open(path, newline="", encoding=encoding) as f:
+                reader = csv.DictReader(f)
+                columns = reader.fieldnames or []
+                rows = []
+                for row in reader:
+                    coerced = {k: _coerce_value(v) for k, v in row.items()}
+                    rows.append(coerced)
+                return rows, list(columns)
         except UnicodeDecodeError:
             continue
 
@@ -94,10 +109,59 @@ def _read_tabular(path: Path) -> pd.DataFrame:
     )
 
 
-def _to_native(value):
-    """Convert pandas/numpy scalar to native Python type for JSON serialization."""
-    if pd.isna(value):
+def _read_xlsx(path: Path) -> tuple[list[dict], list[str]]:
+    """Read first sheet of .xlsx with openpyxl (read-only, data-only)."""
+    wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
+    try:
+        ws = wb.active
+        row_iter = ws.iter_rows()
+        header_cells = next(row_iter)
+        columns = [str(c.value) if c.value is not None else f"col_{i}" for i, c in enumerate(header_cells)]
+
+        rows = []
+        for row_cells in row_iter:
+            row = {}
+            for col_name, cell in zip(columns, row_cells):
+                value = cell.value
+                if isinstance(value, datetime):
+                    value = value.isoformat()
+                row[col_name] = value
+            rows.append(row)
+        return rows, columns
+    finally:
+        wb.close()
+
+
+def _read_text_file(path: Path) -> str:
+    """Read a text file with multi-encoding fallback."""
+    for encoding in _CSV_ENCODINGS:
+        try:
+            return path.read_text(encoding=encoding)
+        except UnicodeDecodeError:
+            continue
+
+    raise UnicodeDecodeError(
+        "multi", b"", 0, 1, f"Could not decode {path} with utf-8, latin-1, or cp1252"
+    )
+
+
+def _coerce_value(value: str):
+    """Coerce a CSV string value to int, float, or leave as string.
+
+    Empty strings become None.
+    """
+    if value == "":
         return None
-    if hasattr(value, "item"):
-        return value.item()
+    try:
+        int_val = int(value)
+        # Avoid converting "07" to 7 — preserve as string if leading zero
+        if value != str(int_val):
+            return value
+        return int_val
+    except ValueError:
+        pass
+    try:
+        return float(value)
+    except ValueError:
+        pass
     return value
