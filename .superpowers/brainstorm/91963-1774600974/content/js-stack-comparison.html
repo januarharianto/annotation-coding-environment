@@ -1,0 +1,101 @@
+<h2>Which JS approach for ACE?</h2>
+<p class="subtitle">You want: minimalist code, minimalist UI, no fighting CSS, easy debugging</p>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Vanilla JS + HTMX</h3>
+      <p><strong>No build step. No npm. No Node.js.</strong></p>
+      <p>FastAPI + Jinja2 templates + HTMX for partial page updates + plain JS for interactions.</p>
+      <div class="pros-cons">
+        <div class="pros">
+          <h4>Pros</h4>
+          <ul>
+            <li>Zero dependencies beyond HTMX (~14 KB) + SortableJS (~13 KB)</li>
+            <li>What you write is what runs &mdash; no compilation, no abstraction</li>
+            <li>Debug with browser DevTools directly, no source maps needed</li>
+            <li>Your existing bridge.js transfers almost unchanged</li>
+            <li>Simplest possible mental model</li>
+          </ul>
+        </div>
+        <div class="cons">
+          <h4>Cons</h4>
+          <ul>
+            <li>More boilerplate for toggles, dropdowns, conditional visibility (~10-15 lines each vs 3 with Alpine)</li>
+            <li>No reactive data binding &mdash; manual DOM updates</li>
+            <li>Keyboard shortcut wiring is more verbose</li>
+          </ul>
+        </div>
+      </div>
+      <p style="margin-top:12px;color:#666;font-size:13px"><strong>Total JS overhead:</strong> ~27 KB gzipped &bull; <strong>Files to learn:</strong> HTMX docs only</p>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Alpine.js + HTMX</h3>
+      <p><strong>No build step. Declarative reactivity via HTML attributes.</strong></p>
+      <p>Everything in Option A, plus Alpine.js for toggles, dropdowns, keyboard shortcuts, and reactive show/hide.</p>
+      <div class="pros-cons">
+        <div class="pros">
+          <h4>Pros</h4>
+          <ul>
+            <li>Toggles/dropdowns in 3 lines instead of 15 (<code>x-show</code>, <code>x-on</code>)</li>
+            <li>Keyboard shortcuts are clean: <code>@keydown.ctrl.z.window="undo()"</code></li>
+            <li>Still no build step, no npm, no Node.js</li>
+            <li>Large community in Python/Django/FastAPI ecosystem</li>
+          </ul>
+        </div>
+        <div class="cons">
+          <h4>Cons</h4>
+          <ul>
+            <li>HTMX DOM swaps destroy Alpine state &mdash; requires morph extension to fix</li>
+            <li>Alpine's MutationObserver slows DOM-heavy pages (annotation spans, drag-and-drop)</li>
+            <li>Debugging state-loss between HTMX + Alpine is notoriously hard</li>
+            <li>Doesn't help with the hard parts (text selection, DnD, undo/redo)</li>
+          </ul>
+        </div>
+      </div>
+      <p style="margin-top:12px;color:#666;font-size:13px"><strong>Total JS overhead:</strong> ~44 KB gzipped &bull; <strong>Files to learn:</strong> HTMX + Alpine docs + morph extension</p>
+    </div>
+  </div>
+
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Svelte 5 (or Preact)</h3>
+      <p><strong>Build step required. Full reactive component model.</strong></p>
+      <p>Separate Svelte frontend compiled by Vite, FastAPI as pure API backend.</p>
+      <div class="pros-cons">
+        <div class="pros">
+          <h4>Pros</h4>
+          <ul>
+            <li>Best DX for complex reactive UI (shared state across panels)</li>
+            <li>Cleanest drag-and-drop via <code>svelte-dnd-action</code></li>
+            <li>Smallest compiled output (~2-3 KB runtime)</li>
+            <li>Excellent devtools and TypeScript support</li>
+          </ul>
+        </div>
+        <div class="cons">
+          <h4>Cons</h4>
+          <ul>
+            <li><strong>Requires Node.js, npm, Vite, config files</strong></li>
+            <li>Two dev servers during development (Vite + FastAPI)</li>
+            <li>Two languages to maintain (Python + Svelte/JS)</li>
+            <li>CORS/proxy setup between frontend and backend</li>
+            <li>Overkill for ACE's level of interactivity</li>
+          </ul>
+        </div>
+      </div>
+      <p style="margin-top:12px;color:#666;font-size:13px"><strong>Total JS overhead:</strong> ~25-35 KB gzipped &bull; <strong>Files to learn:</strong> Svelte + Vite + SvelteKit docs</p>
+    </div>
+  </div>
+</div>
+
+<div style="margin-top:32px;padding:20px;background:#f8f8f8;border:1px solid #e0e0e0;border-radius:4px;">
+  <h3 style="margin-top:0">My recommendation: A</h3>
+  <p style="margin:8px 0 0 0">Your hard problems (text selection offsets, drag-and-drop, undo/redo) are all vanilla JS regardless of framework. Alpine saves ~50-100 lines of toggle boilerplate but introduces HTMX state-loss headaches. Svelte is great but adds a whole build toolchain for an app that doesn't need it.</p>
+  <p style="margin:8px 0 0 0"><strong>Vanilla JS + HTMX + SortableJS</strong> = fewest moving parts, easiest to debug, your existing bridge.js carries over, and you write CSS directly in files you control.</p>
+</div>

@@ -1,0 +1,270 @@
+<h2>ACE v2 — Revised Architecture</h2>
+<p class="subtitle">Updated after expert audit. Changes from original proposal highlighted.</p>
+
+<div class="section">
+  <h3>What Changed After Audit</h3>
+  <div class="mockup">
+    <div class="mockup-header">Key Revisions</div>
+    <div class="mockup-body" style="font-size:14px;line-height:2">
+      <table style="width:100%;border-collapse:collapse">
+        <tr>
+          <td style="padding:6px 12px;color:#c62828;font-weight:bold;width:100px">Removed</td>
+          <td style="padding:6px 12px"><code>schemas/</code> directory &mdash; Pydantic adds nothing for a local HTMX app with form data, no JSON API consumers</td>
+        </tr>
+        <tr style="background:#f8f8f8">
+          <td style="padding:6px 12px;color:#c62828;font-weight:bold">Removed</td>
+          <td style="padding:6px 12px"><code>fragments/</code> directory &mdash; use Jinja2 macros + block rendering instead. 6 template files, not 20</td>
+        </tr>
+        <tr>
+          <td style="padding:6px 12px;color:#ef6c00;font-weight:bold">Merged</td>
+          <td style="padding:6px 12px">6 route files &rarr; 4: <code>pages.py</code>, <code>api_coding.py</code>, <code>api_codebook.py</code>, <code>api_project.py</code></td>
+        </tr>
+        <tr style="background:#f8f8f8">
+          <td style="padding:6px 12px;color:#ef6c00;font-weight:bold">Merged</td>
+          <td style="padding:6px 12px"><code>models/coder.py</code> + <code>models/project.py</code> &rarr; one file (37 LOC combined)</td>
+        </tr>
+        <tr>
+          <td style="padding:6px 12px;color:#c62828;font-weight:bold">Deleted</td>
+          <td style="padding:6px 12px"><code>services/icr.py</code> &mdash; strict subset of <code>agreement_computer.py</code></td>
+        </tr>
+        <tr style="background:#f8f8f8">
+          <td style="padding:6px 12px;color:#c62828;font-weight:bold">Deleted</td>
+          <td style="padding:6px 12px"><code>scikit-learn</code> dependency (50 MB) &mdash; replace with 15-line Cohen's kappa function</td>
+        </tr>
+        <tr>
+          <td style="padding:6px 12px;color:#c62828;font-weight:bold">Deleted</td>
+          <td style="padding:6px 12px">Direct <code>pandas</code> usage &mdash; use stdlib <code>csv</code> + <code>openpyxl</code> directly</td>
+        </tr>
+        <tr style="background:#f8f8f8">
+          <td style="padding:6px 12px;color:#2e7d32;font-weight:bold">Added</td>
+          <td style="padding:6px 12px"><code>idiomorph</code> extension (~4 KB) for DOM-diffing text panel swaps (preserves scroll position)</td>
+        </tr>
+        <tr>
+          <td style="padding:6px 12px;color:#2e7d32;font-weight:bold">Added</td>
+          <td style="padding:6px 12px">UTF-16 offset conversion moves to <code>bridge.js</code> (browser creates UTF-16, convert before POSTing)</td>
+        </tr>
+        <tr style="background:#f8f8f8">
+          <td style="padding:6px 12px;color:#ef6c00;font-weight:bold">Split</td>
+          <td style="padding:6px 12px">CSS: <code>ace.css</code> (shared tokens + components) + <code>coding.css</code> (annotation/DnD-specific)</td>
+        </tr>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Revised Project Structure</h3>
+  <div class="mockup">
+    <div class="mockup-header">src/ace/ &mdash; ~38 files, ~4,000 LOC estimated (down from ~5,700)</div>
+    <div class="mockup-body" style="font-family:monospace;font-size:13px;line-height:1.8;white-space:pre">
+src/ace/
+├── app.py                  # FastAPI app, lifespan, static files
+├── dependencies.py         # get_db, get_session, get_undo_manager
+├── routes/
+│   ├── pages.py            # GET /, /import, /code, /agreement
+│   ├── api_coding.py       # annotations + source nav + undo/redo
+│   ├── api_codebook.py     # code CRUD, import/export, reorder
+│   └── api_project.py      # project open/create, coder, agreement
+├── templates/
+│   ├── base.html           # &lt;html&gt; shell, CSS/JS includes
+│   ├── _macros.html        # shared Jinja2 macros (card, status, etc.)
+│   ├── landing.html
+│   ├── import.html
+│   ├── coding.html         # full page + macros for each swap zone
+│   └── agreement.html
+├── static/
+│   ├── css/
+│   │   ├── ace.css         # tokens + reset + shared components
+│   │   └── coding.css      # annotation spans, DnD, splitter
+│   ├── js/
+│   │   ├── bridge.js       # selection, shortcuts, flash, offset conv
+│   │   ├── htmx.min.js     # vendored (~14 KB)
+│   │   ├── idiomorph.min.js# vendored (~4 KB) — DOM diff for swaps
+│   │   └── Sortable.min.js # vendored (~13 KB)
+│   └── favicon.ico
+├── models/                 # kept, lightly cleaned
+│   ├── annotation.py
+│   ├── assignment.py
+│   ├── codebook.py
+│   ├── project.py          # merged: project + coder
+│   └── source.py
+├── services/               # kept, trimmed
+│   ├── undo.py
+│   ├── palette.py
+│   ├── importer.py         # uses csv stdlib + openpyxl (no pandas)
+│   ├── exporter.py
+│   ├── agreement_types.py
+│   ├── agreement_loader.py
+│   ├── agreement_computer.py  # includes inline kappa (no sklearn)
+│   ├── assigner.py
+│   └── packager.py
+└── db/
+    ├── schema.py
+    └── connection.py</div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>State Management — Three Tiers</h3>
+  <div class="mockup">
+    <div class="mockup-header">Where State Lives</div>
+    <div class="mockup-body" style="font-size:14px">
+      <table style="width:100%;border-collapse:collapse">
+        <tr style="border-bottom:1px solid #e0e0e0">
+          <td style="padding:8px 12px;font-weight:bold;width:200px">Server session</td>
+          <td style="padding:8px 12px">current_index, coder_id, project_path</td>
+          <td style="padding:8px 12px;color:#888">In-memory dict (single user, local app)</td>
+        </tr>
+        <tr style="border-bottom:1px solid #e0e0e0;background:#f8f8f8">
+          <td style="padding:8px 12px;font-weight:bold">Server app.state</td>
+          <td style="padding:8px 12px">UndoManager (per source, ephemeral)</td>
+          <td style="padding:8px 12px;color:#888">Lost on restart, by design</td>
+        </tr>
+        <tr style="border-bottom:1px solid #e0e0e0">
+          <td style="padding:8px 12px;font-weight:bold">JS variables</td>
+          <td style="padding:8px 12px">pending_selection (text offsets), reorg_mode, sort toggle</td>
+          <td style="padding:8px 12px;color:#888">Sent to server via hx-vals when needed</td>
+        </tr>
+        <tr style="background:#f8f8f8">
+          <td style="padding:8px 12px;font-weight:bold">localStorage</td>
+          <td style="padding:8px 12px">collapsed groups, grid visibility, coder name</td>
+          <td style="padding:8px 12px;color:#888">Survives page reload, replaces app.storage</td>
+        </tr>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>HTMX Patterns — Coding Page</h3>
+  <div class="mockup">
+    <div class="mockup-header">How cross-pane updates work (OOB swaps)</div>
+    <div class="mockup-body" style="font-size:13px;font-family:monospace;line-height:1.8;white-space:pre">
+User clicks code to apply annotation:
+
+  POST /api/coding/annotate
+    body: {code_id, start, end, text, source_id}
+
+  Server response (single HTTP response, multiple swap targets):
+
+  &lt;div id="text-panel"&gt;
+    ...re-rendered annotated text...
+  &lt;/div&gt;
+
+  &lt;div id="annotation-list" hx-swap-oob="true"&gt;
+    ...updated annotation list...
+  &lt;/div&gt;
+
+  HTMX swaps #text-panel (primary target)
+  AND #annotation-list (out-of-band) in one response.
+  No race conditions, no flicker, fully inspectable in Network tab.</div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Dependency Reduction</h3>
+  <div class="split">
+    <div class="mockup" style="flex:1">
+      <div class="mockup-header" style="background:#ffebee;color:#c62828">Before (NiceGUI)</div>
+      <div class="mockup-body" style="font-size:13px;line-height:2">
+        <ul style="margin:0;padding-left:20px">
+          <li><strong>nicegui</strong> (huge — Vue, Quasar, WebSocket, 40+ transitive deps)</li>
+          <li><strong>pandas</strong> (~30 MB)</li>
+          <li><strong>scikit-learn</strong> (~50 MB)</li>
+          <li>openpyxl</li>
+          <li>krippendorff</li>
+          <li>irrCAC</li>
+        </ul>
+      </div>
+    </div>
+    <div class="mockup" style="flex:1">
+      <div class="mockup-header" style="background:#e8f5e9;color:#2e7d32">After (FastAPI + HTMX)</div>
+      <div class="mockup-body" style="font-size:13px;line-height:2">
+        <ul style="margin:0;padding-left:20px">
+          <li><strong>fastapi</strong> (light)</li>
+          <li><strong>uvicorn</strong> (light)</li>
+          <li><strong>jinja2</strong> (light)</li>
+          <li><strong>python-multipart</strong> (form data)</li>
+          <li>openpyxl</li>
+          <li>krippendorff</li>
+          <li>irrCAC (pulls pandas transitively)</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <p style="margin-top:12px;color:#555;font-size:14px">Removes ~80+ MB of direct dependencies. Install size drops dramatically.</p>
+</div>
+
+<div class="section">
+  <h3>CSS Architecture</h3>
+  <div class="mockup">
+    <div class="mockup-header">Design Token System (replaces Quasar utility classes)</div>
+    <div class="mockup-body" style="font-family:monospace;font-size:13px;line-height:1.8;white-space:pre">
+:root {
+  /* Spacing: only these 5 values */
+  --ace-space-xs: 4px;   --ace-space-sm: 8px;
+  --ace-space-md: 16px;  --ace-space-lg: 24px;  --ace-space-xl: 32px;
+
+  /* Colours */
+  --ace-border: #bdbdbd;
+  --ace-bg: #ffffff;       --ace-bg-muted: #f5f5f5;
+  --ace-text: #212121;     --ace-text-muted: #616161;
+
+  /* Typography */
+  --ace-font-body: system-ui, -apple-system, sans-serif;
+  --ace-font-mono: 'SF Mono', Menlo, Consolas, monospace;
+
+  /* Timing */
+  --ace-transition: 0.15s;
+}
+
+All classes prefixed ace-. States: ace-cell--active.
+No BEM. No !important. No utility classes. You own it all.</div>
+  </div>
+</div>
+
+<div style="margin-top:32px;padding:20px;background:#f8f8f8;border:1px solid #e0e0e0;border-radius:4px;">
+  <h3 style="margin-top:0">By the Numbers</h3>
+  <table style="width:100%;border-collapse:collapse;font-size:14px">
+    <tr>
+      <td style="padding:6px 0;width:200px"></td>
+      <td style="padding:6px 12px;font-weight:bold;color:#888">Before</td>
+      <td style="padding:6px 12px;font-weight:bold;color:#888">After</td>
+    </tr>
+    <tr style="border-top:1px solid #e0e0e0">
+      <td style="padding:6px 0">Total LOC</td>
+      <td style="padding:6px 12px">~5,700</td>
+      <td style="padding:6px 12px"><strong>~4,000</strong></td>
+    </tr>
+    <tr>
+      <td style="padding:6px 0">Python files</td>
+      <td style="padding:6px 12px">~37</td>
+      <td style="padding:6px 12px"><strong>~28</strong></td>
+    </tr>
+    <tr>
+      <td style="padding:6px 0">Template files</td>
+      <td style="padding:6px 12px">0</td>
+      <td style="padding:6px 12px">6</td>
+    </tr>
+    <tr>
+      <td style="padding:6px 0">Dependencies (direct)</td>
+      <td style="padding:6px 12px">6 (incl. 80+ MB)</td>
+      <td style="padding:6px 12px"><strong>7 (all light)</strong></td>
+    </tr>
+    <tr>
+      <td style="padding:6px 0">JS libraries</td>
+      <td style="padding:6px 12px">1 (SortableJS)</td>
+      <td style="padding:6px 12px">3 (HTMX + idiomorph + SortableJS)</td>
+    </tr>
+    <tr>
+      <td style="padding:6px 0">JS total size</td>
+      <td style="padding:6px 12px">~13 KB</td>
+      <td style="padding:6px 12px">~31 KB</td>
+    </tr>
+    <tr>
+      <td style="padding:6px 0">Build step needed</td>
+      <td style="padding:6px 12px">No</td>
+      <td style="padding:6px 12px"><strong>No</strong></td>
+    </tr>
+  </table>
+</div>

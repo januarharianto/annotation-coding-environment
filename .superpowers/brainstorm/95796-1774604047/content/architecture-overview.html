@@ -1,0 +1,165 @@
+<h2>ACE v2 — Proposed Architecture</h2>
+<p class="subtitle">FastAPI + Jinja2 + HTMX + Vanilla JS. No build step. No abstraction layer.</p>
+
+<div class="section">
+  <h3>Stack</h3>
+  <div class="mockup">
+    <div class="mockup-header">Technology Choices</div>
+    <div class="mockup-body" style="font-family:monospace;font-size:14px;line-height:2">
+      <table style="width:100%;border-collapse:collapse">
+        <tr><td style="padding:6px 12px;color:#888;width:140px">Server</td><td style="padding:6px 12px"><strong>FastAPI</strong> — ASGI, async, lightweight</td></tr>
+        <tr style="background:#f8f8f8"><td style="padding:6px 12px;color:#888">Templates</td><td style="padding:6px 12px"><strong>Jinja2</strong> — server-rendered HTML, template inheritance</td></tr>
+        <tr><td style="padding:6px 12px;color:#888">Interactivity</td><td style="padding:6px 12px"><strong>HTMX 2.x</strong> (~14 KB) — partial page updates via HTML fragments</td></tr>
+        <tr style="background:#f8f8f8"><td style="padding:6px 12px;color:#888">Drag &amp; drop</td><td style="padding:6px 12px"><strong>SortableJS</strong> (~13 KB) — carried over from current app</td></tr>
+        <tr><td style="padding:6px 12px;color:#888">Custom JS</td><td style="padding:6px 12px"><strong>bridge.js</strong> — text selection, keyboard shortcuts, annotation flash</td></tr>
+        <tr style="background:#f8f8f8"><td style="padding:6px 12px;color:#888">CSS</td><td style="padding:6px 12px"><strong>Plain CSS</strong> — no framework, no utility classes, you write it directly</td></tr>
+        <tr><td style="padding:6px 12px;color:#888">Database</td><td style="padding:6px 12px"><strong>SQLite</strong> — same .ace format, leaner schema</td></tr>
+        <tr style="background:#f8f8f8"><td style="padding:6px 12px;color:#888">Distribution</td><td style="padding:6px 12px"><strong>Python package</strong> (pip/uv) — desktop-packaging-ready later</td></tr>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Project Structure</h3>
+  <div class="mockup">
+    <div class="mockup-header">src/ace/</div>
+    <div class="mockup-body" style="font-family:monospace;font-size:13px;line-height:1.8;white-space:pre">
+src/ace/
+├── app.py                  # FastAPI app, startup, static files
+├── routes/                 # API + page routes (FastAPI routers)
+│   ├── pages.py            #   GET / , /import, /code, /agreement
+│   ├── api_codebook.py     #   HTMX endpoints: codes CRUD
+│   ├── api_annotation.py   #   HTMX endpoints: annotation CRUD
+│   ├── api_source.py       #   HTMX endpoints: source navigation
+│   ├── api_project.py      #   HTMX endpoints: project/coder mgmt
+│   └── api_agreement.py    #   HTMX endpoints: agreement compute
+├── templates/              # Jinja2 HTML templates
+│   ├── base.html           #   &lt;html&gt;, &lt;head&gt;, scripts, shared layout
+│   ├── landing.html        #   Home page
+│   ├── import.html         #   Import page
+│   ├── coding.html         #   Coding page (main layout + panels)
+│   ├── agreement.html      #   Agreement page
+│   └── fragments/          #   HTMX partial responses
+│       ├── code_list.html  #     Code sidebar content
+│       ├── text_panel.html #     Annotated text + annotation list
+│       ├── source_nav.html #     Bottom bar + source grid
+│       └── ...
+├── static/
+│   ├── css/
+│   │   └── ace.css         #   All styles in one file
+│   ├── js/
+│   │   ├── bridge.js       #   Text selection, shortcuts, flash
+│   │   ├── htmx.min.js     #   HTMX library (vendored)
+│   │   └── Sortable.min.js #   SortableJS (vendored)
+│   └── favicon.ico
+├── models/                 # SQLite CRUD (kept, lightly cleaned)
+├── services/               # Business logic (kept as-is)
+├── schemas/                # Pydantic models for API layer
+└── db/                     # Schema, migrations, connection</div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>How HTMX Replaces NiceGUI</h3>
+  <div class="mockup">
+    <div class="mockup-header">Data Flow: Applying an Annotation</div>
+    <div class="mockup-body" style="font-size:14px;line-height:1.8">
+      <p><strong>Current (NiceGUI):</strong></p>
+      <p style="color:#888;font-family:monospace;font-size:13px">
+        JS mouseup → NiceGUI WebSocket event → Python handler → DB insert → NiceGUI re-renders Vue component → WebSocket pushes DOM update
+      </p>
+      <p style="margin-top:16px"><strong>New (HTMX):</strong></p>
+      <p style="color:#888;font-family:monospace;font-size:13px">
+        JS mouseup → fetch POST /api/annotations (HTMX) → Python handler → DB insert → return HTML fragment → HTMX swaps into DOM
+      </p>
+      <p style="margin-top:16px;color:#555">Same number of steps, but every step is inspectable: you can see the POST in Network tab, read the HTML response, and the swap is a simple innerHTML replacement. No WebSocket, no Vue, no virtual DOM.</p>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>What Stays, What Changes, What's New</h3>
+  <div class="split">
+    <div class="mockup" style="flex:1">
+      <div class="mockup-header" style="background:#e8f5e9;color:#2e7d32">Keeps (reused)</div>
+      <div class="mockup-body" style="font-size:13px">
+        <ul style="margin:0;padding-left:20px;line-height:2">
+          <li>All models/ (annotation, codebook, coder, source, etc.)</li>
+          <li>All services/ (undo, palette, ICR, agreement, import/export)</li>
+          <li>db/ schema + migrations</li>
+          <li>bridge.js text selection logic</li>
+          <li>SortableJS drag-and-drop</li>
+          <li>.ace SQLite file format</li>
+          <li>Keyboard shortcut mappings</li>
+        </ul>
+      </div>
+    </div>
+    <div class="mockup" style="flex:1">
+      <div class="mockup-header" style="background:#fff3e0;color:#e65100">Changes (rewritten)</div>
+      <div class="mockup-body" style="font-size:13px">
+        <ul style="margin:0;padding-left:20px;line-height:2">
+          <li>All page files → Jinja2 templates</li>
+          <li>NiceGUI event handlers → FastAPI route handlers</li>
+          <li>bridge.js event emission → HTMX requests</li>
+          <li>CSS (new design from scratch)</li>
+          <li>App startup (FastAPI instead of NiceGUI)</li>
+          <li>Storage (app.storage → server-side session or cookies)</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="mockup" style="margin-top:12px">
+    <div class="mockup-header" style="background:#e3f2fd;color:#1565c0">New</div>
+    <div class="mockup-body" style="font-size:13px">
+      <ul style="margin:0;padding-left:20px;line-height:2">
+        <li>routes/ — FastAPI routers for pages + HTMX API endpoints</li>
+        <li>schemas/ — Pydantic models for request/response validation</li>
+        <li>templates/ — Jinja2 templates with HTMX attributes</li>
+        <li>fragments/ — partial HTML responses for HTMX swaps</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Pages — Build Order</h3>
+  <div class="mockup">
+    <div class="mockup-header">Migration Sequence (simplest → hardest)</div>
+    <div class="mockup-body" style="font-size:14px">
+      <table style="width:100%;border-collapse:collapse">
+        <tr>
+          <td style="padding:8px 12px;font-weight:bold;width:30px">1</td>
+          <td style="padding:8px 12px"><strong>Landing page</strong></td>
+          <td style="padding:8px 12px;color:#888">Simplest — buttons, dialogs, recent files list. Establishes base template + routing.</td>
+        </tr>
+        <tr style="background:#f8f8f8">
+          <td style="padding:8px 12px;font-weight:bold">2</td>
+          <td style="padding:8px 12px"><strong>Import page</strong></td>
+          <td style="padding:8px 12px;color:#888">File upload, preview table, column selection. Tests HTMX form handling.</td>
+        </tr>
+        <tr>
+          <td style="padding:8px 12px;font-weight:bold">3</td>
+          <td style="padding:8px 12px"><strong>Coding page</strong></td>
+          <td style="padding:8px 12px;color:#888">The hard one — two-pane layout, text selection, annotations, DnD, shortcuts, undo/redo, source grid.</td>
+        </tr>
+        <tr style="background:#f8f8f8">
+          <td style="padding:8px 12px;font-weight:bold">4</td>
+          <td style="padding:8px 12px"><strong>Agreement page</strong></td>
+          <td style="padding:8px 12px;color:#888">File picker, validation, metrics dashboard, heatmap, export. Mostly display.</td>
+        </tr>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div style="margin-top:32px;padding:20px;background:#f8f8f8;border:1px solid #e0e0e0;border-radius:4px;">
+  <h3 style="margin-top:0">Key Design Decisions</h3>
+  <ul style="line-height:2;font-size:14px">
+    <li><strong>No JavaScript build step</strong> — vendor HTMX + SortableJS as static files</li>
+    <li><strong>Server-rendered HTML</strong> — Jinja2 templates, HTMX fragments for dynamic updates</li>
+    <li><strong>Plain CSS</strong> — one file, you control every pixel, new visual design</li>
+    <li><strong>Models/services untouched</strong> — proven logic, just add a thin API layer on top</li>
+    <li><strong>Desktop-ready</strong> — no hardcoded URLs, clean startup/shutdown, structurally wrappable</li>
+  </ul>
+</div>

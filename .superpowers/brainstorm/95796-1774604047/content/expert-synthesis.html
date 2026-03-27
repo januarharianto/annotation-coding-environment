@@ -1,0 +1,234 @@
+<h2>Expert Audit Synthesis</h2>
+<p class="subtitle">What to build into v2, what to defer, and what to skip</p>
+
+<div class="section">
+  <h3>Architecture Adjustments (all experts agree)</h3>
+  <div class="mockup">
+    <div class="mockup-header">Incorporate into the spec</div>
+    <div class="mockup-body" style="font-size:14px;line-height:2">
+      <table style="width:100%;border-collapse:collapse">
+        <tr>
+          <td style="padding:6px 12px;width:200px;font-weight:500">Request queuing</td>
+          <td style="padding:6px 12px"><code>hx-sync="this:queue all"</code> on the coding workspace &mdash; mandatory for rapid keypresses (3, 5, 7 in quick succession). Without this, annotations get lost.</td>
+        </tr>
+        <tr style="background:#f8f8f8">
+          <td style="padding:6px 12px;font-weight:500">idiomorph for text panel</td>
+          <td style="padding:6px 12px"><code>hx-swap="morph:innerHTML"</code> on <code>#text-panel</code> only. Preserves scroll position, ~3ms cost. Add <code>id="ann-{uuid}"</code> to annotation spans for better diffing.</td>
+        </tr>
+        <tr>
+          <td style="padding:6px 12px;font-weight:500">SortableJS lifecycle</td>
+          <td style="padding:6px 12px"><code>destroy()</code> in <code>htmx:beforeSwap</code>, <code>Sortable.create()</code> in <code>htmx:afterSwap</code>. Prevents memory leak from orphaned document listeners.</td>
+        </tr>
+        <tr style="background:#f8f8f8">
+          <td style="padding:6px 12px;font-weight:500">CSS classes for annotations</td>
+          <td style="padding:6px 12px">Pre-generate <code>.ace-code-{id}</code> classes instead of inline <code>rgba()</code> styles. 30% faster paint, smaller HTML fragments.</td>
+        </tr>
+        <tr>
+          <td style="padding:6px 12px;font-weight:500">OOB swaps pattern</td>
+          <td style="padding:6px 12px">Single response returns primary target + OOB updates. E.g., POST /annotate returns text panel + annotation list in one response. No race conditions.</td>
+        </tr>
+        <tr style="background:#f8f8f8">
+          <td style="padding:6px 12px;font-weight:500">Keyboard → hidden trigger</td>
+          <td style="padding:6px 12px">Shortcut keys trigger hidden HTMX elements (not <code>htmx.ajax()</code>) to preserve request queuing and swap behaviour.</td>
+        </tr>
+        <tr>
+          <td style="padding:6px 12px;font-weight:500">UTF-16 conversion in JS</td>
+          <td style="padding:6px 12px">Move offset conversion to bridge.js. Browser creates UTF-16, convert to codepoints before POST. Eliminates <code>offset.py</code>.</td>
+        </tr>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>UX Features for v2</h3>
+  <div class="mockup">
+    <div class="mockup-header">Build into initial release (high impact, low effort)</div>
+    <div class="mockup-body" style="font-size:14px;line-height:2">
+      <table style="width:100%;border-collapse:collapse">
+        <tr>
+          <td style="padding:6px 12px;width:200px;font-weight:500">Quick Coding</td>
+          <td style="padding:6px 12px">Press <code>Q</code> to apply last-used code to current selection. Single highest-impact feature missing from ACE. All major competitors have this.</td>
+        </tr>
+        <tr style="background:#f8f8f8">
+          <td style="padding:6px 12px;font-weight:500">Code search/filter</td>
+          <td style="padding:6px 12px">Dual-purpose input: type to filter existing codes, Enter to create new. Critical once codebook exceeds ~30 codes. Like Delve's approach.</td>
+        </tr>
+        <tr>
+          <td style="padding:6px 12px;font-weight:500">Shortcut cheat sheet</td>
+          <td style="padding:6px 12px">Press <code>?</code> to show overlay of all shortcuts. Standard in every keyboard-heavy app.</td>
+        </tr>
+        <tr style="background:#f8f8f8">
+          <td style="padding:6px 12px;font-weight:500">Code apply flash</td>
+          <td style="padding:6px 12px">Brief background pulse on the code row when applied via keyboard. Confirms <em>which</em> code was applied &mdash; catches mistyped shortcuts.</td>
+        </tr>
+        <tr>
+          <td style="padding:6px 12px;font-weight:500">Annotation count in delete</td>
+          <td style="padding:6px 12px">"This will remove 47 annotations across 12 sources" instead of vague warning. One query.</td>
+        </tr>
+        <tr style="background:#f8f8f8">
+          <td style="padding:6px 12px;font-weight:500"><code>F</code> for flag toggle</td>
+          <td style="padding:6px 12px">Consistent with <code>G</code> for grid. Currently mouse-only.</td>
+        </tr>
+        <tr>
+          <td style="padding:6px 12px;font-weight:500">Code frequency counts</td>
+          <td style="padding:6px 12px">Small count badge per code showing usage in current source. At-a-glance density feedback.</td>
+        </tr>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>UI/CSS Design System</h3>
+  <div class="split">
+    <div class="mockup" style="flex:1">
+      <div class="mockup-header">Typography (4 sizes, 2 weights)</div>
+      <div class="mockup-body" style="font-family:monospace;font-size:12px;line-height:2;white-space:pre">
+--text-xs:   11px  metadata, keycaps
+--text-sm:   13px  sidebar items, labels
+--text-base: 15px  body text, primary UI
+--text-lg:   18px  page titles only
+
+--weight-normal: 400
+--weight-medium: 500
+
+Hierarchy via opacity, not decoration.
+Page title: lg + medium + primary
+Section label: xs + medium + tertiary + uppercase
+Body: base + normal + primary
+Sidebar: sm + normal + secondary</div>
+    </div>
+    <div class="mockup" style="flex:1">
+      <div class="mockup-header">Colour tokens (18 total)</div>
+      <div class="mockup-body" style="font-family:monospace;font-size:12px;line-height:2;white-space:pre">
+Surfaces:
+  --bg-primary:   #ffffff
+  --bg-secondary: #fafafa
+  --bg-tertiary:  #f5f5f5
+  --bg-hover:     #eeeeee
+
+Borders:
+  --border:        #e0e0e0
+  --border-strong: #bdbdbd
+
+Text:
+  --text-primary:   #1a1a1a
+  --text-secondary: #6b6b6b
+  --text-tertiary:  #9e9e9e
+
+Semantic:
+  --status-ok/warn/error
+
+Dark mode: swap values in one
+@media block later. Zero code change.</div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Text Panel (reading surface)</h3>
+  <div class="mockup">
+    <div class="mockup-header">Optimised for extended reading of source documents</div>
+    <div class="mockup-body" style="font-family:monospace;font-size:13px;line-height:1.8;white-space:pre">
+.ace-text-content {
+  font-size: 15px;
+  line-height: 1.75;
+  max-width: 72ch;         /* optimal reading measure */
+  padding: 24px 32px;      /* generous — 2x sidebar padding */
+  -webkit-font-smoothing: antialiased;
+}
+
+.ace-text-content::selection {
+  background: rgba(0, 0, 0, 0.12);  /* subtle, brand-consistent */
+}
+
+Annotation opacity: 0.22 (down from 0.30)
+Reduces visual noise with many overlapping codes.</div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Deferred to Later Versions</h3>
+  <div class="mockup">
+    <div class="mockup-header">Good ideas, but not v2 scope</div>
+    <div class="mockup-body" style="font-size:14px;line-height:2">
+      <table style="width:100%;border-collapse:collapse">
+        <tr>
+          <td style="padding:6px 12px;width:200px;color:#888">Coding stripe gutter</td>
+          <td style="padding:6px 12px">Vertical coloured bars in margin (like MAXQDA). High impact but high effort &mdash; needs pixel-position calculation from character offsets. v3 feature.</td>
+        </tr>
+        <tr style="background:#f8f8f8">
+          <td style="padding:6px 12px;color:#888">Sticky code mode</td>
+          <td style="padding:6px 12px">"Code first, then select" for focused coding. Good for deductive workflows. Can layer in after Quick Coding is proven.</td>
+        </tr>
+        <tr>
+          <td style="padding:6px 12px;color:#888">Memo field UI</td>
+          <td style="padding:6px 12px">Inline memo editor for annotations. DB column exists. UI needs design thought.</td>
+        </tr>
+        <tr style="background:#f8f8f8">
+          <td style="padding:6px 12px;color:#888">In Vivo coding</td>
+          <td style="padding:6px 12px">Create code from selected text. Nice for open coding. Small feature, defer to keep scope tight.</td>
+        </tr>
+        <tr>
+          <td style="padding:6px 12px;color:#888">Dark mode</td>
+          <td style="padding:6px 12px">Architecture supports it (custom properties). Implementation deferred. One <code>@media</code> block when ready.</td>
+        </tr>
+        <tr style="background:#f8f8f8">
+          <td style="padding:6px 12px;color:#888">Source search/filter</td>
+          <td style="padding:6px 12px">Search by display_id, filter by status. Good for 100+ source projects. Not critical for v2.</td>
+        </tr>
+        <tr>
+          <td style="padding:6px 12px;color:#888">Persistent undo across nav</td>
+          <td style="padding:6px 12px">Currently undo stack clears on source change. Could persist to server session. Adds complexity.</td>
+        </tr>
+        <tr style="background:#f8f8f8">
+          <td style="padding:6px 12px;color:#888">Code descriptions</td>
+          <td style="padding:6px 12px">Optional description field in codebook. Schema change needed. Defer.</td>
+        </tr>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Performance Summary</h3>
+  <div class="mockup">
+    <div class="mockup-header">HTMX on localhost is fast. Very fast.</div>
+    <div class="mockup-body" style="font-size:14px">
+      <table style="width:100%;border-collapse:collapse">
+        <tr style="border-bottom:1px solid #e0e0e0">
+          <td style="padding:8px 12px;width:250px">Annotation roundtrip (POST → swap)</td>
+          <td style="padding:8px 12px;font-family:monospace"><strong>3-8ms</strong></td>
+          <td style="padding:8px 12px;color:#888">vs ~20-60ms with NiceGUI WebSocket</td>
+        </tr>
+        <tr style="border-bottom:1px solid #e0e0e0;background:#f8f8f8">
+          <td style="padding:8px 12px">idiomorph text panel diff</td>
+          <td style="padding:8px 12px;font-family:monospace"><strong>2-4ms</strong></td>
+          <td style="padding:8px 12px;color:#888">800 DOM nodes, preserves scroll</td>
+        </tr>
+        <tr style="border-bottom:1px solid #e0e0e0">
+          <td style="padding:8px 12px">3x OOB swaps (text + list + header)</td>
+          <td style="padding:8px 12px;font-family:monospace"><strong>&lt;4ms</strong></td>
+          <td style="padding:8px 12px;color:#888">Browser batches into one paint</td>
+        </tr>
+        <tr style="border-bottom:1px solid #e0e0e0;background:#f8f8f8">
+          <td style="padding:8px 12px">Initial page load (JS + CSS)</td>
+          <td style="padding:8px 12px;font-family:monospace"><strong>~36 KB</strong></td>
+          <td style="padding:8px 12px;color:#888">vs ~300-400 KB with NiceGUI/Vue/Quasar</td>
+        </tr>
+        <tr>
+          <td style="padding:8px 12px">Time to interactive</td>
+          <td style="padding:8px 12px;font-family:monospace"><strong>50-100ms</strong></td>
+          <td style="padding:8px 12px;color:#888">vs ~200-500ms (no hydration, no WebSocket)</td>
+        </tr>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div style="margin-top:32px;padding:20px;background:#f8f8f8;border:1px solid #e0e0e0;border-radius:4px;">
+  <h3 style="margin-top:0">Ready for Spec?</h3>
+  <p>The architecture is audited. The experts found no deal-breakers &mdash; only improvements to incorporate. The main risk (request queuing for rapid keypresses) has a clean solution (<code>hx-sync</code>).</p>
+  <p style="margin-top:8px">Next step: write the full design spec, then create the implementation plan.</p>
+</div>
