@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import asyncio
+import html
 import platform
 import sqlite3
 import subprocess
+import tempfile
 from pathlib import Path
 
-from fastapi import APIRouter, Form, Request
+from fastapi import APIRouter, Form, Request, UploadFile, File
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 
 router = APIRouter(prefix="/api")
@@ -195,4 +197,162 @@ async def project_open(request: Request, path: str = Form(...)):
     return Response(
         status_code=200,
         headers={"HX-Redirect": redirect},
+    )
+
+
+# ---------------------------------------------------------------------------
+# Import routes
+# ---------------------------------------------------------------------------
+
+_MAX_UPLOAD_BYTES = 50 * 1024 * 1024  # 50 MB
+
+
+@router.post("/import/upload")
+async def import_upload(request: Request, file: UploadFile = File(...)):
+    """Accept a CSV/Excel upload, parse it, return a preview table fragment."""
+    from ace.services.importer import _read_tabular
+
+    # Read the uploaded file into a temp file
+    data = await file.read()
+    if len(data) > _MAX_UPLOAD_BYTES:
+        return _oob_toast("File exceeds 50 MB limit")
+
+    suffix = Path(file.filename or "upload.csv").suffix
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
+    try:
+        tmp.write(data)
+        tmp.close()
+
+        rows, columns = _read_tabular(Path(tmp.name))
+    except Exception as e:
+        Path(tmp.name).unlink(missing_ok=True)
+        return _oob_toast(f"Could not parse file: {e}")
+
+    # Store temp path for the commit step
+    request.app.state.import_tmp_path = tmp.name
+
+    # Build preview HTML
+    preview_rows = rows[:10]
+
+    # Table header
+    th = "".join(f"<th>{html.escape(str(c))}</th>" for c in columns)
+
+    # Table body
+    tbody = ""
+    for row in preview_rows:
+        cells = "".join(
+            f"<td>{html.escape(str(row.get(c, '')))}</td>" for c in columns
+        )
+        tbody += f"<tr>{cells}</tr>"
+
+    row_note = ""
+    if len(rows) > 10:
+        row_note = f'<p style="color:var(--ace-text-muted);font-size:0.8rem;margin-top:0.5rem">Showing 10 of {len(rows)} rows</p>'
+
+    # Column selection: ID dropdown + text column checkboxes
+    id_options = "".join(
+        f'<option value="{html.escape(str(c))}">{html.escape(str(c))}</option>'
+        for c in columns
+    )
+
+    text_checks = "".join(
+        f'<label style="display:block;margin-bottom:0.25rem">'
+        f'<input type="checkbox" name="text_columns" value="{html.escape(str(c))}"> '
+        f'{html.escape(str(c))}'
+        f'</label>'
+        for c in columns
+    )
+
+    fragment = f"""
+    <div class="ace-table-wrap" style="overflow-x:auto;margin-bottom:1rem">
+      <table class="ace-table">
+        <thead><tr>{th}</tr></thead>
+        <tbody>{tbody}</tbody>
+      </table>
+      {row_note}
+    </div>
+
+    <form hx-post="/api/import/commit" hx-target="#import-preview" hx-swap="innerHTML">
+      <div style="display:flex;gap:2rem;margin-bottom:1rem">
+        <div>
+          <label class="ace-label">ID column</label>
+          <select name="id_column" class="ace-input" style="width:auto">
+            {id_options}
+          </select>
+        </div>
+        <div>
+          <label class="ace-label">Text column(s)</label>
+          {text_checks}
+        </div>
+      </div>
+      <button type="submit" class="ace-btn ace-btn--primary">Import</button>
+    </form>
+    """
+    return HTMLResponse(fragment)
+
+
+@router.post("/import/commit")
+async def import_commit(
+    request: Request,
+    id_column: str = Form(...),
+    text_columns: list[str] = Form(...),
+):
+    """Commit the uploaded file: import selected columns as sources."""
+    from ace.app import get_db
+    from ace.services.importer import import_csv
+
+    tmp_path = getattr(request.app.state, "import_tmp_path", None)
+    if tmp_path is None or not Path(tmp_path).exists():
+        return _oob_toast("No uploaded file found. Please upload again.")
+
+    db_gen = get_db(request)
+    conn = next(db_gen)
+    try:
+        count = import_csv(conn, tmp_path, id_column, text_columns)
+    except Exception as e:
+        db_gen.close()
+        return _oob_toast(f"Import failed: {e}")
+    finally:
+        db_gen.close()
+
+    # Clean up temp file
+    Path(tmp_path).unlink(missing_ok=True)
+    request.app.state.import_tmp_path = None
+
+    return HTMLResponse(
+        f'<div style="padding:1rem;border:1px solid var(--ace-success);color:var(--ace-success)">'
+        f'<p>Imported {count} source{"s" if count != 1 else ""} successfully.</p>'
+        f'<a href="/code" class="ace-btn ace-btn--primary" style="margin-top:0.5rem;display:inline-block;text-decoration:none">Start coding &rarr;</a>'
+        f'</div>'
+    )
+
+
+@router.post("/import/folder")
+async def import_folder(
+    request: Request,
+    path: str = Form(...),
+):
+    """Import .txt files from a folder."""
+    from ace.app import get_db
+    from ace.services.importer import import_text_files
+
+    folder = Path(path)
+    if not folder.is_dir():
+        return _oob_toast("Invalid folder path.")
+
+    db_gen = get_db(request)
+    conn = next(db_gen)
+    try:
+        count = import_text_files(conn, folder)
+    except Exception as e:
+        db_gen.close()
+        return _oob_toast(f"Import failed: {e}")
+    finally:
+        db_gen.close()
+
+    return HTMLResponse(
+        f'<div style="padding:1rem;border:1px solid var(--ace-success);color:var(--ace-success)">'
+        f'<p>Imported {count} text file{"s" if count != 1 else ""} successfully.</p>'
+        f'<a href="/code" class="ace-btn ace-btn--primary" style="margin-top:0.5rem;display:inline-block;text-decoration:none">Start coding &rarr;</a>'
+        f'</div>'
     )
