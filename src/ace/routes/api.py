@@ -231,32 +231,64 @@ async def import_upload(request: Request, file: UploadFile = File(...)):
     # Store temp path for the commit step
     request.app.state.import_tmp_path = tmp.name
 
-    # Build preview HTML
-    preview_rows = rows[:10]
+    # Build glimpse-style preview
+    filename = html.escape(file.filename or "upload")
+    n_rows = len(rows)
+    n_cols = len(columns)
+    sample_rows = rows[:8]
 
-    # Table header
-    th = "".join(f"<th>{html.escape(str(c))}</th>" for c in columns)
+    def _infer_type(col_name: str) -> str:
+        """Infer column type from first non-None values."""
+        for row in sample_rows:
+            v = row.get(col_name)
+            if v is None or v == "":
+                continue
+            if isinstance(v, (int, float)):
+                return "num"
+            s = str(v)
+            try:
+                float(s)
+                return "num"
+            except (ValueError, TypeError):
+                pass
+            return "chr"
+        return "chr"
 
-    # Table body
-    tbody = ""
-    for row in preview_rows:
-        cells = "".join(
-            f"<td>{html.escape(str(row.get(c, '')))}</td>" for c in columns
+    def _sample_values(col_name: str) -> str:
+        """Get comma-joined sample values, truncated."""
+        vals = []
+        for row in sample_rows:
+            v = row.get(col_name)
+            if v is None:
+                vals.append("NA")
+            else:
+                s = str(v)
+                if len(s) > 30:
+                    s = s[:28] + "\u2026"
+                vals.append(s)
+        return html.escape(", ".join(vals)) + " \u2026"
+
+    # Glimpse rows
+    glimpse_rows = ""
+    for col in columns:
+        col_type = _infer_type(col)
+        sample = _sample_values(col)
+        esc_col = html.escape(str(col))
+        glimpse_rows += (
+            f'<div class="ace-glimpse-row">'
+            f'<span class="ace-glimpse-name">{esc_col}</span>'
+            f'<span class="ace-glimpse-type">{col_type}</span>'
+            f'<span class="ace-glimpse-vals">{sample}</span>'
+            f'</div>'
         )
-        tbody += f"<tr>{cells}</tr>"
-
-    row_note = ""
-    if len(rows) > 10:
-        row_note = f'<p style="color:var(--ace-text-muted);font-size:0.8rem;margin-top:0.5rem">Showing 10 of {len(rows)} rows</p>'
 
     # Column selection: ID dropdown + text column checkboxes
     id_options = "".join(
         f'<option value="{html.escape(str(c))}">{html.escape(str(c))}</option>'
         for c in columns
     )
-
     text_checks = "".join(
-        f'<label style="display:block;margin-bottom:0.25rem">'
+        f'<label class="ace-glimpse-check">'
         f'<input type="checkbox" name="text_columns" value="{html.escape(str(c))}"> '
         f'{html.escape(str(c))}'
         f'</label>'
@@ -264,25 +296,26 @@ async def import_upload(request: Request, file: UploadFile = File(...)):
     )
 
     fragment = f"""
-    <div class="ace-table-wrap" style="overflow-x:auto;margin-bottom:1rem">
-      <table class="ace-table">
-        <thead><tr>{th}</tr></thead>
-        <tbody>{tbody}</tbody>
-      </table>
-      {row_note}
+    <div class="ace-glimpse">
+      <div class="ace-glimpse-header">
+        <span>{filename}</span>
+        <span>{n_rows:,} rows &times; {n_cols}</span>
+      </div>
+      {glimpse_rows}
     </div>
 
-    <form hx-post="/api/import/commit" hx-target="#import-preview" hx-swap="innerHTML">
-      <div style="display:flex;gap:2rem;margin-bottom:1rem">
+    <form hx-post="/api/import/commit" hx-target="#import-preview" hx-swap="innerHTML"
+          style="margin-top:16px">
+      <div style="display:flex;gap:24px;margin-bottom:12px">
         <div>
-          <label class="ace-label">ID column</label>
-          <select name="id_column" class="ace-input" style="width:auto">
+          <label class="ace-label" style="margin-bottom:4px">ID column</label>
+          <select name="id_column" class="ace-input" style="width:auto;font-size:13px">
             {id_options}
           </select>
         </div>
         <div>
-          <label class="ace-label">Text column(s)</label>
-          {text_checks}
+          <label class="ace-label" style="margin-bottom:4px">Text column(s)</label>
+          <div style="display:flex;flex-wrap:wrap;gap:4px 16px">{text_checks}</div>
         </div>
       </div>
       <button type="submit" class="ace-btn ace-btn--primary">Import</button>

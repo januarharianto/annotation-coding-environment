@@ -242,3 +242,49 @@ body {
 .ace-table tr:hover td {
   background: var(--ace-bg-muted);
 }
+
+/* ---- Glimpse preview ---- */
+.ace-glimpse {
+  font-family: 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 13px;
+  max-width: 500px;
+}
+.ace-glimpse-header {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 0;
+  margin-bottom: 2px;
+  border-bottom: 1px solid var(--ace-border);
+  color: var(--ace-text-muted);
+  font-size: 11px;
+}
+.ace-glimpse-row {
+  display: grid;
+  grid-template-columns: 120px 36px 1fr;
+  gap: 8px;
+  padding: 2px 0;
+  line-height: 1.6;
+}
+.ace-glimpse-name {
+  font-weight: 500;
+  color: var(--ace-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ace-glimpse-type {
+  color: var(--ace-text-muted);
+  font-size: 11px;
+}
+.ace-glimpse-vals {
+  color: var(--ace-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ace-glimpse-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+}

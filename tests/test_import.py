@@ -49,7 +49,7 @@ def test_upload_csv_shows_preview(client_with_project):
         )
 
     assert resp.status_code == 200
-    assert "ace-table" in resp.text
+    assert "ace-glimpse" in resp.text
     assert "P001" in resp.text
     assert "participant_id" in resp.text
     # Should have column selection controls
