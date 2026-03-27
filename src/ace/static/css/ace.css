@@ -262,6 +262,19 @@ body {
 }
 .ace-home-link:hover { color: var(--ace-text); }
 
+/* ---- Back link (top-left on non-landing pages) ---- */
+.ace-back {
+  position: fixed;
+  top: 16px;
+  left: 20px;
+  font-size: 13px;
+  color: var(--ace-text-muted);
+  text-decoration: none;
+  transition: color var(--ace-transition);
+  z-index: 10;
+}
+.ace-back:hover { color: var(--ace-text); }
+
 /* ---- Import wizard ---- */
 .ace-wizard {
   display: flex;

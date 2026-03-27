@@ -28,6 +28,17 @@
     }, duration);
   };
 
+  // Escape key: navigate back (if a .ace-back link exists)
+  document.addEventListener("keydown", function (e) {
+    if (e.key !== "Escape") return;
+    // Don't navigate if typing in an input or dialog is open
+    var tag = document.activeElement && document.activeElement.tagName;
+    if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+    if (document.querySelector("dialog[open]")) return;
+    var back = document.querySelector(".ace-back");
+    if (back) { window.location.href = back.href; }
+  });
+
   // Listen for HTMX custom events that carry toast messages
   document.addEventListener("htmx:afterRequest", function (e) {
     var msg = e.detail.xhr && e.detail.xhr.getResponseHeader("X-ACE-Toast");
