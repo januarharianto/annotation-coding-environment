@@ -10,7 +10,7 @@ from ace.models.annotation import (
 )
 from ace.models.assignment import update_assignment_status
 from ace.models.source import get_source_content
-from ace.pages.coding_render import render_annotated_text
+from ace.services.coding_render import render_annotated_text
 from ace.services.offset import utf16_to_codepoint
 
 

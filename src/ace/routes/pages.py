@@ -12,7 +12,7 @@ from ace.models.assignment import add_assignment, get_assignments_for_coder
 from ace.models.codebook import list_codes
 from ace.models.project import get_project
 from ace.models.source import get_source_content, list_sources
-from ace.pages.coding_render import render_annotated_text
+from ace.services.coding_render import render_annotated_text
 
 router = APIRouter()
 
