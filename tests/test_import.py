@@ -52,10 +52,10 @@ def test_upload_csv_shows_preview(client_with_project):
     assert "ace-glimpse" in resp.text
     assert "P001" in resp.text
     assert "participant_id" in resp.text
-    # Should have column selection controls
-    assert 'name="id_column"' in resp.text
-    assert 'name="text_columns"' in resp.text
-    assert "Import" in resp.text
+    # Should have inline role toggle buttons
+    assert "ace-role-btn" in resp.text
+    assert 'data-role="id"' in resp.text
+    assert 'data-role="text"' in resp.text
 
 
 def test_import_commit(client_with_project):
@@ -75,7 +75,7 @@ def test_import_commit(client_with_project):
     # Commit the import
     resp = client.post(
         "/api/import/commit",
-        data={"id_column": "id", "text_columns": ["text"]},
+        data={"id_column": "id", "text_columns": "text"},
     )
 
     assert resp.status_code == 200
