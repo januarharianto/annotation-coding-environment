@@ -3,18 +3,17 @@
 import html
 
 
-def _annotation_span(data: dict) -> str:
-    hex_c = data["colour"].lstrip("#")
-    if len(hex_c) == 6:
-        r, g, b = int(hex_c[0:2], 16), int(hex_c[2:4], 16), int(hex_c[4:6], 16)
-    else:
-        r, g, b = 153, 153, 153
+def _annotation_span(data: dict, *, first: bool = False) -> str:
+    ann_id = html.escape(data["id"])
+    code_id = html.escape(data["code_id"])
+    code_name = html.escape(data["code_name"])
+    id_attr = f'id="ann-{ann_id}" ' if first else ""
     return (
-        f'<span class="ace-annotation" '
-        f'data-annotation-id="{html.escape(data["id"])}" '
-        f'title="{html.escape(data["code_name"])}" '
-        f'aria-label="{html.escape(data["code_name"])}" '
-        f'style="background-color: rgba({r},{g},{b},0.3);">'
+        f'<span {id_attr}'
+        f'class="ace-annotation ace-code-{code_id}" '
+        f'data-annotation-id="{ann_id}" '
+        f'title="{code_name}" '
+        f'aria-label="{code_name}">'
     )
 
 
@@ -27,11 +26,10 @@ def render_annotated_text(text: str, annotations: list, codes_by_id: dict) -> st
         start = ann["start_offset"]
         end = ann["end_offset"]
         code = codes_by_id.get(ann["code_id"])
-        colour = code["colour"] if code else "#999999"
         code_name = code["name"] if code else "Unknown"
         events_list.append((start, 0, "open", {
             "id": ann["id"],
-            "colour": colour,
+            "code_id": ann["code_id"],
             "code_name": code_name,
         }))
         events_list.append((end, 1, "close", {"id": ann["id"]}))
@@ -41,6 +39,7 @@ def render_annotated_text(text: str, annotations: list, codes_by_id: dict) -> st
     parts: list[str] = []
     pos = 0
     open_stack: list[dict] = []
+    seen_ids: set[str] = set()
 
     for offset, kind_order, kind, data in events_list:
         if offset > pos:
@@ -48,7 +47,9 @@ def render_annotated_text(text: str, annotations: list, codes_by_id: dict) -> st
             pos = offset
 
         if kind == "open":
-            parts.append(_annotation_span(data))
+            first = data["id"] not in seen_ids
+            seen_ids.add(data["id"])
+            parts.append(_annotation_span(data, first=first))
             open_stack.append(data)
         else:
             target_id = data["id"]
