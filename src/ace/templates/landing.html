@@ -4,60 +4,31 @@
 
 {% block content %}
 <main class="ace-landing">
-  <div class="ace-landing-card">
-    <h1 style="font-size:1.75rem;font-weight:700;letter-spacing:-0.02em">ACE</h1>
-    <p style="color:var(--ace-text-muted);margin-bottom:1.5rem">Annotation Coding Environment</p>
+  <div class="ace-home">
 
-    <!-- Coder name entry (shown when no name in localStorage) -->
-    <div id="coder-entry" style="display:none">
-      <label class="ace-label">Your name</label>
-      <div style="display:flex;gap:0.5rem;margin-bottom:1rem">
-        <input id="coder-name-input" class="ace-input" type="text"
-               placeholder="Enter your name" style="flex:1">
-        <button class="ace-btn ace-btn--primary" onclick="saveCoder()">Save</button>
-      </div>
+    <!-- First-time: name prompt (hidden after Enter, never shown again) -->
+    <div id="name-prompt" style="display:none">
+      <p class="ace-home-prompt">What should we call you?</p>
+      <input id="name-input" class="ace-home-name-input" placeholder="Your name" autofocus>
+      <p class="ace-home-hint">press Enter</p>
     </div>
 
-    <!-- Coder greeting (shown when name exists) -->
-    <div id="coder-greeting" style="display:none;margin-bottom:1rem;color:var(--ace-text-muted);font-size:0.875rem">
-      Welcome, <span id="coder-display-name"></span>
-      <button class="ace-btn" style="font-size:0.75rem;padding:0.15rem 0.5rem;margin-left:0.5rem"
-              onclick="clearCoder()">Change</button>
-    </div>
+    <!-- Main screen (hidden until name is set) -->
+    <div id="main-screen" style="display:none">
+      <h1 class="ace-home-title">ACE</h1>
+      <p class="ace-home-subtitle">Annotation Coding Environment</p>
 
-    <!-- Action buttons -->
-    <div style="display:flex;gap:0.5rem;margin-bottom:1rem">
-      <button class="ace-btn ace-btn--primary" onclick="showNewProject()" style="flex:1">New Project</button>
-      <button class="ace-btn" onclick="openExisting()" style="flex:1">Open Project</button>
-    </div>
+      <!-- New project: type name, Enter opens folder picker automatically -->
+      <input id="new-project-input" class="ace-home-new-input"
+             placeholder="New project name..." aria-label="New project name">
 
-    <!-- New project inline form (hidden by default) -->
-    <div id="new-project-form" style="display:none;margin-bottom:1rem">
-      <label class="ace-label">Project name</label>
-      <input id="project-name" class="ace-input" type="text"
-             placeholder="My Project" style="margin-bottom:0.5rem">
+      <!-- Recent projects -->
+      <div id="recent-list" class="ace-home-recents"></div>
 
-      <label class="ace-label">Location</label>
-      <div style="display:flex;gap:0.5rem;margin-bottom:0.5rem">
-        <input id="project-folder" class="ace-input" type="text"
-               placeholder="Choose a folder..." readonly style="flex:1">
-        <button class="ace-btn" onclick="pickFolder()">Browse</button>
-      </div>
-
-      <div id="cloud-warning" style="display:none;padding:0.5rem;border:1px solid #e65100;background:#fff3e0;color:#e65100;font-size:0.8rem;margin-bottom:0.5rem;border-radius:2px">
-        This path appears to be inside a cloud sync folder (Dropbox, OneDrive, iCloud, or Google Drive). SQLite databases can become corrupted when synced. Consider choosing a local folder instead.
-      </div>
-
-      <div style="display:flex;gap:0.5rem;justify-content:flex-end">
-        <button class="ace-btn" onclick="hideNewProject()">Cancel</button>
-        <button id="create-btn" class="ace-btn ace-btn--primary" onclick="createProject()">Create</button>
-      </div>
-    </div>
-
-    <!-- Recent files -->
-    <div id="recent-section" style="display:none">
-      <label class="ace-label">Recent projects</label>
-      <div id="recent-list"></div>
+      <!-- Open existing + greeting -->
+      <nav class="ace-home-footer">
+        <a class="ace-home-link" href="#" onclick="openExisting(); return false">Open file...</a>
+      </nav>
     </div>
 
     <div id="modal-container"></div>
@@ -74,77 +45,62 @@
   var CODER_KEY = "ace-coder-name";
   var cloudPatterns = [/dropbox/i, /onedrive/i, /icloud/i, /google\s*drive/i];
 
-  // --- Coder name ---
-  function initCoder() {
+  // --- Name setup ---
+  function init() {
     var name = localStorage.getItem(CODER_KEY);
-    if (name) {
-      document.getElementById("coder-greeting").style.display = "block";
-      document.getElementById("coder-display-name").textContent = name;
-      document.getElementById("coder-entry").style.display = "none";
+    if (!name) {
+      document.getElementById("name-prompt").style.display = "block";
+      document.getElementById("main-screen").style.display = "none";
+      var input = document.getElementById("name-input");
+      input.addEventListener("keydown", function(e) {
+        if (e.key === "Enter") {
+          var val = input.value.trim();
+          if (!val) return;
+          localStorage.setItem(CODER_KEY, val);
+          document.getElementById("name-prompt").style.display = "none";
+          document.getElementById("main-screen").style.display = "block";
+          document.getElementById("new-project-input").focus();
+        }
+      });
     } else {
-      document.getElementById("coder-entry").style.display = "block";
-      document.getElementById("coder-greeting").style.display = "none";
+      document.getElementById("name-prompt").style.display = "none";
+      document.getElementById("main-screen").style.display = "block";
     }
   }
 
-  window.saveCoder = function() {
-    var input = document.getElementById("coder-name-input");
-    var name = input.value.trim();
+  // --- New project: Enter triggers folder picker, then create ---
+  document.getElementById("new-project-input").addEventListener("keydown", function(e) {
+    if (e.key !== "Enter") return;
+    var name = this.value.trim();
     if (!name) return;
-    localStorage.setItem(CODER_KEY, name);
-    initCoder();
-  };
+    this.disabled = true;
+    this.placeholder = "Choosing folder...";
 
-  window.clearCoder = function() {
-    localStorage.removeItem(CODER_KEY);
-    initCoder();
-  };
-
-  // --- New project form ---
-  window.showNewProject = function() {
-    document.getElementById("new-project-form").style.display = "block";
-    document.getElementById("project-name").focus();
-  };
-
-  window.hideNewProject = function() {
-    document.getElementById("new-project-form").style.display = "none";
-  };
-
-  window.pickFolder = function() {
     fetch("/api/native/pick-folder", { method: "POST" })
       .then(function(r) { return r.json(); })
       .then(function(data) {
-        if (data.path) {
-          document.getElementById("project-folder").value = data.path;
-          checkCloudPath(data.path);
-        }
+        var input = document.getElementById("new-project-input");
+        input.disabled = false;
+        input.placeholder = "New project name...";
+        if (!data.path) return;
+
+        // Cloud sync warning
+        var lower = data.path.toLowerCase();
+        var isCloud = cloudPatterns.some(function(re) { return re.test(lower); });
+        if (isCloud && !confirm(
+          "This folder appears to be cloud-synced (Dropbox, OneDrive, iCloud). " +
+          "SQLite databases can corrupt when synced.\n\nContinue anyway?"
+        )) return;
+
+        var path = data.path.replace(/\/$/, "") + "/" + name.replace(/\.ace$/, "") + ".ace";
+        addRecent(path);
+        htmx.ajax("POST", "/api/project/create", {
+          values: { name: name, path: path },
+          target: "#modal-container",
+          swap: "innerHTML"
+        });
       });
-  };
-
-  function checkCloudPath(p) {
-    var warn = cloudPatterns.some(function(re) { return re.test(p); });
-    document.getElementById("cloud-warning").style.display = warn ? "block" : "none";
-  }
-
-  window.createProject = function() {
-    var name = document.getElementById("project-name").value.trim();
-    var folder = document.getElementById("project-folder").value.trim();
-    if (!name) { window.aceToast("Enter a project name"); return; }
-    if (!folder) { window.aceToast("Choose a folder"); return; }
-
-    // Build path: folder + name.ace
-    var path = folder.replace(/\/$/, "") + "/" + name.replace(/\.ace$/, "") + ".ace";
-
-    var body = new FormData();
-    body.append("name", name);
-    body.append("path", path);
-
-    htmx.ajax("POST", "/api/project/create", {
-      values: { name: name, path: path },
-      target: "#modal-container",
-      swap: "innerHTML"
-    });
-  };
+  });
 
   // --- Open existing ---
   window.openExisting = function() {
@@ -155,28 +111,23 @@
     })
       .then(function(r) { return r.json(); })
       .then(function(data) {
-        if (data.path) {
-          openProject(data.path);
-        }
+        if (data.path) openProject(data.path);
       });
   };
 
   function openProject(path) {
+    addRecent(path);
     htmx.ajax("POST", "/api/project/open", {
       values: { path: path },
       target: "#modal-container",
       swap: "innerHTML"
     });
-    addRecent(path);
   }
 
   // --- Recent files ---
   function getRecent() {
-    try {
-      return JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
-    } catch(e) {
-      return [];
-    }
+    try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || []; }
+    catch(e) { return []; }
   }
 
   function addRecent(path) {
@@ -189,43 +140,36 @@
 
   function renderRecent() {
     var list = getRecent();
-    var section = document.getElementById("recent-section");
     var container = document.getElementById("recent-list");
-    if (!list.length) {
-      section.style.display = "none";
-      return;
-    }
-    section.style.display = "block";
     container.innerHTML = "";
+    if (!list.length) return;
+
     list.forEach(function(path) {
+      var parts = path.split("/");
+      var filename = parts.pop();
+      var dir = parts.slice(-2).join("/");
       var row = document.createElement("div");
-      row.className = "ace-recent-item";
-      row.textContent = path.split("/").pop();
-      row.title = path;
+      row.className = "ace-home-recent";
+      row.innerHTML =
+        '<span class="ace-home-recent-name">' + filename + '</span>' +
+        '<span class="ace-home-recent-path">' + dir + '</span>';
       row.onclick = function() { openProject(path); };
       container.appendChild(row);
     });
   }
 
-  // Expose addRecent so project creation can update the list
   window._aceAddRecent = addRecent;
 
-  // Listen for successful HX-Redirect to update recent list
-  document.addEventListener("htmx:beforeRequest", function(e) {
-    // Before redirect on project create, store the path
-    var trigger = e.detail.elt;
-    if (trigger && trigger.id === "create-btn") {
-      var path = document.getElementById("project-folder").value.trim();
-      var name = document.getElementById("project-name").value.trim();
-      if (path && name) {
-        var fullPath = path.replace(/\/$/, "") + "/" + name.replace(/\.ace$/, "") + ".ace";
-        addRecent(fullPath);
-      }
+  // Dialog auto-open for overwrite confirmation
+  document.addEventListener("htmx:afterSwap", function(evt) {
+    if (evt.detail.target.id === "modal-container") {
+      var dialog = evt.detail.target.querySelector("dialog");
+      if (dialog && !dialog.open) dialog.showModal();
     }
   });
 
   // --- Init ---
-  initCoder();
+  init();
   renderRecent();
 })();
 </script>

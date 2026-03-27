@@ -162,7 +162,7 @@ body {
   margin-bottom: 0.25rem;
 }
 
-/* Landing page layout */
+/* Landing page */
 .ace-landing {
   display: flex;
   align-items: center;
@@ -170,29 +170,97 @@ body {
   min-height: 100vh;
   padding: 2rem;
 }
-
-.ace-landing-card {
+.ace-home {
+  text-align: center;
+  max-width: 320px;
   width: 100%;
-  max-width: 400px;
-  padding: 2rem;
-  border: 1px solid var(--ace-border);
-  background: var(--ace-bg);
 }
-
-/* Recent file items */
-.ace-recent-item {
-  padding: 0.5rem 0.75rem;
-  font-size: 0.875rem;
+.ace-home-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  margin: 0 0 2px;
+}
+.ace-home-subtitle {
+  font-size: 13px;
+  color: var(--ace-text-muted);
+  margin: 0 0 2rem;
+}
+.ace-home-prompt {
+  font-size: 1.1rem;
+  font-weight: 500;
+  margin: 0 0 1rem;
+}
+.ace-home-name-input {
+  display: block;
+  width: 100%;
+  border: none;
+  border-bottom: 1px solid var(--ace-border);
+  padding: 0.5rem 0;
+  font-size: 15px;
+  text-align: center;
+  background: transparent;
+  color: var(--ace-text);
+  outline: none;
+}
+.ace-home-name-input:focus { border-bottom-color: var(--ace-text); }
+.ace-home-name-input::placeholder { color: var(--ace-border); }
+.ace-home-hint {
+  font-size: 11px;
+  color: var(--ace-border);
+  margin-top: 0.5rem;
+}
+.ace-home-new-input {
+  display: block;
+  width: 100%;
+  border: none;
+  border-bottom: 1px solid var(--ace-border);
+  padding: 0.5rem 0;
+  font-size: 14px;
+  text-align: center;
+  background: transparent;
+  color: var(--ace-text);
+  outline: none;
+  margin-bottom: 1.5rem;
+}
+.ace-home-new-input:focus { border-bottom-color: var(--ace-text); }
+.ace-home-new-input::placeholder { color: var(--ace-border); }
+.ace-home-recents {
+  text-align: left;
+  margin-bottom: 1.5rem;
+}
+.ace-home-recent {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 8px 10px;
   cursor: pointer;
   transition: background var(--ace-transition);
+}
+.ace-home-recent:hover { background: var(--ace-bg-muted); }
+.ace-home-recent-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ace-text);
+}
+.ace-home-recent-path {
+  font-size: 11px;
+  color: var(--ace-text-muted);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  max-width: 140px;
 }
-
-.ace-recent-item:hover {
-  background: var(--ace-bg-muted);
+.ace-home-footer {
+  font-size: 13px;
 }
+.ace-home-link {
+  color: var(--ace-text-muted);
+  text-decoration: none;
+  cursor: pointer;
+  transition: color var(--ace-transition);
+}
+.ace-home-link:hover { color: var(--ace-text); }
 
 /* ---- Import wizard ---- */
 .ace-wizard {
