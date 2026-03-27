@@ -15,8 +15,7 @@ from ace.models.annotation import (
 )
 from ace.models.assignment import get_assignments_for_coder
 from ace.models.codebook import add_code, export_codebook_to_csv, import_selected_codes, list_codes, preview_codebook_csv, update_code
-from ace.models.coder import add_coder, list_coders, update_coder
-from ace.models.project import get_project
+from ace.models.project import add_coder, get_project, list_coders, update_coder
 from ace.pages.header import build_header
 from ace.models.source import get_source, list_sources
 from ace.pages.coding_actions import (

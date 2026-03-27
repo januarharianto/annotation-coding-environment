@@ -3,7 +3,7 @@
 from ace.db.connection import create_project
 from ace.models.source import add_source
 from ace.models.codebook import add_code
-from ace.models.coder import add_coder
+from ace.models.project import add_coder
 from ace.models.assignment import add_assignment
 from ace.models.annotation import add_annotation
 from ace.services.icr import compute_icr, ICRResult
