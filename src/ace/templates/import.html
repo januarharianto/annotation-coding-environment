@@ -1,48 +1,69 @@
 {% extends "base.html" %}
 
-{% block title %}Import Data — ACE{% endblock %}
+{% block title %}Import — ACE{% endblock %}
 
 {% block content %}
-<header class="ace-header">
-  <a href="/" style="text-decoration:none;color:var(--ace-text);font-weight:600;font-size:0.875rem">{{ project_name }}</a>
-</header>
-
-<main style="max-width:720px;margin:2rem auto;padding:0 1rem">
-  <h1 style="font-size:1.5rem;font-weight:700;margin-bottom:1.5rem">Import Data</h1>
+<main class="ace-wizard">
 
   {% if source_count > 0 %}
-  <div style="padding:1rem;border:1px solid var(--ace-border);margin-bottom:1.5rem">
-    <p>{{ source_count }} source{{ "s" if source_count != 1 else "" }} already imported.</p>
-    <a href="/code" class="ace-btn ace-btn--primary" style="margin-top:0.5rem;display:inline-block;text-decoration:none">Start coding &rarr;</a>
+  <!-- Already have data — offer to continue or import more -->
+  <div class="ace-wizard-step" id="step-existing">
+    <p class="ace-wizard-count">{{ source_count }} source{{ "s" if source_count != 1 else "" }} imported</p>
+    <a href="/code" class="ace-wizard-action">Start coding &rarr;</a>
+    <button class="ace-wizard-link" onclick="showStep('step-choose')">or import more data</button>
   </div>
   {% endif %}
 
-  <!-- CSV / Excel upload -->
-  <section style="margin-bottom:2rem">
-    <h2 style="font-size:1rem;font-weight:600;margin-bottom:0.75rem">CSV / Excel file</h2>
+  <!-- Step 1: Choose import type -->
+  <div class="ace-wizard-step {% if source_count == 0 %}active{% endif %}" id="step-choose">
+    <p class="ace-wizard-q">What would you like to import?</p>
+    <div class="ace-wizard-options">
+      <button class="ace-wizard-option" onclick="chooseFile()">
+        <span class="ace-wizard-option-title">CSV or Excel file</span>
+        <span class="ace-wizard-option-desc">Tabular data with columns</span>
+      </button>
+      <button class="ace-wizard-option" onclick="chooseFolder()">
+        <span class="ace-wizard-option-title">Folder of text files</span>
+        <span class="ace-wizard-option-desc">One .txt file per source</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Step 2a: File upload -->
+  <div class="ace-wizard-step" id="step-upload">
+    <p class="ace-wizard-q">Choose your file</p>
     <form hx-post="/api/import/upload"
-          hx-target="#import-preview"
+          hx-target="#step-columns"
           hx-swap="innerHTML"
           hx-encoding="multipart/form-data"
-          style="display:flex;gap:0.5rem;align-items:flex-end">
-      <input type="file" name="file" accept=".csv,.xlsx" class="ace-input" style="flex:1">
-      <button type="submit" class="ace-btn ace-btn--primary">Upload</button>
+          hx-on::after-request="if(event.detail.successful) showStep('step-columns')">
+      <label class="ace-wizard-dropzone" id="dropzone">
+        <input type="file" name="file" accept=".csv,.xlsx" style="display:none"
+               onchange="this.closest('form').requestSubmit()">
+        <span class="ace-wizard-dropzone-text">Click to choose a file</span>
+        <span class="ace-wizard-dropzone-hint">.csv or .xlsx</span>
+      </label>
     </form>
-  </section>
+    <button class="ace-wizard-back" onclick="showStep('step-choose')">&larr; Back</button>
+  </div>
 
-  <div id="import-preview"></div>
-
-  <!-- Text folder import -->
-  <section>
-    <h2 style="font-size:1rem;font-weight:600;margin-bottom:0.75rem">Text files from folder</h2>
-    <div style="display:flex;gap:0.5rem;margin-bottom:0.5rem">
-      <input id="folder-path" name="path" class="ace-input" type="text"
-             placeholder="Choose a folder..." readonly style="flex:1">
-      <button class="ace-btn" onclick="pickImportFolder()">Browse</button>
-    </div>
-    <button class="ace-btn ace-btn--primary" onclick="importFolder()">Import Folder</button>
+  <!-- Step 2b: Folder picker -->
+  <div class="ace-wizard-step" id="step-folder">
+    <p class="ace-wizard-q">Choose a folder</p>
+    <p class="ace-wizard-hint">All .txt files in the folder will be imported as sources</p>
+    <button class="ace-wizard-option" onclick="pickAndImportFolder()" style="max-width:300px">
+      <span class="ace-wizard-option-title">Browse for folder</span>
+    </button>
     <div id="folder-result"></div>
-  </section>
+    <button class="ace-wizard-back" onclick="showStep('step-choose')">&larr; Back</button>
+  </div>
+
+  <!-- Step 3: Column selection (populated by HTMX) -->
+  <div class="ace-wizard-step" id="step-columns"></div>
+
+  <!-- Step 4: Done (populated by HTMX on import commit) -->
+  <div class="ace-wizard-step" id="step-done"></div>
+
 </main>
 {% endblock %}
 
@@ -51,27 +72,29 @@
 (function() {
   "use strict";
 
-  window.pickImportFolder = function() {
+  window.showStep = function(id) {
+    document.querySelectorAll('.ace-wizard-step').forEach(function(el) {
+      el.classList.remove('active');
+    });
+    var step = document.getElementById(id);
+    if (step) step.classList.add('active');
+  };
+
+  window.chooseFile = function() { showStep('step-upload'); };
+
+  window.chooseFolder = function() { showStep('step-folder'); };
+
+  window.pickAndImportFolder = function() {
     fetch("/api/native/pick-folder", { method: "POST" })
       .then(function(r) { return r.json(); })
       .then(function(data) {
-        if (data.path) {
-          document.getElementById("folder-path").value = data.path;
-        }
+        if (!data.path) return;
+        htmx.ajax("POST", "/api/import/folder", {
+          values: { path: data.path },
+          target: "#step-done",
+          swap: "innerHTML"
+        }).then(function() { showStep('step-done'); });
       });
-  };
-
-  window.importFolder = function() {
-    var path = document.getElementById("folder-path").value.trim();
-    if (!path) {
-      window.aceToast("Choose a folder first");
-      return;
-    }
-    htmx.ajax("POST", "/api/import/folder", {
-      values: { path: path },
-      target: "#folder-result",
-      swap: "innerHTML"
-    });
   };
 })();
 </script>

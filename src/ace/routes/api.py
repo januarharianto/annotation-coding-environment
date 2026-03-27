@@ -287,7 +287,9 @@ async def import_upload(request: Request, file: UploadFile = File(...)):
         )
 
     fragment = f"""
-    <form id="import-form" hx-post="/api/import/commit" hx-target="#import-preview" hx-swap="innerHTML">
+    <p class="ace-wizard-q">Select columns</p>
+    <form id="import-form" hx-post="/api/import/commit" hx-target="#step-done" hx-swap="innerHTML"
+          hx-on::after-request="if(event.detail.successful) showStep('step-done')">
       <div class="ace-glimpse">
         <div class="ace-glimpse-header">
           <span>{filename}</span>
@@ -301,6 +303,7 @@ async def import_upload(request: Request, file: UploadFile = File(...)):
       <button type="submit" class="ace-btn ace-btn--primary" id="import-submit"
               disabled style="margin-top:12px">Import</button>
     </form>
+    <button class="ace-wizard-back" onclick="showStep('step-upload')">&larr; Back</button>
 
     <script>
     (function() {{
@@ -386,10 +389,9 @@ async def import_commit(
     request.app.state.import_tmp_path = None
 
     return HTMLResponse(
-        f'<div style="padding:1rem;border:1px solid var(--ace-success);color:var(--ace-success)">'
-        f'<p>Imported {count} source{"s" if count != 1 else ""} successfully.</p>'
-        f'<a href="/code" class="ace-btn ace-btn--primary" style="margin-top:0.5rem;display:inline-block;text-decoration:none">Start coding &rarr;</a>'
-        f'</div>'
+        f'<p class="ace-wizard-count">{count} source{"s" if count != 1 else ""}</p>'
+        f'<p style="color:var(--ace-text-muted);margin:0 0 1.5rem">imported successfully</p>'
+        f'<a href="/code" class="ace-wizard-action">Start coding &rarr;</a>'
     )
 
 
@@ -417,8 +419,7 @@ async def import_folder(
         db_gen.close()
 
     return HTMLResponse(
-        f'<div style="padding:1rem;border:1px solid var(--ace-success);color:var(--ace-success)">'
-        f'<p>Imported {count} text file{"s" if count != 1 else ""} successfully.</p>'
-        f'<a href="/code" class="ace-btn ace-btn--primary" style="margin-top:0.5rem;display:inline-block;text-decoration:none">Start coding &rarr;</a>'
-        f'</div>'
+        f'<p class="ace-wizard-count">{count} text file{"s" if count != 1 else ""}</p>'
+        f'<p style="color:var(--ace-text-muted);margin:0 0 1.5rem">imported successfully</p>'
+        f'<a href="/code" class="ace-wizard-action">Start coding &rarr;</a>'
     )
