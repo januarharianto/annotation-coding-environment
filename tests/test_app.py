@@ -54,6 +54,9 @@ class TestAppStartup:
         with TestClient(app):
             assert app.state.db is None
             assert app.state.project_path is None
+            assert app.state.undo_managers == {}
+            assert app.state.migrated_paths == set()
+            assert app.state.active_projects == set()
 
 
 # ── CSRF middleware ──────────────────────────────────────────────────────
@@ -136,43 +139,72 @@ class TestHtmxRedirect:
 
 
 class TestGetDb:
-    def test_raises_redirect_when_no_project(self, client):
-        """get_db should redirect when no project is loaded."""
-        # /import exercises get_db indirectly — but let's test the
-        # dependency directly by importing it
+    def _fake_request(self, project_path=None):
+        """Build a minimal request-like object with app.state.project_path."""
+        from types import SimpleNamespace
+
+        state = SimpleNamespace(project_path=project_path)
+        app = SimpleNamespace(state=state)
+        return SimpleNamespace(app=app)
+
+    def test_raises_redirect_when_no_project_path(self):
         from ace.app import get_db
 
-        class FakeState:
-            db = None
-
-        class FakeApp:
-            state = FakeState()
-
-        class FakeRequest:
-            app = FakeApp()
-
-        gen = get_db(FakeRequest())
+        gen = get_db(self._fake_request(project_path=None))
         with pytest.raises(HtmxRedirect):
             next(gen)
 
-    def test_yields_connection_when_project_loaded(self):
+    def test_raises_redirect_when_path_missing(self, tmp_path):
         from ace.app import get_db
 
-        conn = sqlite3.connect(":memory:")
+        gen = get_db(self._fake_request(project_path=str(tmp_path / "gone.ace")))
+        with pytest.raises(HtmxRedirect):
+            next(gen)
 
-        class FakeState:
-            db = conn
+    def test_raises_redirect_when_bad_application_id(self, tmp_path):
+        from ace.app import get_db
 
-        class FakeApp:
-            state = FakeState()
-
-        class FakeRequest:
-            app = FakeApp()
-
-        gen = get_db(FakeRequest())
-        result = next(gen)
-        assert result is conn
+        bad_db = tmp_path / "bad.ace"
+        conn = sqlite3.connect(str(bad_db))
+        conn.execute("PRAGMA application_id = 0")
         conn.close()
+
+        gen = get_db(self._fake_request(project_path=str(bad_db)))
+        with pytest.raises(HtmxRedirect):
+            next(gen)
+
+    def test_yields_connection_for_valid_project(self, tmp_path):
+        from ace.app import get_db
+        from ace.db.connection import create_project
+
+        db_path = tmp_path / "valid.ace"
+        setup_conn = create_project(str(db_path), "test")
+        setup_conn.close()
+
+        gen = get_db(self._fake_request(project_path=str(db_path)))
+        conn = next(gen)
+        try:
+            assert isinstance(conn, sqlite3.Connection)
+            # Verify foreign keys are enabled
+            fk = conn.execute("PRAGMA foreign_keys").fetchone()[0]
+            assert fk == 1
+        finally:
+            gen.close()
+
+    def test_connection_closed_after_yield(self, tmp_path):
+        from ace.app import get_db
+        from ace.db.connection import create_project
+
+        db_path = tmp_path / "close_test.ace"
+        setup_conn = create_project(str(db_path), "test")
+        setup_conn.close()
+
+        gen = get_db(self._fake_request(project_path=str(db_path)))
+        conn = next(gen)
+        gen.close()
+        # Connection should be closed — executing should raise
+        with pytest.raises(sqlite3.ProgrammingError):
+            conn.execute("SELECT 1")
 
 
 # ── Allowed origins builder ──────────────────────────────────────────────
