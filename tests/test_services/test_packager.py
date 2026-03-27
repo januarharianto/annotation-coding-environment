@@ -5,7 +5,7 @@ import sqlite3
 from ace.db.connection import create_project, open_project, checkpoint_and_close
 from ace.models.source import add_source
 from ace.models.codebook import add_code, list_codes
-from ace.models.coder import add_coder
+from ace.models.project import add_coder
 from ace.models.annotation import add_annotation
 from ace.services.assigner import generate_assignments
 from ace.services.packager import export_coder_package, import_coder_package, ImportResult

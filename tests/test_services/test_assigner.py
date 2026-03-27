@@ -2,7 +2,7 @@
 
 from ace.db.connection import create_project
 from ace.models.source import add_source
-from ace.models.coder import add_coder
+from ace.models.project import add_coder
 from ace.services.assigner import generate_assignments, AssignmentPreview
 
 

@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 from ace.app import create_app
 from ace.db.connection import create_project
 from ace.models.codebook import add_code
-from ace.models.coder import list_coders
+from ace.models.project import list_coders
 from ace.models.source import add_source
 
 

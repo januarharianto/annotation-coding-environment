@@ -7,7 +7,7 @@ from ace.models.annotation import (
     list_annotations,
     undelete_annotation,
 )
-from ace.models.coder import add_coder
+from ace.models.project import add_coder
 from ace.models.codebook import add_code
 from ace.models.source import add_source
 
