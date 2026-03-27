@@ -134,6 +134,12 @@ def _coding_context(conn: sqlite3.Connection, coder_id: str, current_index: int)
     }
 
 
+@router.get("/agreement", response_class=HTMLResponse)
+async def agreement_page(request: Request):
+    templates = request.app.state.templates
+    return templates.TemplateResponse(request, "agreement.html")
+
+
 @router.get("/code", response_class=HTMLResponse)
 async def coding_page(request: Request, index: int = Query(default=0)):
     project_path: str | None = getattr(request.app.state, "project_path", None)
