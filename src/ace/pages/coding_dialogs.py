@@ -4,8 +4,7 @@ import sqlite3
 
 from nicegui import ui
 
-from ace.models.codebook import update_code, delete_code
-from ace.services.palette import COLOUR_PALETTE
+from ace.models.codebook import COLOUR_PALETTE, delete_code, update_code
 
 
 def open_code_dialog(dlg, title, content_fn, action_label=None, action_fn=None, action_props="unelevated color=primary"):
