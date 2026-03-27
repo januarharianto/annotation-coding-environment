@@ -174,66 +174,11 @@
 
 {% block scripts %}
 <script src="/static/js/idiomorph-ext.min.js"></script>
+<script src="/static/js/Sortable.min.js"></script>
 <script>
-(function() {
-  "use strict";
-
   window.__aceCurrentIndex = {{ current_index }};
   window.__aceLastSelection = null;
   window.__aceLastAppliedCodeId = null;
   window.__aceTotalSources = {{ total_sources }};
-
-  window.aceNavigate = function(index) {
-    if (index < 0 || index >= window.__aceTotalSources) return;
-    window.__aceCurrentIndex = index;
-    window.location.href = "/code?index=" + index;
-  };
-
-  // Resize handle drag
-  var handle = document.getElementById("resize-handle");
-  if (handle) {
-    var split = handle.parentElement;
-    var dragging = false;
-
-    handle.addEventListener("mousedown", function(e) {
-      e.preventDefault();
-      dragging = true;
-      document.body.style.cursor = "col-resize";
-      document.body.style.userSelect = "none";
-    });
-
-    document.addEventListener("mousemove", function(e) {
-      if (!dragging) return;
-      var rect = split.getBoundingClientRect();
-      var x = e.clientX - rect.left;
-      var min = 180;
-      var max = rect.width * 0.5;
-      x = Math.max(min, Math.min(max, x));
-      split.style.gridTemplateColumns = x + "px 1px 1fr";
-    });
-
-    document.addEventListener("mouseup", function() {
-      if (dragging) {
-        dragging = false;
-        document.body.style.cursor = "";
-        document.body.style.userSelect = "";
-      }
-    });
-  }
-
-  // Code filter
-  var filterInput = document.getElementById("code-filter-input");
-  if (filterInput) {
-    filterInput.addEventListener("input", function() {
-      var query = this.value.toLowerCase();
-      var rows = document.querySelectorAll(".ace-code-row");
-      rows.forEach(function(row) {
-        var name = row.querySelector(".ace-code-name");
-        if (!name) return;
-        row.style.display = name.textContent.toLowerCase().indexOf(query) >= 0 ? "" : "none";
-      });
-    });
-  }
-})();
 </script>
 {% endblock %}
