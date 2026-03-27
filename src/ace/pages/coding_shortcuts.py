@@ -4,9 +4,6 @@ from nicegui import ui
 
 from ace.models.codebook import reorder_codes
 from ace.pages.coding_actions import apply_code, do_undo_redo
-from ace.pages.coding_dialogs import open_annotation_info
-
-
 def register_shortcuts(
     *,
     state,
@@ -18,14 +15,12 @@ def register_shortcuts(
     text_container,
     annotation_list_refresh,
     grid_container,
-    annotation_info_dialog,
     assignments,
     current_source_id,
     navigate_to_fn,
     toggle_grid_fn,
     refresh_codes_fn,
     code_list_refresh,
-    delete_annotation_fn,
 ):
     """Register all keyboard shortcut and JS event handlers."""
 
@@ -39,14 +34,7 @@ def register_shortcuts(
             "text": data["text"],
         }
 
-    def _on_annotation_clicked(e):
-        data = e.args
-        ann_ids = data.get("annotation_ids", [])
-        if ann_ids:
-            open_annotation_info(conn, annotation_info_dialog, ann_ids, codes_by_id, delete_annotation_fn)
-
     ui.on("text_selected", _on_text_selected)
-    ui.on("annotation_clicked", _on_annotation_clicked)
 
     # ── Keyboard shortcut handlers ────────────────────────────────────
 
@@ -61,7 +49,6 @@ def register_shortcuts(
             grid_container.set_visibility(False)
             return
         state["pending_selection"] = None
-        annotation_info_dialog.close()
 
     def _on_shortcut_prev(_e):
         idx = state["current_index"]

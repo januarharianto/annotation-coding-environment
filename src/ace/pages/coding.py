@@ -1,7 +1,6 @@
 """New two-pane coding interface with inline code creation."""
 
 import hashlib
-import json
 import sqlite3
 import tempfile
 import uuid
@@ -155,7 +154,6 @@ def build(conn: sqlite3.Connection) -> None:
         '</style>'
     )
 
-    annotation_info_dialog = ui.dialog()
     rename_dialog = ui.dialog()
     colour_dialog = ui.dialog()
     delete_dialog = ui.dialog()
@@ -569,8 +567,6 @@ def build(conn: sqlite3.Connection) -> None:
                     ).style(
                         "min-width: 0; line-height: 1.4;"
                     ).on("click", _click_apply)
-                    with lbl:
-                        ui.tooltip(code["name"]).props(":delay=1000")
                     if shortcut:
                         ui.label(shortcut).classes("ace-keycap")
                     with ui.button(icon="more_horiz").props(
@@ -724,17 +720,6 @@ def build(conn: sqlite3.Connection) -> None:
                         f"{'unelevated color=negative' if is_flagged else 'flat color=grey-5'} round dense size=sm"
                     ).tooltip("Flagged" if is_flagged else "Flag this source")
 
-                if src["metadata_json"]:
-                    try:
-                        meta = json.loads(src["metadata_json"])
-                        with ui.row().classes("q-mb-sm gap-2"):
-                            for k, v in meta.items():
-                                ui.label(f"{k}: {v}").classes(
-                                    "text-caption text-grey-7 bg-grey-2 q-px-xs"
-                                )
-                    except (json.JSONDecodeError, TypeError):
-                        pass
-
             source_header()
 
             # Text content area
@@ -835,14 +820,12 @@ def build(conn: sqlite3.Connection) -> None:
         text_container=text_container,
         annotation_list_refresh=annotation_list_display.refresh,
         grid_container=grid_container,
-        annotation_info_dialog=annotation_info_dialog,
         assignments=assignments,
         current_source_id=current_source_id,
         navigate_to_fn=_navigate_to,
         toggle_grid_fn=_toggle_grid,
         refresh_codes_fn=_refresh_codes,
         code_list_refresh=code_list.refresh,
-        delete_annotation_fn=_delete_annotation,
     )
 
     # ── Initial render ───────────────────────────────────────────────
