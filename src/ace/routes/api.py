@@ -467,6 +467,33 @@ def _render_coding_oob(request: Request, conn, coder_id: str, current_index: int
     return text_html + f'<div id="annotation-list" hx-swap-oob="innerHTML">{ann_html}</div>'
 
 
+def _render_full_coding_oob(request: Request, conn, coder_id: str, target_index: int) -> str:
+    """Render all 6 coding swap zones (primary text_panel + 5 OOB blocks)."""
+    from ace.routes.pages import _coding_context
+    from jinja2_fragments import render_block
+
+    templates = request.app.state.templates
+    ctx = _coding_context(conn, coder_id, target_index)
+    ctx["request"] = request
+
+    primary = render_block(templates.env, "coding.html", "text_panel", ctx)
+
+    oob_blocks = [
+        ("source_header", "source-header"),
+        ("annotation_list", "annotation-list"),
+        ("bottom_bar", "bottom-bar"),
+        ("source_grid", "source-grid"),
+        ("code_sidebar", "code-sidebar"),
+    ]
+
+    parts = [primary]
+    for block_name, element_id in oob_blocks:
+        block_html = render_block(templates.env, "coding.html", block_name, ctx)
+        parts.append(f'<div id="{element_id}" hx-swap-oob="innerHTML">{block_html}</div>')
+
+    return "".join(parts)
+
+
 def _resolve_source_id(conn, coder_id: str, current_index: int) -> str | None:
     """Get the source_id for the given assignment index."""
     from ace.models.assignment import get_assignments_for_coder
@@ -646,5 +673,88 @@ async def redo_route(
             content,
             headers={"HX-Trigger": f'{{"ace-toast": "{msg}"}}'},
         )
+    finally:
+        conn.close()
+
+
+# ---------------------------------------------------------------------------
+# Source navigation + flag routes
+# ---------------------------------------------------------------------------
+
+
+@router.post("/code/navigate")
+async def navigate_route(
+    request: Request,
+    current_index: int = Form(default=0),
+    target_index: int = Form(default=0),
+):
+    """Navigate between sources, auto-completing/starting assignments."""
+    import json
+
+    from ace.models.assignment import get_assignments_for_coder, update_assignment_status
+
+    coder_id = getattr(request.app.state, "coder_id", None)
+    if coder_id is None:
+        return HTMLResponse("", status_code=400)
+
+    conn = _open_project_db(request)
+    try:
+        assignments = get_assignments_for_coder(conn, coder_id)
+        if not assignments:
+            return HTMLResponse("", status_code=400)
+
+        total = len(assignments)
+
+        # Clamp target
+        if target_index < 0:
+            target_index = 0
+        if target_index >= total:
+            target_index = total - 1
+
+        # Auto-complete departing source
+        if 0 <= current_index < total:
+            if assignments[current_index]["status"] == "in_progress":
+                source_id = assignments[current_index]["source_id"]
+                update_assignment_status(conn, source_id, coder_id, "complete")
+
+        # Auto-start arriving source
+        if assignments[target_index]["status"] == "pending":
+            source_id = assignments[target_index]["source_id"]
+            update_assignment_status(conn, source_id, coder_id, "in_progress")
+
+        content = _render_full_coding_oob(request, conn, coder_id, target_index)
+        trigger = json.dumps({"ace-navigate": {"index": target_index, "total": total}})
+        return HTMLResponse(content, headers={"HX-Trigger": trigger})
+    finally:
+        conn.close()
+
+
+@router.post("/code/flag")
+async def flag_route(
+    request: Request,
+    source_index: int = Form(default=0),
+):
+    """Toggle the flagged status of the current source."""
+    from ace.models.assignment import get_assignments_for_coder, update_assignment_status
+
+    coder_id = getattr(request.app.state, "coder_id", None)
+    if coder_id is None:
+        return HTMLResponse("", status_code=400)
+
+    conn = _open_project_db(request)
+    try:
+        assignments = get_assignments_for_coder(conn, coder_id)
+        if not assignments or source_index >= len(assignments):
+            return HTMLResponse("", status_code=400)
+
+        assignment = assignments[source_index]
+        source_id = assignment["source_id"]
+        current_status = assignment["status"]
+
+        new_status = "in_progress" if current_status == "flagged" else "flagged"
+        update_assignment_status(conn, source_id, coder_id, new_status)
+
+        content = _render_full_coding_oob(request, conn, coder_id, source_index)
+        return HTMLResponse(content)
     finally:
         conn.close()
