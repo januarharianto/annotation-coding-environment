@@ -221,7 +221,6 @@ body {
   background: transparent;
   color: var(--ace-text);
   outline: none;
-  margin-bottom: 1.5rem;
 }
 .ace-home-new-input:focus { border-bottom-color: var(--ace-text); }
 .ace-home-new-input::placeholder { color: var(--ace-border); }
@@ -261,6 +260,14 @@ body {
   transition: color var(--ace-transition);
 }
 .ace-home-link:hover { color: var(--ace-text); }
+.ace-home-empty {
+  font-size: 13px;
+  color: var(--ace-text-muted);
+  margin: 0 0 1.5rem;
+  line-height: 1.6;
+}
+.ace-home-new { position: relative; margin-bottom: 1.5rem; }
+.ace-home-new .ace-home-hint { transition: opacity var(--ace-transition); }
 
 /* ---- Back link (top-left on non-landing pages) ---- */
 .ace-back {

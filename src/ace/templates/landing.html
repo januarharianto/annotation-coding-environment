@@ -19,15 +19,23 @@
       <p class="ace-home-subtitle">Annotation Coding Environment</p>
 
       <!-- New project: type name, Enter opens folder picker automatically -->
-      <input id="new-project-input" class="ace-home-new-input"
-             placeholder="New project name..." aria-label="New project name">
+      <div class="ace-home-new">
+        <input id="new-project-input" class="ace-home-new-input"
+               placeholder="New project name..." aria-label="New project name">
+        <p id="new-project-hint" class="ace-home-hint">type a name and press Enter</p>
+      </div>
 
       <!-- Recent projects -->
       <div id="recent-list" class="ace-home-recents"></div>
 
-      <!-- Open existing + greeting -->
+      <!-- Empty state hint (shown when no recent projects) -->
+      <p id="empty-hint" class="ace-home-empty" style="display:none">
+        Create a project above, or open an existing .ace file below
+      </p>
+
+      <!-- Open existing -->
       <nav class="ace-home-footer">
-        <a class="ace-home-link" href="#" onclick="openExisting(); return false">Open file...</a>
+        <a class="ace-home-link" href="#" onclick="openExisting(); return false">Open existing file...</a>
       </nav>
     </div>
 
@@ -68,8 +76,15 @@
     }
   }
 
-  // --- New project: Enter triggers folder picker, then create ---
-  document.getElementById("new-project-input").addEventListener("keydown", function(e) {
+  // --- New project ---
+  // Show/hide hint based on input content
+  var newInput = document.getElementById("new-project-input");
+  var newHint = document.getElementById("new-project-hint");
+  newInput.addEventListener("input", function() {
+    if (newHint) newHint.style.opacity = this.value.trim() ? "0" : "1";
+  });
+
+  newInput.addEventListener("keydown", function(e) {
     if (e.key !== "Enter") return;
     var name = this.value.trim();
     if (!name) return;
@@ -141,8 +156,13 @@
   function renderRecent() {
     var list = getRecent();
     var container = document.getElementById("recent-list");
+    var emptyHint = document.getElementById("empty-hint");
     container.innerHTML = "";
-    if (!list.length) return;
+    if (!list.length) {
+      if (emptyHint) emptyHint.style.display = "block";
+      return;
+    }
+    if (emptyHint) emptyHint.style.display = "none";
 
     list.forEach(function(path) {
       var parts = path.split("/");
