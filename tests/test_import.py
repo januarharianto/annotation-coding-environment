@@ -27,8 +27,7 @@ def test_import_page_renders(client_with_project):
     client, _ = client_with_project
     resp = client.get("/import")
     assert resp.status_code == 200
-    assert "Import Data" in resp.text
-    assert "Test Project" in resp.text
+    assert "What would you like to import" in resp.text
 
 
 def test_upload_csv_shows_preview(client_with_project):

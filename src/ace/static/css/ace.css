@@ -194,6 +194,114 @@ body {
   background: var(--ace-bg-muted);
 }
 
+/* ---- Import wizard ---- */
+.ace-wizard {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 2rem;
+}
+.ace-wizard-step {
+  display: none;
+  text-align: center;
+  max-width: 480px;
+  width: 100%;
+}
+.ace-wizard-step.active { display: block; }
+.ace-wizard-q {
+  font-size: 1.25rem;
+  font-weight: 500;
+  margin: 0 0 1.5rem;
+  color: var(--ace-text);
+}
+.ace-wizard-hint {
+  font-size: 13px;
+  color: var(--ace-text-muted);
+  margin: -1rem 0 1.5rem;
+}
+.ace-wizard-count {
+  font-size: 2rem;
+  font-weight: 600;
+  color: var(--ace-text);
+  margin: 0 0 0.5rem;
+}
+.ace-wizard-action {
+  display: inline-block;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--ace-text);
+  text-decoration: none;
+  padding: 10px 24px;
+  border: 1px solid var(--ace-text);
+  transition: background var(--ace-transition), color var(--ace-transition);
+}
+.ace-wizard-action:hover { background: var(--ace-text); color: var(--ace-bg); }
+.ace-wizard-link {
+  display: block;
+  margin-top: 1rem;
+  font-size: 13px;
+  color: var(--ace-text-muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-decoration: underline;
+}
+.ace-wizard-options {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: center;
+}
+.ace-wizard-option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  max-width: 320px;
+  padding: 20px;
+  border: 1px solid var(--ace-border);
+  background: var(--ace-bg);
+  cursor: pointer;
+  transition: border-color var(--ace-transition), background var(--ace-transition);
+  text-align: center;
+}
+.ace-wizard-option:hover { border-color: var(--ace-text); background: var(--ace-bg-muted); }
+.ace-wizard-option-title { font-size: 15px; font-weight: 500; color: var(--ace-text); }
+.ace-wizard-option-desc { font-size: 13px; color: var(--ace-text-muted); }
+.ace-wizard-dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  max-width: 320px;
+  margin: 0 auto;
+  padding: 40px 20px;
+  border: 2px dashed var(--ace-border);
+  cursor: pointer;
+  transition: border-color var(--ace-transition), background var(--ace-transition);
+}
+.ace-wizard-dropzone:hover { border-color: var(--ace-text-muted); background: var(--ace-bg-muted); }
+.ace-wizard-dropzone-text { font-size: 15px; font-weight: 500; color: var(--ace-text); }
+.ace-wizard-dropzone-hint { font-size: 13px; color: var(--ace-text-muted); }
+.ace-wizard-back {
+  display: inline-block;
+  margin-top: 1.5rem;
+  font-size: 13px;
+  color: var(--ace-text-muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+.ace-wizard-back:hover { color: var(--ace-text); }
+
+/* Wizard overrides for glimpse (center it, add spacing) */
+.ace-wizard .ace-glimpse { margin: 0 auto 16px; text-align: left; }
+.ace-wizard #import-submit { margin-top: 16px; }
+
 /* Dialog styling */
 .ace-dialog {
   border: 1px solid var(--ace-border);
