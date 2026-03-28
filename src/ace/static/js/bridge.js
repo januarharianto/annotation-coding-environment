@@ -334,8 +334,19 @@
       return;
     }
 
-    // Skip other arrow keys (ArrowLeft, ArrowRight)
-    if (key.startsWith("Arrow")) return;
+    // ← / → — Navigate between sources (Shift = jump 5)
+    if (key === "ArrowLeft") {
+      e.preventDefault();
+      var step = shift ? 5 : 1;
+      window.aceNavigate(window.__aceCurrentIndex - step);
+      return;
+    }
+    if (key === "ArrowRight") {
+      e.preventDefault();
+      var step2 = shift ? 5 : 1;
+      window.aceNavigate(window.__aceCurrentIndex + step2);
+      return;
+    }
 
     // Z — Undo (no modifier needed in sentence mode)
     if ((key === "z" || key === "Z") && !ctrl) {
@@ -527,6 +538,8 @@
       '<h3 style="margin:0 0 12px;font-size:15px;font-weight:600;">Keyboard shortcuts</h3>' +
       '<table style="width:100%;border-collapse:collapse;">' +
       _shortcutRow("↑ / ↓", "Navigate sentences") +
+      _shortcutRow("← / →", "Previous / next source") +
+      _shortcutRow("Shift + ← / →", "Jump 5 sources") +
       _shortcutRow("1 – 9, 0, a – z", "Apply code (per tab)") +
       _shortcutRow("Q", "Repeat last code") +
       _shortcutRow("X", "Remove code from sentence") +
