@@ -18,7 +18,7 @@ _LIST_RE = re.compile(
     r"|[a-z][.)]"                     # a. or a)
     r"|\(\d+\)"                       # (1)
     r"|\([a-z]+\)"                    # (a), (i), (ii), (iii), (iv)
-    r"|[ivxlcdm]+[.)]"               # i. ii. iii. iv. (roman numerals)
+    r"|[ivxlcdm]{1,6}[.)]"            # i. ii. iii. iv. (roman numerals, max 6 chars to avoid false positives like "dim." "mix.")
     r")\s+",
     re.IGNORECASE,
 )
