@@ -283,13 +283,6 @@
       if (window.__aceLastSelection) {
         window.__aceLastSelection = null;
         window.getSelection().removeAllRanges();
-        return;
-      }
-
-      // Navigate back
-      var back = document.querySelector(".ace-coding-header-back");
-      if (back) {
-        window.location.href = back.href;
       }
       return;
     }
@@ -571,6 +564,13 @@
         row.style.display =
           name.textContent.toLowerCase().indexOf(query) >= 0 ? "" : "none";
       });
+
+      // Show/hide "no matches" hint
+      var visibleCount = document.querySelectorAll('.ace-code-row:not([hidden]):not([style*="display: none"])').length;
+      var hint = document.getElementById('filter-no-match-hint');
+      if (hint) {
+        hint.style.display = (query && visibleCount === 0) ? 'block' : 'none';
+      }
     });
 
     // Enter to create a new code when no matches
@@ -637,6 +637,16 @@
    * 14. HTMX request enrichment — inject selection data into code apply
    * ================================================================ */
 
+  // Cancel code apply if no text is selected
+  document.addEventListener("htmx:confirm", function (e) {
+    var elt = e.detail.elt;
+    if (!elt || !elt.classList || !elt.classList.contains("ace-code-row")) return;
+    if (!window.__aceLastSelection) {
+      e.preventDefault();
+      aceToast("Select text first");
+    }
+  });
+
   document.addEventListener("htmx:configRequest", function (e) {
     // Only inject for code apply requests
     var elt = e.detail.elt;
@@ -654,7 +664,87 @@
   });
 
   /* ================================================================
-   * 15. DOMContentLoaded init
+   * 15. Code menu dropdown
+   * ================================================================ */
+
+  var _activeCodeMenu = null;
+
+  function _closeCodeMenu() {
+    if (_activeCodeMenu) {
+      _activeCodeMenu.remove();
+      _activeCodeMenu = null;
+    }
+  }
+
+  window.aceCodeMenu = function (event, codeId) {
+    _closeCodeMenu();
+
+    var btn = event.currentTarget;
+    var rect = btn.getBoundingClientRect();
+
+    var menu = document.createElement("div");
+    menu.className = "ace-code-menu";
+
+    var items = [
+      { label: "Rename", endpoint: "rename-dialog" },
+      { label: "Colour", endpoint: "colour-dialog" },
+      { label: "Move to Group", endpoint: "move-dialog" },
+      { label: "Delete", endpoint: "delete-dialog", danger: true },
+    ];
+
+    items.forEach(function (item) {
+      var el = document.createElement("button");
+      el.className = "ace-code-menu-item";
+      if (item.danger) el.classList.add("ace-code-menu-item--danger");
+      el.textContent = item.label;
+      el.addEventListener("click", function () {
+        _closeCodeMenu();
+        htmx.ajax("GET", "/api/codes/" + codeId + "/" + item.endpoint, {
+          target: "#modal-container",
+          swap: "innerHTML",
+        });
+      });
+      menu.appendChild(el);
+    });
+
+    document.body.appendChild(menu);
+    _activeCodeMenu = menu;
+
+    // Position below the button, or above if near bottom
+    var menuHeight = menu.offsetHeight;
+    var spaceBelow = window.innerHeight - rect.bottom;
+    if (spaceBelow < menuHeight + 8) {
+      menu.style.top = (rect.top - menuHeight) + "px";
+    } else {
+      menu.style.top = rect.bottom + "px";
+    }
+    menu.style.left = Math.min(rect.left, window.innerWidth - menu.offsetWidth - 8) + "px";
+
+    // Close on outside click (next tick so this click doesn't close it)
+    setTimeout(function () {
+      document.addEventListener("click", _onCodeMenuOutsideClick);
+      document.addEventListener("keydown", _onCodeMenuEscape);
+    }, 0);
+  };
+
+  function _onCodeMenuOutsideClick(e) {
+    if (_activeCodeMenu && !_activeCodeMenu.contains(e.target)) {
+      _closeCodeMenu();
+      document.removeEventListener("click", _onCodeMenuOutsideClick);
+      document.removeEventListener("keydown", _onCodeMenuEscape);
+    }
+  }
+
+  function _onCodeMenuEscape(e) {
+    if (e.key === "Escape") {
+      _closeCodeMenu();
+      document.removeEventListener("click", _onCodeMenuOutsideClick);
+      document.removeEventListener("keydown", _onCodeMenuEscape);
+    }
+  }
+
+  /* ================================================================
+   * 16. DOMContentLoaded init
    * ================================================================ */
 
   document.addEventListener("DOMContentLoaded", function () {
