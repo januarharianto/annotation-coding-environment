@@ -8,37 +8,55 @@
 
     <!-- First-time: name prompt (hidden after Enter, never shown again) -->
     <div id="name-prompt" style="display:none">
-      <p class="ace-home-prompt">What should we call you?</p>
+      <div class="ace-home-brand">
+        <h1 class="ace-home-title">ACE</h1>
+        <p class="ace-home-subtitle">Annotation Coding Environment</p>
+      </div>
       <input id="name-input" class="ace-home-name-input" placeholder="Your name" autofocus>
       <p class="ace-home-hint">press Enter</p>
     </div>
 
     <!-- Main screen (hidden until name is set) -->
     <div id="main-screen" style="display:none">
-      <h1 class="ace-home-title">ACE</h1>
-      <p class="ace-home-subtitle">Annotation Coding Environment</p>
+      <div class="ace-home-brand">
+        <h1 class="ace-home-title">ACE</h1>
+        <p class="ace-home-subtitle">Annotation Coding Environment</p>
+        <p class="ace-home-version">v{{ version }}</p>
+      </div>
 
-      <!-- New project: type name, Enter opens folder picker automatically -->
-      <div class="ace-home-new">
-        <input id="new-project-input" class="ace-home-new-input"
-               placeholder="New project name..." aria-label="New project name">
-        <p id="new-project-hint" class="ace-home-hint">type a name and press Enter</p>
+      <!-- Actions -->
+      <div class="ace-home-actions">
+        <a id="new-project-btn" class="ace-home-action" href="#"
+           onclick="toggleNewProject(); return false">New Project</a>
+
+        <div id="new-project-wrap" class="ace-home-new-wrap">
+          <input id="new-project-input" class="ace-home-new-input"
+                 placeholder="Project name..." aria-label="New project name">
+          <p class="ace-home-new-hint">press Enter to choose folder</p>
+        </div>
+
+        <a class="ace-home-action" href="#"
+           onclick="openExisting(); return false">Open Project</a>
       </div>
 
       <!-- Recent projects -->
-      <div id="recent-list" class="ace-home-recents"></div>
+      <div id="recent-section" style="display:none">
+        <div class="ace-home-recents-section">
+          <p class="ace-home-section-label">Recent</p>
+          <div id="recent-list"></div>
+        </div>
+      </div>
 
-      <!-- Empty state hint (shown when no recent projects) -->
+      <!-- Empty state -->
       <p id="empty-hint" class="ace-home-empty" style="display:none">
-        Create a project above, or open an existing .ace file below
+        No recent projects
       </p>
 
-      <!-- Open existing -->
-      <nav class="ace-home-footer">
-        <a class="ace-home-link" href="#" onclick="openExisting(); return false">Open existing file...</a>
-        <span style="color:var(--ace-border);margin:0 8px">&middot;</span>
-        <a class="ace-home-link" href="/agreement">Check agreement...</a>
-      </nav>
+      <!-- Tools -->
+      <div class="ace-home-tools">
+        <p class="ace-home-section-label">Tools</p>
+        <a class="ace-home-tool-link" href="/agreement">Inter-Coder Agreement</a>
+      </div>
     </div>
 
     <div id="modal-container"></div>
@@ -55,6 +73,24 @@
   var CODER_KEY = "ace-coder-name";
   var cloudPatterns = [/dropbox/i, /onedrive/i, /icloud/i, /google\s*drive/i];
 
+  // --- Relative time ---
+  function relativeTime(ts) {
+    var now = Date.now();
+    var diff = now - ts;
+    if (diff < 0) diff = 0;
+    var sec = Math.floor(diff / 1000);
+    if (sec < 60) return "Just now";
+    var min = Math.floor(sec / 60);
+    if (min < 60) return min + (min === 1 ? " minute ago" : " minutes ago");
+    var hr = Math.floor(min / 60);
+    if (hr < 24) return hr + (hr === 1 ? " hour ago" : " hours ago");
+    var days = Math.floor(hr / 24);
+    if (days === 1) return "Yesterday";
+    if (days < 7) return days + " days ago";
+    var weeks = Math.floor(days / 7);
+    return weeks + (weeks === 1 ? " week ago" : " weeks ago");
+  }
+
   // --- Name setup ---
   function init() {
     var name = localStorage.getItem(CODER_KEY);
@@ -69,7 +105,6 @@
           localStorage.setItem(CODER_KEY, val);
           document.getElementById("name-prompt").style.display = "none";
           document.getElementById("main-screen").style.display = "block";
-          document.getElementById("new-project-input").focus();
         }
       });
     } else {
@@ -78,15 +113,27 @@
     }
   }
 
-  // --- New project ---
-  // Show/hide hint based on input content
+  // --- New project expand/collapse ---
+  var newWrap = document.getElementById("new-project-wrap");
   var newInput = document.getElementById("new-project-input");
-  var newHint = document.getElementById("new-project-hint");
-  newInput.addEventListener("input", function() {
-    if (newHint) newHint.style.opacity = this.value.trim() ? "0" : "1";
-  });
+
+  window.toggleNewProject = function() {
+    if (newWrap.classList.contains("open")) {
+      newWrap.classList.remove("open");
+      newInput.value = "";
+    } else {
+      newWrap.classList.add("open");
+      // Focus after transition
+      setTimeout(function() { newInput.focus(); }, 180);
+    }
+  };
 
   newInput.addEventListener("keydown", function(e) {
+    if (e.key === "Escape") {
+      newWrap.classList.remove("open");
+      newInput.value = "";
+      return;
+    }
     if (e.key !== "Enter") return;
     var name = this.value.trim();
     if (!name) return;
@@ -96,9 +143,8 @@
     fetch("/api/native/pick-folder", { method: "POST" })
       .then(function(r) { return r.json(); })
       .then(function(data) {
-        var input = document.getElementById("new-project-input");
-        input.disabled = false;
-        input.placeholder = "New project name...";
+        newInput.disabled = false;
+        newInput.placeholder = "Project name...";
         if (!data.path) return;
 
         // Cloud sync warning
@@ -142,40 +188,74 @@
   }
 
   // --- Recent files ---
+  // Migrate old format (array of strings) to new format ({path, openedAt})
+  function migrateRecent(raw) {
+    if (!Array.isArray(raw)) return [];
+    return raw.map(function(item) {
+      if (typeof item === "string") {
+        return { path: item, openedAt: 0 };
+      }
+      if (item && typeof item.path === "string") {
+        return item;
+      }
+      return null;
+    }).filter(Boolean);
+  }
+
   function getRecent() {
-    try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || []; }
-    catch(e) { return []; }
+    try {
+      var raw = JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
+      return migrateRecent(raw);
+    } catch(e) { return []; }
   }
 
   function addRecent(path) {
-    var list = getRecent().filter(function(p) { return p !== path; });
-    list.unshift(path);
+    var list = getRecent().filter(function(item) { return item.path !== path; });
+    list.unshift({ path: path, openedAt: Date.now() });
     if (list.length > 5) list = list.slice(0, 5);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
     renderRecent();
   }
 
+  function escapeHtml(str) {
+    var d = document.createElement("div");
+    d.textContent = str;
+    return d.innerHTML;
+  }
+
   function renderRecent() {
     var list = getRecent();
     var container = document.getElementById("recent-list");
+    var section = document.getElementById("recent-section");
     var emptyHint = document.getElementById("empty-hint");
     container.innerHTML = "";
+
     if (!list.length) {
+      section.style.display = "none";
       if (emptyHint) emptyHint.style.display = "block";
       return;
     }
+
+    section.style.display = "block";
     if (emptyHint) emptyHint.style.display = "none";
 
-    list.forEach(function(path) {
-      var parts = path.split("/");
+    list.forEach(function(item) {
+      var parts = item.path.split("/");
       var filename = parts.pop();
       var dir = parts.slice(-2).join("/");
-      var row = document.createElement("div");
+      var time = item.openedAt ? relativeTime(item.openedAt) : "";
+
+      var row = document.createElement("a");
+      row.href = "#";
       row.className = "ace-home-recent";
+      row.onclick = function(e) { e.preventDefault(); openProject(item.path); };
+
+      var meta = escapeHtml(dir);
+      if (time) meta += '<span class="ace-home-recent-sep">&middot;</span>' + escapeHtml(time);
+
       row.innerHTML =
-        '<span class="ace-home-recent-name">' + filename + '</span>' +
-        '<span class="ace-home-recent-path">' + dir + '</span>';
-      row.onclick = function() { openProject(path); };
+        '<span class="ace-home-recent-name">' + escapeHtml(filename) + '</span>' +
+        '<span class="ace-home-recent-meta">' + meta + '</span>';
       container.appendChild(row);
     });
   }
