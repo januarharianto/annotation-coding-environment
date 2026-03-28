@@ -82,11 +82,11 @@ def render_sentence_text(
     annotations: list[dict],
     codes_by_id: dict,
 ) -> str:
-    """Render source text as individual sentence spans with coding state.
+    """Render source text as sentence spans with stacked underline annotations.
 
-    Each unit becomes a <span class="ace-sentence"> with data-idx.
-    Coded sentences get --code-color/--code-bg CSS variables and
-    data-annotation-id/data-code-id attributes.
+    Supports multiple overlapping codes per sentence. Each annotation adds
+    a coloured underline at increasing offset (3px, 6px, 9px...).
+    Partial annotations (custom selections) are rendered as inner <mark> spans.
     """
     if not units:
         return ""
@@ -97,54 +97,134 @@ def render_sentence_text(
         if _is_para_break(i, units):
             parts.append('<span class="ace-para-break"></span>')
 
-        ann_info = _get_sentence_annotation(unit, annotations, codes_by_id)
+        overlapping = _get_sentence_annotations(unit, annotations, codes_by_id)
 
         classes = ["ace-sentence"]
         if unit["type"] == "list":
             classes.append("ace-sentence--list")
-
-        style = ""
-        extra_attrs = ""
-        if ann_info:
+        if overlapping:
             classes.append("ace-sentence--coded")
-            colour = ann_info["colour"]
-            r, g, b = int(colour[1:3], 16), int(colour[3:5], 16), int(colour[5:7], 16)
-            style = f' style="--code-color:{colour};--code-bg:rgba({r},{g},{b},0.18);"'
-            ann_id = html.escape(ann_info["annotation_id"])
-            code_id = html.escape(ann_info["code_id"])
-            extra_attrs = f' data-annotation-id="{ann_id}" data-code-id="{code_id}"'
 
-        text = html.escape(unit["text"])
-        cls = " ".join(classes)
         s = unit["start_offset"]
         e = unit["end_offset"]
+        cls = " ".join(classes)
+        inner = _render_inner_text(unit["text"], s, overlapping)
+
         parts.append(
-            f'<span id="s-{i}" class="{cls}" data-idx="{i}" data-start="{s}" data-end="{e}"{style}{extra_attrs}>{text}</span> '
+            f'<span id="s-{i}" class="{cls}" data-idx="{i}" data-start="{s}" data-end="{e}">{inner}</span> '
         )
 
     return "".join(parts)
 
 
-def _get_sentence_annotation(
+def _get_sentence_annotations(
     unit: dict, annotations: list[dict], codes_by_id: dict,
-) -> dict | None:
-    """Find the first annotation that overlaps this sentence's offset range."""
+) -> list[dict]:
+    """Find ALL annotations that overlap this sentence, with colour info."""
     start = unit["start_offset"]
     end = unit["end_offset"]
+    result = []
 
     for ann in annotations:
-        ann_start = ann["start_offset"]
-        ann_end = ann["end_offset"]
-        if ann_start < end and ann_end > start:
+        if ann["start_offset"] < end and ann["end_offset"] > start:
             code = codes_by_id.get(ann["code_id"])
             if code:
-                return {
+                result.append({
                     "annotation_id": ann["id"],
                     "code_id": ann["code_id"],
                     "colour": code["colour"],
-                    "code_name": code["name"],
-                }
-    return None
+                    "start_offset": ann["start_offset"],
+                    "end_offset": ann["end_offset"],
+                })
+    return result
+
+
+_UNDERLINE_OFFSETS = [3, 6, 9, 12, 15]
+
+
+def _render_inner_text(
+    text: str, unit_start: int, overlapping: list[dict],
+) -> str:
+    """Render sentence text with stacked underlines for each annotation.
+
+    Full-sentence annotations: underline the whole text.
+    Partial annotations: underline only the selected range via <mark>.
+    """
+    if not overlapping:
+        return html.escape(text)
+
+    # Build underline events: each annotation marks its range within this sentence
+    unit_end = unit_start + len(text)
+    events: list[tuple[int, int, str, dict]] = []  # (offset, order, type, ann)
+    for ann in overlapping:
+        rel_start = max(0, ann["start_offset"] - unit_start)
+        rel_end = min(len(text), ann["end_offset"] - unit_start)
+        events.append((rel_start, 0, "open", ann))
+        events.append((rel_end, 1, "close", ann))
+
+    events.sort(key=lambda e: (e[0], e[1]))
+
+    # Check if all annotations cover the full sentence (common case: sentence-level coding)
+    all_full = all(
+        ann["start_offset"] <= unit_start and ann["end_offset"] >= unit_end
+        for ann in overlapping
+    )
+
+    if all_full:
+        # Simple case: stacked underlines on the whole sentence
+        style_parts = []
+        colors = []
+        for idx, ann in enumerate(overlapping):
+            offset_px = _UNDERLINE_OFFSETS[idx] if idx < len(_UNDERLINE_OFFSETS) else 15
+            colors.append(ann["colour"])
+            style_parts.append(f"{ann['colour']} {offset_px}px")
+        # Use box-shadow for stacked underlines (more reliable than text-decoration stacking)
+        shadows = ", ".join(f"inset 0 -{px}px 0 {c}" for c, px in zip(colors, [2] + [2] * (len(colors) - 1)) for _ in [None])
+        # Actually, simpler: use multiple box-shadows at different y-offsets
+        shadow_list = []
+        for idx, ann in enumerate(overlapping):
+            offset_px = _UNDERLINE_OFFSETS[idx] if idx < len(_UNDERLINE_OFFSETS) else 15
+            shadow_list.append(f"inset 0 -{offset_px}px 0 -1px {ann['colour']}")
+        style = f' style="text-decoration:none;box-shadow:{",".join(shadow_list)};"'
+        escaped = html.escape(text)
+        return f"<span{style}>{escaped}</span>"
+
+    # Complex case: partial annotations — render with <mark> tags for each range
+    # Sort events and walk through text building segments
+    pos = 0
+    result: list[str] = []
+    active: list[dict] = []
+
+    for offset, order, kind, ann in events:
+        if offset > pos:
+            segment = html.escape(text[pos:offset])
+            if active:
+                segment = _wrap_underlines(segment, active)
+            result.append(segment)
+            pos = offset
+
+        if kind == "open":
+            active.append(ann)
+        else:
+            active = [a for a in active if a["annotation_id"] != ann["annotation_id"]]
+
+    if pos < len(text):
+        segment = html.escape(text[pos:])
+        if active:
+            segment = _wrap_underlines(segment, active)
+        result.append(segment)
+
+    return "".join(result)
+
+
+def _wrap_underlines(text: str, annotations: list[dict]) -> str:
+    """Wrap text in a <mark> with stacked underline styles."""
+    shadow_list = []
+    for idx, ann in enumerate(annotations):
+        offset_px = _UNDERLINE_OFFSETS[idx] if idx < len(_UNDERLINE_OFFSETS) else 15
+        shadow_list.append(f"inset 0 -{offset_px}px 0 -1px {ann['colour']}")
+    style = f"background:transparent;box-shadow:{','.join(shadow_list)};"
+    return f'<mark style="{style}">{text}</mark>'
 
 
 def _is_para_break(idx: int, units: list[dict]) -> bool:

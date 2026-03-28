@@ -300,15 +300,15 @@
 .ace-sentence {
   transition: background 0.1s;
   cursor: text;
-  padding: 1px 2px;
+  padding: 2px 2px 4px;
   display: inline;
   font-size: var(--ace-font-size-base);
-  line-height: var(--ace-leading-relaxed);
+  line-height: 2.2;
 }
 
 .ace-sentence--list {
   display: block;
-  padding: 2px 2px 2px 20px;
+  padding: 2px 2px 4px 20px;
 }
 
 .ace-sentence--focused {
@@ -318,13 +318,16 @@
 }
 
 .ace-sentence--coded {
-  border-left: 4px solid var(--code-color, #999);
-  padding-left: 6px;
-  background: var(--code-bg, rgba(0, 0, 0, 0.05));
+  padding-bottom: 6px;
 }
 
 .ace-sentence--coded.ace-sentence--focused {
   outline: 2px solid #212121;
+}
+
+.ace-sentence mark {
+  background: transparent;
+  color: inherit;
 }
 
 .ace-para-break {

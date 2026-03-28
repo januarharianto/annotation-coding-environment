@@ -1,4 +1,4 @@
-"""Tests for sentence-based text rendering."""
+"""Tests for sentence-based text rendering with stacked underlines."""
 
 from ace.services.coding_render import render_sentence_text
 
@@ -15,20 +15,19 @@ def test_single_uncoded_sentence():
     assert "Hello world." in html
 
 
-def test_coded_sentence():
+def test_coded_sentence_has_underline():
     units = [{"text": "Hello.", "type": "prose", "start_offset": 0, "end_offset": 6}]
     annotations = [{"id": "a1", "code_id": "c1", "start_offset": 0, "end_offset": 6, "selected_text": "Hello."}]
     codes_by_id = {"c1": {"id": "c1", "name": "Greeting", "colour": "#e53935"}}
     html = render_sentence_text(units, annotations, codes_by_id)
     assert "ace-sentence--coded" in html
-    assert "--code-color:#e53935" in html
+    assert "#e53935" in html  # colour appears in box-shadow
 
 
-def test_uncoded_sentence_no_style():
+def test_uncoded_sentence_no_coded_class():
     units = [{"text": "Hello.", "type": "prose", "start_offset": 0, "end_offset": 6}]
     html = render_sentence_text(units, [], {})
     assert "ace-sentence--coded" not in html
-    assert "--code-color" not in html
 
 
 def test_list_item_class():
@@ -76,10 +75,36 @@ def test_html_escaping():
     assert "A &lt; B &amp; C &gt; D" in html
 
 
-def test_annotation_data_attribute():
+def test_data_start_end_attributes():
+    units = [{"text": "Hello.", "type": "prose", "start_offset": 5, "end_offset": 11}]
+    html = render_sentence_text(units, [], {})
+    assert 'data-start="5"' in html
+    assert 'data-end="11"' in html
+
+
+def test_multiple_overlapping_codes():
+    """Two codes on the same sentence produce stacked underlines."""
     units = [{"text": "Hello.", "type": "prose", "start_offset": 0, "end_offset": 6}]
-    annotations = [{"id": "a1", "code_id": "c1", "start_offset": 0, "end_offset": 6, "selected_text": "Hello."}]
-    codes_by_id = {"c1": {"id": "c1", "name": "Test", "colour": "#000000"}}
+    annotations = [
+        {"id": "a1", "code_id": "c1", "start_offset": 0, "end_offset": 6, "selected_text": "Hello."},
+        {"id": "a2", "code_id": "c2", "start_offset": 0, "end_offset": 6, "selected_text": "Hello."},
+    ]
+    codes_by_id = {
+        "c1": {"id": "c1", "name": "Red", "colour": "#e53935"},
+        "c2": {"id": "c2", "name": "Blue", "colour": "#1e88e5"},
+    }
     html = render_sentence_text(units, annotations, codes_by_id)
-    assert 'data-annotation-id="a1"' in html
-    assert 'data-code-id="c1"' in html
+    assert "#e53935" in html
+    assert "#1e88e5" in html
+    assert "ace-sentence--coded" in html
+
+
+def test_partial_annotation_uses_mark():
+    """Custom selection within a sentence wraps only the selected text in <mark>."""
+    units = [{"text": "Hello world.", "type": "prose", "start_offset": 0, "end_offset": 12}]
+    annotations = [{"id": "a1", "code_id": "c1", "start_offset": 6, "end_offset": 11, "selected_text": "world"}]
+    codes_by_id = {"c1": {"id": "c1", "name": "Test", "colour": "#43a047"}}
+    html = render_sentence_text(units, annotations, codes_by_id)
+    assert "<mark" in html
+    assert "Hello" in html  # uncoded prefix still present
+    assert "#43a047" in html
