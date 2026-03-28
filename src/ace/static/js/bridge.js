@@ -197,21 +197,21 @@
    * inject them via htmx:configRequest at request time.
    * ================================================================ */
 
-  var _pendingApplyParams = [];    // queue for trigger-apply
-  var _pendingSelectionParams = []; // queue for trigger-apply-selection
-  var _pendingDeleteParams = [];    // queue for trigger-delete-sentence
+  // Apply/delete use htmx.ajax() directly instead of hidden trigger buttons
+  // to avoid issues with hx-sync queuing and param injection timing.
 
   function _applyCodeToSentence(codeId) {
     if (window.__aceFocusIndex < 0) return;
 
-    _pendingApplyParams.push({
-      code_id: codeId,
-      sentence_index: window.__aceFocusIndex,
-      current_index: window.__aceCurrentIndex,
+    htmx.ajax("POST", "/api/code/apply-sentence", {
+      target: "#text-panel",
+      swap: "outerHTML",
+      values: {
+        code_id: codeId,
+        sentence_index: window.__aceFocusIndex,
+        current_index: window.__aceCurrentIndex,
+      },
     });
-
-    var applyBtn = document.getElementById("trigger-apply");
-    if (applyBtn) htmx.trigger(applyBtn, "click");
 
     window.__aceLastCodeId = codeId;
     _trackRecent(codeId);
@@ -222,16 +222,17 @@
     var sel = window.__aceLastSelection;
     if (!sel) return;
 
-    _pendingSelectionParams.push({
-      code_id: codeId,
-      start_offset: sel.start,
-      end_offset: sel.end,
-      selected_text: sel.text,
-      current_index: window.__aceCurrentIndex,
+    htmx.ajax("POST", "/api/code/apply", {
+      target: "#text-panel",
+      swap: "outerHTML",
+      values: {
+        code_id: codeId,
+        start_offset: sel.start,
+        end_offset: sel.end,
+        selected_text: sel.text,
+        current_index: window.__aceCurrentIndex,
+      },
     });
-
-    var applyBtn = document.getElementById("trigger-apply-selection");
-    if (applyBtn) htmx.trigger(applyBtn, "click");
 
     window.__aceLastCodeId = codeId;
     window.__aceLastSelection = null;
@@ -243,13 +244,14 @@
   function _deleteSentenceAnnotation() {
     if (window.__aceFocusIndex < 0) return;
 
-    _pendingDeleteParams.push({
-      sentence_index: window.__aceFocusIndex,
-      current_index: window.__aceCurrentIndex,
+    htmx.ajax("POST", "/api/code/delete-sentence", {
+      target: "#text-panel",
+      swap: "outerHTML",
+      values: {
+        sentence_index: window.__aceFocusIndex,
+        current_index: window.__aceCurrentIndex,
+      },
     });
-
-    var btn = document.getElementById("trigger-delete-sentence");
-    if (btn) htmx.trigger(btn, "click");
   }
 
   function _flashCodeRow(codeId) {
@@ -308,24 +310,34 @@
     // Skip remaining if modifier keys held
     if (ctrl || e.altKey) return;
 
-    // ↓ — Navigate to next sentence
+    // ↓ — Navigate to next sentence (or focus first if none focused)
     if (key === "ArrowDown") {
       e.preventDefault();
       var sentences = _getSentences();
-      if (window.__aceFocusIndex < sentences.length - 1) {
+      if (sentences.length === 0) return;
+      if (window.__aceFocusIndex < 0) {
+        _focusSentence(0);
+      } else if (window.__aceFocusIndex < sentences.length - 1) {
         _focusSentence(window.__aceFocusIndex + 1);
       }
       return;
     }
 
-    // ↑ — Navigate to previous sentence
+    // ↑ — Navigate to previous sentence (or focus last if none focused)
     if (key === "ArrowUp") {
       e.preventDefault();
-      if (window.__aceFocusIndex > 0) {
+      var sentencesUp = _getSentences();
+      if (sentencesUp.length === 0) return;
+      if (window.__aceFocusIndex < 0) {
+        _focusSentence(sentencesUp.length - 1);
+      } else if (window.__aceFocusIndex > 0) {
         _focusSentence(window.__aceFocusIndex - 1);
       }
       return;
     }
+
+    // Skip other arrow keys (ArrowLeft, ArrowRight)
+    if (key.startsWith("Arrow")) return;
 
     // Z — Undo (no modifier needed in sentence mode)
     if ((key === "z" || key === "Z") && !ctrl) {
@@ -395,7 +407,8 @@
     }
 
     // 1-9, 0, a-z — Apply code at keymap position
-    if (!shift) {
+    // Guard: only single-character keys (skip ArrowLeft, ArrowRight, etc.)
+    if (!shift && key.length === 1) {
       var pos = _keyToPosition(key);
       if (pos >= 0 && pos < _currentKeyMap.length) {
         e.preventDefault();
@@ -403,6 +416,10 @@
         if (window.__aceLastSelection) {
           _applyCodeToSelection(codeId);
         } else if (window.__aceFocusIndex >= 0) {
+          _applyCodeToSentence(codeId);
+        } else {
+          // Auto-focus first sentence if none focused
+          _focusSentence(0);
           _applyCodeToSentence(codeId);
         }
       }
@@ -637,33 +654,11 @@
     }
   });
 
-  // Inject parameters at request time from queues (avoids hx-sync race condition)
+  // Inject current_index into undo/redo/flag hidden trigger requests
   document.addEventListener("htmx:configRequest", function (e) {
     var elt = e.detail.elt;
     if (!elt || !elt.id) return;
 
-    // Sentence apply — shift params from queue
-    if (elt.id === "trigger-apply" && _pendingApplyParams.length) {
-      var params = _pendingApplyParams.shift();
-      Object.keys(params).forEach(function (k) { e.detail.parameters[k] = params[k]; });
-      return;
-    }
-
-    // Selection apply — shift params from queue
-    if (elt.id === "trigger-apply-selection" && _pendingSelectionParams.length) {
-      var params2 = _pendingSelectionParams.shift();
-      Object.keys(params2).forEach(function (k) { e.detail.parameters[k] = params2[k]; });
-      return;
-    }
-
-    // Delete sentence — shift params from queue
-    if (elt.id === "trigger-delete-sentence" && _pendingDeleteParams.length) {
-      var params3 = _pendingDeleteParams.shift();
-      Object.keys(params3).forEach(function (k) { e.detail.parameters[k] = params3[k]; });
-      return;
-    }
-
-    // Undo/redo/flag — inject current_index directly
     if (["trigger-undo", "trigger-redo", "trigger-flag"].indexOf(elt.id) >= 0) {
       e.detail.parameters.current_index = window.__aceCurrentIndex;
     }
@@ -798,7 +793,11 @@
     _buildTabContent("all");
     _updateKeycaps();
 
-    // Focus the text panel for keyboard navigation
+    // Auto-focus first sentence so keyboard works immediately
+    var sentences = _getSentences();
+    if (sentences.length > 0) {
+      _focusSentence(0);
+    }
     var tp = document.getElementById("text-panel");
     if (tp) tp.focus();
   });
