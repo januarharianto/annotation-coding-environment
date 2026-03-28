@@ -811,6 +811,138 @@ async def flag_route(
         conn.close()
 
 
+@router.post("/code/apply-sentence")
+async def annotate_sentence(
+    request: Request,
+    code_id: str = Form(...),
+    sentence_index: int = Form(...),
+    current_index: int = Form(default=0),
+):
+    """Apply a code to a sentence (with toggle: same code removes it)."""
+    from ace.models.annotation import add_annotation, delete_annotation, get_annotations_for_source
+    from ace.models.assignment import update_assignment_status
+    from ace.models.source import get_source_content
+    from ace.services.text_splitter import split_into_units
+
+    coder_id = getattr(request.app.state, "coder_id", None)
+    if coder_id is None:
+        return HTMLResponse("", status_code=400)
+
+    conn = _open_project_db(request)
+    try:
+        source_id = _resolve_source_id(conn, coder_id, current_index)
+        if source_id is None:
+            return HTMLResponse("", status_code=400)
+
+        content_row = get_source_content(conn, source_id)
+        if not content_row:
+            return HTMLResponse("", status_code=400)
+
+        units = split_into_units(content_row["content_text"])
+        if sentence_index < 0 or sentence_index >= len(units):
+            return HTMLResponse("", status_code=400)
+
+        unit = units[sentence_index]
+        start = unit["start_offset"]
+        end = unit["end_offset"]
+
+        # Check for existing annotation overlapping this sentence
+        existing = get_annotations_for_source(conn, source_id, coder_id)
+        existing_same_code = None
+        existing_any = None
+        for ann in existing:
+            if ann["start_offset"] < end and ann["end_offset"] > start:
+                if ann["code_id"] == code_id:
+                    existing_same_code = ann
+                    break
+                if existing_any is None:
+                    existing_any = ann
+
+        undo = _get_undo_manager(request)
+
+        if existing_same_code:
+            # Toggle off
+            delete_annotation(conn, existing_same_code["id"])
+            undo.record_delete(source_id, existing_same_code["id"])
+        else:
+            # Replace existing (if any) then add new
+            if existing_any:
+                delete_annotation(conn, existing_any["id"])
+                undo.record_delete(source_id, existing_any["id"])
+
+            ann_id = add_annotation(
+                conn, source_id, coder_id, code_id,
+                start, end, unit["text"],
+            )
+            undo.record_add(source_id, ann_id)
+
+            # Auto-transition pending → in_progress
+            assignment = conn.execute(
+                "SELECT status FROM assignment WHERE source_id = ? AND coder_id = ?",
+                (source_id, coder_id),
+            ).fetchone()
+            if assignment and assignment["status"] == "pending":
+                update_assignment_status(conn, source_id, coder_id, "in_progress")
+
+        content = _render_coding_oob(request, conn, coder_id, current_index)
+        return HTMLResponse(content)
+    finally:
+        conn.close()
+
+
+@router.post("/code/delete-sentence")
+async def delete_sentence_annotations(
+    request: Request,
+    sentence_index: int = Form(...),
+    current_index: int = Form(default=0),
+):
+    """Delete all annotations on a focused sentence (X key)."""
+    from ace.models.annotation import delete_annotation, get_annotations_for_source
+    from ace.models.source import get_source_content
+    from ace.services.text_splitter import split_into_units
+
+    coder_id = getattr(request.app.state, "coder_id", None)
+    if coder_id is None:
+        return HTMLResponse("", status_code=400)
+
+    conn = _open_project_db(request)
+    try:
+        source_id = _resolve_source_id(conn, coder_id, current_index)
+        if source_id is None:
+            return HTMLResponse("", status_code=400)
+
+        content_row = get_source_content(conn, source_id)
+        if not content_row:
+            return HTMLResponse("", status_code=400)
+
+        units = split_into_units(content_row["content_text"])
+        if sentence_index < 0 or sentence_index >= len(units):
+            return HTMLResponse("", status_code=400)
+
+        unit = units[sentence_index]
+        start = unit["start_offset"]
+        end = unit["end_offset"]
+
+        existing = get_annotations_for_source(conn, source_id, coder_id)
+        undo = _get_undo_manager(request)
+        deleted_any = False
+        for ann in existing:
+            if ann["start_offset"] < end and ann["end_offset"] > start:
+                delete_annotation(conn, ann["id"])
+                undo.record_delete(source_id, ann["id"])
+                deleted_any = True
+
+        content = _render_coding_oob(request, conn, coder_id, current_index)
+        if deleted_any:
+            return HTMLResponse(
+                content,
+                headers={"HX-Trigger": '{"ace-toast": "Annotation removed"}'},
+            )
+        return HTMLResponse(content)
+    finally:
+        conn.close()
+
+
 # ---------------------------------------------------------------------------
 # Codebook CRUD helpers
 # ---------------------------------------------------------------------------
