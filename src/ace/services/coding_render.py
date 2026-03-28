@@ -92,10 +92,9 @@ def render_sentence_text(
         return ""
 
     parts: list[str] = []
-    prev_type = None
 
     for i, unit in enumerate(units):
-        if prev_type is not None and _is_para_break(i, units):
+        if _is_para_break(i, units):
             parts.append('<span class="ace-para-break"></span>')
 
         ann_info = _get_sentence_annotation(unit, annotations, codes_by_id)
@@ -122,7 +121,6 @@ def render_sentence_text(
         parts.append(
             f'<span id="s-{i}" class="{cls}" data-idx="{i}"{style}{extra_attrs}>{text}</span> '
         )
-        prev_type = unit["type"]
 
     return "".join(parts)
 
