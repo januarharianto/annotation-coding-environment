@@ -6,6 +6,7 @@ from pathlib import Path
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import HTMLResponse
 
+from ace import __version__
 from ace.app import HtmxRedirect, get_db
 from ace.models.annotation import get_annotation_counts_by_source, get_annotations_for_source
 from ace.models.assignment import add_assignment, get_assignments_for_coder
@@ -20,7 +21,7 @@ router = APIRouter()
 @router.get("/", response_class=HTMLResponse)
 async def landing(request: Request):
     templates = request.app.state.templates
-    return templates.TemplateResponse(request, "landing.html")
+    return templates.TemplateResponse(request, "landing.html", {"version": __version__})
 
 
 @router.get("/import", response_class=HTMLResponse)
