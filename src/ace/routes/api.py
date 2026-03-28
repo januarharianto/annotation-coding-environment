@@ -494,6 +494,22 @@ def _open_project_db(request: Request) -> sqlite3.Connection:
     return conn
 
 
+def _hex_to_rgb(hex_col: str) -> tuple[int, int, int]:
+    return int(hex_col[1:3], 16), int(hex_col[3:5], 16), int(hex_col[5:7], 16)
+
+
+def _inject_oob(html: str, element_id: str) -> str:
+    return html.replace(f'id="{element_id}"', f'id="{element_id}" hx-swap-oob="outerHTML"', 1)
+
+
+def _render_colour_style_oob(codes: list[dict]) -> str:
+    parts = []
+    for code in codes:
+        r, g, b = _hex_to_rgb(code["colour"])
+        parts.append(f".ace-code-{code['id']} {{ background-color: rgba({r}, {g}, {b}, var(--ace-annotation-alpha)); }}")
+    return f'<style id="code-colours" hx-swap-oob="outerHTML">{chr(10).join(parts)}</style>'
+
+
 def _render_coding_oob(request: Request, conn, coder_id: str, current_index: int) -> str:
     """Render text_panel (primary) + margin_panel (OOB)."""
     from ace.routes.pages import _coding_context
@@ -505,13 +521,7 @@ def _render_coding_oob(request: Request, conn, coder_id: str, current_index: int
 
     text_html = render_block(templates.env, "coding.html", "text_panel", ctx)
     margin_html = render_block(templates.env, "coding.html", "margin_panel", ctx)
-
-    margin_oob = margin_html.replace(
-        'id="margin-panel"',
-        'id="margin-panel" hx-swap-oob="outerHTML"',
-        1,
-    )
-    return text_html + margin_oob
+    return text_html + _inject_oob(margin_html, "margin-panel")
 
 
 def _render_full_coding_oob(request: Request, conn, coder_id: str, target_index: int) -> str:
@@ -535,25 +545,9 @@ def _render_full_coding_oob(request: Request, conn, coder_id: str, target_index:
     parts = [primary]
     for block_name, element_id in oob_blocks:
         block_html = render_block(templates.env, "coding.html", block_name, ctx)
-        block_oob = block_html.replace(
-            f'id="{element_id}"',
-            f'id="{element_id}" hx-swap-oob="outerHTML"',
-            1,
-        )
-        parts.append(block_oob)
+        parts.append(_inject_oob(block_html, element_id))
 
-    colour_css_parts = []
-    for code in ctx["codes"]:
-        hex_col = code["colour"]
-        r = int(hex_col[1:3], 16)
-        g = int(hex_col[3:5], 16)
-        b = int(hex_col[5:7], 16)
-        colour_css_parts.append(
-            f".ace-code-{code['id']} {{ background-color: rgba({r}, {g}, {b}, var(--ace-annotation-alpha)); }}"
-        )
-    colours_css = "\n".join(colour_css_parts)
-    parts.append(f'<style id="code-colours" hx-swap-oob="outerHTML">{colours_css}</style>')
-
+    parts.append(_render_colour_style_oob(ctx["codes"]))
     return "".join(parts)
 
 
@@ -984,24 +978,11 @@ def _render_sidebar_and_text(request: Request, conn, coder_id: str, current_inde
     text_html = render_block(templates.env, "coding.html", "text_panel", ctx)
     margin_html = render_block(templates.env, "coding.html", "margin_panel", ctx)
 
-    colour_css_parts = []
-    for code in ctx["codes"]:
-        hex_col = code["colour"]
-        r = int(hex_col[1:3], 16)
-        g = int(hex_col[3:5], 16)
-        b = int(hex_col[5:7], 16)
-        colour_css_parts.append(
-            f".ace-code-{code['id']} {{ background-color: rgba({r}, {g}, {b}, var(--ace-annotation-alpha)); }}"
-        )
-    colours_css = "\n".join(colour_css_parts)
-
-    text_oob = text_html.replace('id="text-panel"', 'id="text-panel" hx-swap-oob="outerHTML"', 1)
-    margin_oob = margin_html.replace('id="margin-panel"', 'id="margin-panel" hx-swap-oob="outerHTML"', 1)
     return (
         sidebar_html
-        + text_oob
-        + margin_oob
-        + f'<style id="code-colours" hx-swap-oob="outerHTML">{colours_css}</style>'
+        + _inject_oob(text_html, "text-panel")
+        + _inject_oob(margin_html, "margin-panel")
+        + _render_colour_style_oob(ctx["codes"])
     )
 
 
