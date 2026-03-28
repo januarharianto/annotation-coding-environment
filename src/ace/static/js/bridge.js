@@ -76,8 +76,6 @@
    * 3. Tab management
    * ================================================================ */
 
-  var _activeTab = "groups";
-
   window.aceSwitchTab = function (btn, tabId) {
     // Update tab buttons
     var tabs = btn.parentElement.querySelectorAll(".ace-sidebar-tab");
@@ -90,7 +88,6 @@
     });
     document.getElementById("view-" + tabId).classList.add("ace-sidebar-view--active");
 
-    _activeTab = tabId;
     _buildTabContent(tabId);
     _updateKeycaps();
 
@@ -149,9 +146,7 @@
   }
 
   function _escHtml(s) {
-    var d = document.createElement("div");
-    d.textContent = s;
-    return d.innerHTML;
+    return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   }
 
   /* ================================================================

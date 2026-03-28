@@ -52,7 +52,6 @@ def _coding_context(conn: sqlite3.Connection, coder_id: str, current_index: int)
     """Assemble all data needed to render the coding page."""
     from ace.services.coding_render import (
         build_margin_annotations,
-        render_annotated_text,
         render_sentence_text,
     )
     from ace.services.text_splitter import split_into_units
@@ -113,10 +112,7 @@ def _coding_context(conn: sqlite3.Connection, coder_id: str, current_index: int)
     sentence_units = split_into_units(source_text)
     sentence_html = render_sentence_text(sentence_units, annotations_list, codes_by_id)
 
-    # Keep old annotated_html for backwards compat (export/agreement pages)
-    annotated_html = render_annotated_text(source_text, annotations_list, codes_by_id)
-
-    # --- New: grouped codes for sidebar ---
+    # --- Grouped codes for sidebar ---
     group_dict: dict[str, list[dict]] = {}
     ungrouped_codes: list[dict] = []
     for code in codes_list:
@@ -174,15 +170,12 @@ def _coding_context(conn: sqlite3.Connection, coder_id: str, current_index: int)
         "codes_by_id": codes_by_id,
         "annotations": annotations_list,
         "annotation_counts": annotation_counts,
-        "annotated_html": annotated_html,
         "code_counts": code_counts,
         "complete_count": complete_count,
         "complete_pct": complete_pct,
         "coder_name": coder_name,
         "assignments": [dict(a) for a in assignments],
-        # New keys for redesign
         "sentence_html": sentence_html,
-        "sentence_units": sentence_units,
         "grouped_codes": grouped_codes,
         "ungrouped_codes": ungrouped_codes,
         "margin_annotations": margin_annotations,

@@ -108,9 +108,7 @@ def render_sentence_text(
         if ann_info:
             classes.append("ace-sentence--coded")
             colour = ann_info["colour"]
-            r = int(colour[1:3], 16)
-            g = int(colour[3:5], 16)
-            b = int(colour[5:7], 16)
+            r, g, b = int(colour[1:3], 16), int(colour[3:5], 16), int(colour[5:7], 16)
             style = f' style="--code-color:{colour};--code-bg:rgba({r},{g},{b},0.18);"'
             ann_id = html.escape(ann_info["annotation_id"])
             code_id = html.escape(ann_info["code_id"])
