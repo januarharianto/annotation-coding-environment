@@ -1,5 +1,6 @@
 """FastAPI application factory for ACE."""
 
+import json
 import os
 import secrets
 import signal
@@ -171,6 +172,7 @@ def create_app() -> FastAPI:
 
     # Templates
     app.state.templates = Jinja2Blocks(directory=str(_PKG_DIR / "templates"))
+    app.state.templates.env.filters["tojson"] = lambda v: json.dumps(v)
 
     # Routes
     from ace.routes.api import router as api_router
