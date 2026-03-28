@@ -68,8 +68,10 @@ def split_into_units(text: str) -> list[dict]:
                 if not sent_text:
                     continue
                 # pySBD start offset is within the stripped line; end may include
-                # trailing whitespace so we derive end from start + stripped length
-                abs_start = content_start + span.start
+                # trailing whitespace so we derive end from start + stripped length.
+                # Account for leading whitespace pySBD may include in span.sent.
+                leading = len(span.sent) - len(span.sent.lstrip())
+                abs_start = content_start + span.start + leading
                 abs_end = abs_start + len(sent_text)
                 units.append({
                     "text": sent_text,
