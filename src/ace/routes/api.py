@@ -824,7 +824,11 @@ async def annotate_sentence(
     sentence_index: int = Form(...),
     current_index: int = Form(default=0),
 ):
-    """Apply a code to a sentence (with toggle: same code removes it)."""
+    """Apply a code to a sentence. Allows multiple codes (overlapping).
+
+    If the same code already exists on this sentence, toggle it off.
+    Otherwise, add it alongside any existing codes.
+    """
     from ace.models.annotation import add_annotation, delete_annotation, get_annotations_for_source
     from ace.models.assignment import update_assignment_status
     from ace.models.source import get_source_content
@@ -852,30 +856,23 @@ async def annotate_sentence(
         start = unit["start_offset"]
         end = unit["end_offset"]
 
-        # Check for existing annotation overlapping this sentence
+        # Check if this exact code already exists on this sentence (toggle)
         existing = get_annotations_for_source(conn, source_id, coder_id)
         existing_same_code = None
-        existing_any = None
         for ann in existing:
             if ann["start_offset"] < end and ann["end_offset"] > start:
                 if ann["code_id"] == code_id:
                     existing_same_code = ann
                     break
-                if existing_any is None:
-                    existing_any = ann
 
         undo = _get_undo_manager(request)
 
         if existing_same_code:
-            # Toggle off
+            # Toggle off: remove this specific code
             delete_annotation(conn, existing_same_code["id"])
             undo.record_delete(source_id, existing_same_code["id"])
         else:
-            # Replace existing (if any) then add new
-            if existing_any:
-                delete_annotation(conn, existing_any["id"])
-                undo.record_delete(source_id, existing_any["id"])
-
+            # Add alongside any existing codes (no replace)
             ann_id = add_annotation(
                 conn, source_id, coder_id, code_id,
                 start, end, unit["text"],
@@ -902,8 +899,11 @@ async def delete_sentence_annotations(
     sentence_index: int = Form(...),
     current_index: int = Form(default=0),
 ):
-    """Delete all annotations on a focused sentence (X key)."""
-    from ace.models.annotation import delete_annotation, get_annotations_for_source
+    """Delete the most recently applied annotation on a focused sentence (X key).
+
+    Press X multiple times to remove codes one by one (last-applied first).
+    """
+    from ace.models.annotation import delete_annotation
     from ace.models.source import get_source_content
     from ace.services.text_splitter import split_into_units
 
@@ -929,17 +929,22 @@ async def delete_sentence_annotations(
         start = unit["start_offset"]
         end = unit["end_offset"]
 
-        existing = get_annotations_for_source(conn, source_id, coder_id)
+        # Find most recently created annotation overlapping this sentence
+        most_recent = conn.execute(
+            "SELECT id FROM annotation "
+            "WHERE source_id = ? AND coder_id = ? AND deleted_at IS NULL "
+            "AND start_offset < ? AND end_offset > ? "
+            "ORDER BY created_at DESC LIMIT 1",
+            (source_id, coder_id, end, start),
+        ).fetchone()
+
         undo = _get_undo_manager(request)
-        deleted_any = False
-        for ann in existing:
-            if ann["start_offset"] < end and ann["end_offset"] > start:
-                delete_annotation(conn, ann["id"])
-                undo.record_delete(source_id, ann["id"])
-                deleted_any = True
+        if most_recent:
+            delete_annotation(conn, most_recent["id"])
+            undo.record_delete(source_id, most_recent["id"])
 
         content = _render_coding_oob(request, conn, coder_id, current_index)
-        if deleted_any:
+        if most_recent:
             return HTMLResponse(
                 content,
                 headers={"HX-Trigger": '{"ace-toast": "Annotation removed"}'},
