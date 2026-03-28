@@ -84,6 +84,9 @@
         <button class="ace-sidebar-tab ace-sidebar-tab--active" data-tab="groups" onclick="aceSwitchTab(this, 'groups')">Groups</button>
         <button class="ace-sidebar-tab" data-tab="all" onclick="aceSwitchTab(this, 'all')">All</button>
       </div>
+      <div class="ace-sidebar-toolbar">
+        <button class="ace-btn-icon ace-manage-toggle" title="Manage codes" onclick="aceToggleManageMode()">&#9881;</button>
+      </div>
       <div class="ace-sidebar-view" id="view-recent"></div>
       <div class="ace-sidebar-view ace-sidebar-view--active" id="view-groups">
         {% for group_name, group_codes in grouped_codes %}
@@ -93,6 +96,8 @@
           <span class="ace-code-dot" style="background: {{ code['colour'] }};"></span>
           <span class="ace-code-name">{{ code['name'] }}</span>
           <span class="ace-keycap"></span>
+          <button class="ace-code-menu-btn" title="Code options"
+                  onclick="event.stopPropagation(); aceCodeMenu(event, '{{ code['id'] }}')">&hellip;</button>
         </div>
         {% endfor %}
         {% endfor %}
@@ -101,6 +106,8 @@
           <span class="ace-code-dot" style="background: {{ code['colour'] }};"></span>
           <span class="ace-code-name">{{ code['name'] }}</span>
           <span class="ace-keycap"></span>
+          <button class="ace-code-menu-btn" title="Code options"
+                  onclick="event.stopPropagation(); aceCodeMenu(event, '{{ code['id'] }}')">&hellip;</button>
         </div>
         {% endfor %}
         {% if not codes %}
@@ -108,6 +115,9 @@
         {% endif %}
       </div>
       <div class="ace-sidebar-view" id="view-all"></div>
+      <div class="ace-manage-create">
+        <input type="text" placeholder="New code name…" id="manage-create-input" autocomplete="off">
+      </div>
     </div>
     {% endblock %}
 
