@@ -139,7 +139,7 @@ def _get_sentence_annotations(
     return result
 
 
-_UNDERLINE_OFFSETS = [3, 5, 7, 9, 11]
+_UNDERLINE_OFFSETS = [3, 6, 9, 12, 15]  # 1px lines with 2px gaps between
 
 
 def _render_inner_text(
@@ -165,7 +165,7 @@ def _render_inner_text(
             offset_px = _UNDERLINE_OFFSETS[idx] if idx < len(_UNDERLINE_OFFSETS) else 11
             escaped = (
                 f'<span style="text-decoration:underline;text-decoration-color:{ann["colour"]};'
-                f'text-underline-offset:{offset_px}px;text-decoration-thickness:2px;">'
+                f'text-underline-offset:{offset_px}px;text-decoration-thickness:1px;">'
                 f'{escaped}</span>'
             )
         return escaped
@@ -214,7 +214,7 @@ def _wrap_underlines(text: str, annotations: list[dict]) -> str:
         result = (
             f'<mark style="background:transparent;color:inherit;'
             f'text-decoration:underline;text-decoration-color:{ann["colour"]};'
-            f'text-underline-offset:{offset_px}px;text-decoration-thickness:2px;">'
+            f'text-underline-offset:{offset_px}px;text-decoration-thickness:1px;">'
             f'{result}</mark>'
         )
     return result
