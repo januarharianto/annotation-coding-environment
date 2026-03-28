@@ -206,7 +206,7 @@
         sentence_index: window.__aceFocusIndex,
         current_index: window.__aceCurrentIndex,
       },
-    });
+    }).then(_restoreFocus);
 
     window.__aceLastCodeId = codeId;
     _trackRecent(codeId);
@@ -227,7 +227,7 @@
         selected_text: sel.text,
         current_index: window.__aceCurrentIndex,
       },
-    });
+    }).then(_restoreFocus);
 
     window.__aceLastCodeId = codeId;
     window.__aceLastSelection = null;
@@ -246,7 +246,7 @@
         sentence_index: window.__aceFocusIndex,
         current_index: window.__aceCurrentIndex,
       },
-    });
+    }).then(_restoreFocus);
   }
 
   function _flashCodeRow(codeId) {
