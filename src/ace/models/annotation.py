@@ -83,6 +83,22 @@ def get_annotation_counts_by_source(conn: sqlite3.Connection, coder_id: str | No
     return {r["source_id"]: r["cnt"] for r in rows}
 
 
+def expand_annotation(
+    conn: sqlite3.Connection,
+    annotation_id: str,
+    new_start: int,
+    new_end: int,
+    new_text: str,
+) -> None:
+    """Expand an annotation's offset range (for merging adjacent sentences)."""
+    now = datetime.now(timezone.utc).isoformat()
+    conn.execute(
+        "UPDATE annotation SET start_offset = ?, end_offset = ?, selected_text = ?, updated_at = ? WHERE id = ?",
+        (new_start, new_end, new_text, now, annotation_id),
+    )
+    conn.commit()
+
+
 def compact_deleted(conn: sqlite3.Connection) -> int:
     cursor = conn.execute("DELETE FROM annotation WHERE deleted_at IS NOT NULL")
     conn.commit()

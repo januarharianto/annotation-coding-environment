@@ -824,12 +824,16 @@ async def annotate_sentence(
     sentence_index: int = Form(...),
     current_index: int = Form(default=0),
 ):
-    """Apply a code to a sentence. Allows multiple codes (overlapping).
+    """Apply a code to a sentence with auto-merge.
 
     If the same code already exists on this sentence, toggle it off.
-    Otherwise, add it alongside any existing codes.
+    If an adjacent sentence already has the same code, expand that
+    annotation to include this sentence (merge) instead of creating a new row.
+    Otherwise, add a new annotation alongside any existing codes.
     """
-    from ace.models.annotation import add_annotation, delete_annotation, get_annotations_for_source
+    from ace.models.annotation import (
+        add_annotation, delete_annotation, expand_annotation, get_annotations_for_source,
+    )
     from ace.models.assignment import update_assignment_status
     from ace.models.source import get_source_content
     from ace.services.text_splitter import split_into_units
@@ -848,7 +852,8 @@ async def annotate_sentence(
         if not content_row:
             return HTMLResponse("", status_code=400)
 
-        units = split_into_units(content_row["content_text"])
+        source_text = content_row["content_text"]
+        units = split_into_units(source_text)
         if sentence_index < 0 or sentence_index >= len(units):
             return HTMLResponse("", status_code=400)
 
@@ -872,12 +877,32 @@ async def annotate_sentence(
             delete_annotation(conn, existing_same_code["id"])
             undo.record_delete(source_id, existing_same_code["id"])
         else:
-            # Add alongside any existing codes (no replace)
-            ann_id = add_annotation(
-                conn, source_id, coder_id, code_id,
-                start, end, unit["text"],
-            )
-            undo.record_add(source_id, ann_id)
+            # Auto-merge: check if adjacent sentence already has the same code
+            neighbour = None
+            for ann in existing:
+                if ann["code_id"] != code_id:
+                    continue
+                # Adjacent = annotation ends where this sentence starts (within 5 chars gap)
+                # or annotation starts where this sentence ends
+                gap_before = start - ann["end_offset"]
+                gap_after = ann["start_offset"] - end
+                if 0 <= gap_before <= 5 or 0 <= gap_after <= 5:
+                    neighbour = ann
+                    break
+
+            if neighbour:
+                # Expand the existing annotation to include this sentence
+                new_start = min(neighbour["start_offset"], start)
+                new_end = max(neighbour["end_offset"], end)
+                new_text = source_text[new_start:new_end]
+                expand_annotation(conn, neighbour["id"], new_start, new_end, new_text)
+                undo.record_add(source_id, neighbour["id"])
+            else:
+                ann_id = add_annotation(
+                    conn, source_id, coder_id, code_id,
+                    start, end, unit["text"],
+                )
+                undo.record_add(source_id, ann_id)
 
             # Auto-transition pending → in_progress
             assignment = conn.execute(
