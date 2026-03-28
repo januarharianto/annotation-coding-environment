@@ -989,7 +989,7 @@ async def import_codebook_preview(request: Request, file: UploadFile = File(...)
         )
 
     return HTMLResponse(
-        f'<dialog>'
+        f'<dialog class="ace-dialog">'
         f'<h3 style="font-size:15px;font-weight:500;margin:0 0 16px">Import Codebook</h3>'
         f'<div style="max-height:300px;overflow-y:auto">{rows_html}</div>'
         f'<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">'
@@ -1120,7 +1120,7 @@ async def rename_dialog(request: Request, code_id: str):
         conn.close()
 
     return HTMLResponse(
-        f'<dialog>'
+        f'<dialog class="ace-dialog">'
         f'<h3 style="font-size:15px;font-weight:500;margin:0 0 16px">Rename Code</h3>'
         f'<form hx-put="/api/codes/{code_id}" hx-target="#code-sidebar" hx-swap="innerHTML">'
         f'<input type="text" name="name" value="{current_name}" '
@@ -1152,7 +1152,7 @@ async def colour_dialog(request: Request, code_id: str):
         )
 
     return HTMLResponse(
-        f'<dialog>'
+        f'<dialog class="ace-dialog">'
         f'<h3 style="font-size:15px;font-weight:500;margin:0 0 16px">Choose Colour</h3>'
         f'<div style="display:grid;grid-template-columns:repeat(6,1fr);gap:6px">'
         f'{swatches}'
@@ -1197,7 +1197,7 @@ async def delete_dialog(request: Request, code_id: str):
         warning = "This code has no annotations."
 
     return HTMLResponse(
-        f'<dialog>'
+        f'<dialog class="ace-dialog">'
         f'<h3 style="font-size:15px;font-weight:500;margin:0 0 16px">Delete {code_name}?</h3>'
         f'<p style="margin:0 0 16px;color:var(--ace-text-muted)">{warning}</p>'
         f'<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">'
@@ -1259,7 +1259,7 @@ async def move_dialog(request: Request, code_id: str):
         )
 
     return HTMLResponse(
-        f'<dialog>'
+        f'<dialog class="ace-dialog">'
         f'<h3 style="font-size:15px;font-weight:500;margin:0 0 16px">Move {code_name} to Group</h3>'
         f'<div style="display:flex;flex-direction:column">'
         f'{options}'

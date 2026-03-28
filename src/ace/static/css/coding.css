@@ -5,12 +5,22 @@
   --ace-sidebar-width: 280px;
 }
 
+/* ---- Coding workspace (flex column fills viewport) ---- */
+
+#coding-workspace {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+}
+
 /* ---- Two-pane split layout ---- */
 
 .ace-split {
   display: grid;
   grid-template-columns: var(--ace-sidebar-width) 1px 1fr;
-  height: calc(100vh - 90px);
+  flex: 1;
+  min-height: 0;
   overflow: hidden;
 }
 
@@ -123,6 +133,38 @@
   color: var(--ace-text);
 }
 
+/* ---- Code menu dropdown ---- */
+
+.ace-code-menu {
+  position: fixed;
+  z-index: 100;
+  background: var(--ace-bg);
+  border: 1px solid var(--ace-border);
+  box-shadow: var(--ace-shadow);
+  min-width: 140px;
+}
+
+.ace-code-menu-item {
+  display: block;
+  width: 100%;
+  padding: 6px 12px;
+  font-size: 13px;
+  color: var(--ace-text);
+  background: none;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--ace-transition);
+}
+
+.ace-code-menu-item:hover {
+  background: var(--ace-bg-muted);
+}
+
+.ace-code-menu-item--danger {
+  color: var(--ace-danger);
+}
+
 /* ---- Resize handle ---- */
 
 .ace-resize-handle {
@@ -212,6 +254,7 @@
   font-size: var(--ace-font-size-lg);
   line-height: var(--ace-leading-relaxed);
   max-width: 72ch;
+  margin: 0 auto;
   padding: var(--ace-space-6) var(--ace-space-8);
 }
 
@@ -243,7 +286,7 @@
 /* ---- Annotation list (below text) ---- */
 
 .ace-annotation-list {
-  max-height: 150px;
+  max-height: min(30vh, 250px);
   overflow-y: auto;
   border-top: 1px solid var(--ace-border);
   flex-shrink: 0;
@@ -332,6 +375,7 @@
   gap: 2px;
   padding: var(--ace-space-2) var(--ace-space-4);
   border-top: 1px solid var(--ace-border);
+  flex-shrink: 0;
 }
 
 .ace-grid-cell {
@@ -442,4 +486,35 @@
   font-size: var(--ace-font-size-xs);
   color: var(--ace-text-muted);
   font-family: var(--ace-font-mono);
+}
+
+/* ---- Touch device fallback for hover-reveal buttons ---- */
+
+@media (hover: none) {
+  .ace-annotation-row .ace-hover-action,
+  .ace-code-row .ace-code-menu-btn {
+    opacity: 0.5;
+  }
+}
+
+/* ---- Dialog base styles ---- */
+
+dialog {
+  border: 1px solid var(--ace-border);
+  padding: var(--ace-space-6);
+  max-width: 400px;
+  background: var(--ace-bg);
+  box-shadow: var(--ace-shadow);
+}
+
+dialog::backdrop {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+/* ---- Loading indicator during HTMX requests ---- */
+
+.htmx-request {
+  opacity: 0.6;
+  pointer-events: none;
+  transition: opacity var(--ace-transition);
 }
