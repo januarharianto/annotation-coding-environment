@@ -857,7 +857,75 @@
   });
 
   /* ================================================================
-   * 14. DOMContentLoaded init
+   * 14. Code search / filter / create
+   * ================================================================ */
+
+  // Filter code rows across all tabs as user types
+  document.addEventListener("input", function (e) {
+    if (e.target.id !== "code-search-input") return;
+    var query = e.target.value.toLowerCase();
+    // Filter the active tab's rows
+    var view = document.querySelector(".ace-sidebar-view--active");
+    if (!view) return;
+    var rows = view.querySelectorAll(".ace-code-row");
+    var visibleCount = 0;
+    rows.forEach(function (row) {
+      var name = row.querySelector(".ace-code-name");
+      if (!name) return;
+      var match = name.textContent.toLowerCase().indexOf(query) >= 0;
+      row.style.display = match ? "" : "none";
+      if (match) visibleCount++;
+    });
+    // Also hide group headers if all their children are hidden
+    var headers = view.querySelectorAll(".ace-code-group-header");
+    headers.forEach(function (header) {
+      var next = header.nextElementSibling;
+      var anyVisible = false;
+      while (next && next.classList.contains("ace-code-row")) {
+        if (next.style.display !== "none") anyVisible = true;
+        next = next.nextElementSibling;
+      }
+      header.style.display = anyVisible ? "" : "none";
+    });
+    _updateKeycaps();
+  });
+
+  // Enter in search: create new code if no visible matches
+  document.addEventListener("keydown", function (e) {
+    if (e.target.id !== "code-search-input") return;
+    if (e.key === "Escape") {
+      e.target.value = "";
+      e.target.dispatchEvent(new Event("input"));
+      document.getElementById("text-panel").focus();
+      return;
+    }
+    if (e.key !== "Enter") return;
+    var name = e.target.value.trim();
+    if (!name) return;
+
+    // Check if any visible rows match exactly
+    var view = document.querySelector(".ace-sidebar-view--active");
+    var rows = view ? view.querySelectorAll('.ace-code-row:not([style*="display: none"])') : [];
+    if (rows.length > 0) {
+      // Has matches — don't create, just clear and refocus
+      e.target.value = "";
+      e.target.dispatchEvent(new Event("input"));
+      document.getElementById("text-panel").focus();
+      return;
+    }
+
+    // No matches — create new code
+    e.preventDefault();
+    htmx.ajax("POST", "/api/codes", {
+      values: { name: name, current_index: window.__aceCurrentIndex },
+      target: "#code-sidebar",
+      swap: "outerHTML",
+    });
+    e.target.value = "";
+  });
+
+  /* ================================================================
+   * 15. DOMContentLoaded init
    * ================================================================ */
 
   document.addEventListener("DOMContentLoaded", function () {
