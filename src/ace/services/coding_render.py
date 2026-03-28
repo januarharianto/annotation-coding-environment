@@ -116,8 +116,10 @@ def render_sentence_text(
 
         text = html.escape(unit["text"])
         cls = " ".join(classes)
+        s = unit["start_offset"]
+        e = unit["end_offset"]
         parts.append(
-            f'<span id="s-{i}" class="{cls}" data-idx="{i}"{style}{extra_attrs}>{text}</span> '
+            f'<span id="s-{i}" class="{cls}" data-idx="{i}" data-start="{s}" data-end="{e}"{style}{extra_attrs}>{text}</span> '
         )
 
     return "".join(parts)

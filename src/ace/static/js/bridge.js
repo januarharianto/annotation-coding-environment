@@ -613,6 +613,8 @@
    * ================================================================ */
 
   // Custom selection capture (for click-drag)
+  // Uses data-start/data-end attributes on sentence spans to compute
+  // source-text offsets (DOM offsets differ due to inter-span whitespace).
   document.addEventListener("mouseup", function () {
     var container = document.querySelector(".ace-text-panel");
     if (!container) return;
@@ -628,27 +630,40 @@
       return;
     }
 
-    var start = _getTextOffset(container, range.startContainer, range.startOffset);
-    var end = _getTextOffset(container, range.endContainer, range.endOffset);
     var text = sel.toString();
+    if (!text) { window.__aceLastSelection = null; return; }
 
-    if (!text || start === end) {
+    // Find the sentence spans containing the selection endpoints
+    var startSrc = _sourceOffset(range.startContainer, range.startOffset);
+    var endSrc = _sourceOffset(range.endContainer, range.endOffset);
+
+    if (startSrc < 0 || endSrc < 0 || startSrc === endSrc) {
       window.__aceLastSelection = null;
       return;
     }
 
-    window.__aceLastSelection = { start: start, end: end, text: text };
+    window.__aceLastSelection = { start: startSrc, end: endSrc, text: text };
   });
 
-  function _getTextOffset(root, node, offset) {
-    var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
-    var total = 0;
+  function _sourceOffset(node, domOffset) {
+    // Walk up to find the containing .ace-sentence span
+    var el = node.nodeType === Node.TEXT_NODE ? node.parentElement : node;
+    var sentence = el.closest(".ace-sentence");
+    if (!sentence) return -1;
+
+    var sentStart = parseInt(sentence.dataset.start, 10);
+    if (isNaN(sentStart)) return -1;
+
+    // Compute character offset within this sentence's text content
+    var walker = document.createTreeWalker(sentence, NodeFilter.SHOW_TEXT, null);
+    var charPos = 0;
     var current;
     while ((current = walker.nextNode())) {
-      if (current === node) return total + offset;
-      total += current.textContent.length;
+      if (current === node) return sentStart + charPos + domOffset;
+      charPos += current.textContent.length;
     }
-    return total + offset;
+    // Fallback: if node is the sentence element itself, use domOffset as child index
+    return sentStart + domOffset;
   }
 
   // Click on sentence to focus it
