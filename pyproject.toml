@@ -17,6 +17,7 @@ dependencies = [
     "openpyxl>=3.1",
     "irrCAC>=0.4",
     "krippendorff>=0.7",
+    "pysbd>=0.3.4",
 ]
 
 [project.scripts]
