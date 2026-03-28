@@ -68,8 +68,11 @@
   }
 
   function _restoreFocus() {
-    var idx = window.__aceFocusIndex;
-    if (idx >= 0) _focusSentence(idx);
+    // Delay until after HTMX settling completes (outerHTML swap replaces DOM)
+    requestAnimationFrame(function () {
+      var idx = window.__aceFocusIndex;
+      if (idx >= 0) _focusSentence(idx);
+    });
   }
 
   /* ================================================================
@@ -689,7 +692,8 @@
   });
 
   // After HTMX swap: restore focus, rebuild tabs, update keycaps
-  document.addEventListener("htmx:afterSwap", function (evt) {
+  // Use afterSettle (not afterSwap) — fires after HTMX finishes all DOM changes
+  document.addEventListener("htmx:afterSettle", function (evt) {
     var target = evt.detail.target;
     if (!target) return;
 
