@@ -456,8 +456,44 @@
 
   window.aceToggleGrid = function () {
     var grid = document.getElementById("source-grid-overlay");
-    if (grid) grid.classList.toggle("ace-hidden");
+    if (!grid) return;
+    var wasHidden = grid.classList.contains("ace-hidden");
+    grid.classList.toggle("ace-hidden");
+    if (wasHidden) {
+      // Adaptive cell size: 10px for ≤200 sources, scales down to 6px for 1000+
+      var total = window.__aceTotalSources || 0;
+      var cellSize = total <= 200 ? 10 : total <= 500 ? 8 : total <= 1000 ? 7 : 6;
+      var popover = grid.querySelector(".ace-grid-popover");
+      // Set max-width so the popover stays reasonable
+      var maxWidth = Math.min(400, Math.max(200, Math.ceil(Math.sqrt(total)) * (cellSize + 1) + 12));
+      if (popover) {
+        popover.style.setProperty("--ace-grid-cell-size", cellSize + "px");
+        popover.style.maxWidth = maxWidth + "px";
+      }
+      // Position anchored below the nav counter
+      var counter = document.getElementById("nav-counter");
+      if (counter) {
+        var rect = counter.getBoundingClientRect();
+        grid.style.top = (rect.bottom + 4) + "px";
+        // Centre the popover under the counter
+        grid.style.left = Math.max(4, rect.left + rect.width / 2 - maxWidth / 2) + "px";
+      }
+      // Close on click outside (next tick)
+      setTimeout(function () {
+        document.addEventListener("click", _onGridOutsideClick);
+      }, 0);
+    } else {
+      document.removeEventListener("click", _onGridOutsideClick);
+    }
   };
+
+  function _onGridOutsideClick(e) {
+    var grid = document.getElementById("source-grid-overlay");
+    if (grid && !grid.contains(e.target) && !e.target.closest(".ace-nav-counter")) {
+      grid.classList.add("ace-hidden");
+      document.removeEventListener("click", _onGridOutsideClick);
+    }
+  }
 
   /* ================================================================
    * 9. Cheat sheet overlay

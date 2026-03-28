@@ -177,8 +177,9 @@
     <div class="ace-grid-popover">
       <div class="ace-grid-cells">
         {% for assignment in assignments %}
-        <div class="ace-grid-cell{% if loop.index0 == current_index %} ace-grid-cell--active{% endif %}{% if annotation_counts.get(assignment['source_id'], 0) > 0 %} ace-grid-cell--annotated{% endif %}{% if assignment['status'] == 'complete' %} ace-grid-cell--complete{% endif %}{% if assignment['status'] == 'flagged' %} ace-grid-cell--flagged{% endif %}"
-             title="{{ assignment['display_id'] }}"
+        {% set ann_count = annotation_counts.get(assignment['source_id'], 0) %}
+        <div class="ace-grid-cell{% if loop.index0 == current_index %} ace-grid-cell--active{% endif %}{% if assignment['status'] == 'complete' %} ace-grid-cell--complete{% elif ann_count >= 10 %} ace-grid-cell--ann-10{% elif ann_count >= 8 %} ace-grid-cell--ann-8{% elif ann_count >= 5 %} ace-grid-cell--ann-5{% elif ann_count >= 3 %} ace-grid-cell--ann-3{% elif ann_count >= 2 %} ace-grid-cell--ann-2{% elif ann_count >= 1 %} ace-grid-cell--ann-1{% endif %}{% if assignment['status'] == 'flagged' %} ace-grid-cell--flagged{% endif %}"
+             title="{{ loop.index }} · {{ ann_count }} annotation{{ 's' if ann_count != 1 else '' }}"
              onclick="aceNavigate({{ loop.index0 }})">
         </div>
         {% endfor %}

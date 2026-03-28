@@ -422,49 +422,56 @@
 
 .ace-grid-overlay {
   position: fixed;
-  inset: 0;
   z-index: 50;
 }
 
 .ace-grid-backdrop {
-  position: absolute;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.15);
+  display: none;
 }
 
 .ace-grid-popover {
-  position: absolute;
-  top: 50px;
-  left: 50%;
-  transform: translateX(-50%);
   background: var(--ace-bg);
   border: 1px solid var(--ace-border);
-  box-shadow: var(--ace-shadow);
-  padding: var(--ace-space-4);
-  max-width: 90vw;
-  max-height: 70vh;
-  overflow-y: auto;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  padding: 6px;
+  border-radius: var(--ace-radius);
 }
 
 .ace-grid-cells {
   display: flex;
   flex-wrap: wrap;
-  gap: 2px;
+  gap: 1px;
 }
 
 .ace-grid-cell {
-  width: 20px;
-  height: 20px;
-  background: var(--ace-bg-muted);
+  width: var(--ace-grid-cell-size, 10px);
+  height: var(--ace-grid-cell-size, 10px);
+  background: #eeeeee;
   cursor: pointer;
   transition: opacity var(--ace-transition);
 }
 
-.ace-grid-cell:hover { opacity: 0.7; }
-.ace-grid-cell--active { outline: 2px solid var(--ace-text); outline-offset: -1px; }
-.ace-grid-cell--annotated { background: var(--ace-focus); }
-.ace-grid-cell--complete { background: var(--ace-success); }
-.ace-grid-cell--flagged { background: var(--ace-warning); }
+.ace-grid-cell:hover { outline: 1px solid #546e7a; outline-offset: 0px; z-index: 1; }
+
+/* Current source: white fill + black outline */
+.ace-grid-cell--active { background: #fff; outline: 2px solid #212121; outline-offset: -1px; }
+
+/* Blue gradient for annotation density */
+.ace-grid-cell--ann-1 { background: #bbdefb; }
+.ace-grid-cell--ann-2 { background: #90caf9; }
+.ace-grid-cell--ann-3 { background: #64b5f6; }
+.ace-grid-cell--ann-5 { background: #42a5f5; }
+.ace-grid-cell--ann-8 { background: #1976d2; }
+.ace-grid-cell--ann-10 { background: #1565c0; }
+
+/* Complete: green */
+.ace-grid-cell--complete { background: #2e7d32; }
+
+/* Flagged: burnt orange outline (on top of any fill) */
+.ace-grid-cell--flagged { outline: 2px solid #d84315; outline-offset: -1px; }
+
+/* Active + flagged: keep black outline, add orange inner shadow */
+.ace-grid-cell--active.ace-grid-cell--flagged { outline: 2px solid #212121; box-shadow: inset 0 0 0 1px #d84315; }
 
 /* ---- Code menu dropdown (management mode) ---- */
 
