@@ -149,3 +149,24 @@ def test_text_roundtrip_offsets():
     for unit in units:
         extracted = text[unit["start_offset"]:unit["end_offset"]]
         assert extracted == unit["text"], f"Offset mismatch: {extracted!r} != {unit['text']!r}"
+
+
+def test_list_items_roman_numeral_dot():
+    text = "i. First item\nii. Second item\niii. Third item"
+    units = split_into_units(text)
+    assert len(units) == 3
+    assert all(u["type"] == "list" for u in units)
+
+
+def test_list_items_lettered():
+    text = "a. First item\nb. Second item"
+    units = split_into_units(text)
+    assert len(units) == 2
+    assert all(u["type"] == "list" for u in units)
+
+
+def test_list_items_parenthetical_lettered():
+    text = "(a) First item\n(b) Second item"
+    units = split_into_units(text)
+    assert len(units) == 2
+    assert all(u["type"] == "list" for u in units)
