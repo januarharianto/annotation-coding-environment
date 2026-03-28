@@ -139,58 +139,46 @@ def _get_sentence_annotations(
     return result
 
 
-_UNDERLINE_OFFSETS = [3, 6, 9, 12, 15]
+_UNDERLINE_OFFSETS = [3, 5, 7, 9, 11]
 
 
 def _render_inner_text(
     text: str, unit_start: int, overlapping: list[dict],
 ) -> str:
-    """Render sentence text with stacked underlines for each annotation.
-
-    Full-sentence annotations: underline the whole text.
-    Partial annotations: underline only the selected range via <mark>.
-    """
+    """Render sentence text with stacked underlines via nested text-decoration spans."""
     if not overlapping:
         return html.escape(text)
 
-    # Build underline events: each annotation marks its range within this sentence
     unit_end = unit_start + len(text)
-    events: list[tuple[int, int, str, dict]] = []  # (offset, order, type, ann)
-    for ann in overlapping:
-        rel_start = max(0, ann["start_offset"] - unit_start)
-        rel_end = min(len(text), ann["end_offset"] - unit_start)
-        events.append((rel_start, 0, "open", ann))
-        events.append((rel_end, 1, "close", ann))
 
-    events.sort(key=lambda e: (e[0], e[1]))
-
-    # Check if all annotations cover the full sentence (common case: sentence-level coding)
+    # Check if all annotations cover the full sentence
     all_full = all(
         ann["start_offset"] <= unit_start and ann["end_offset"] >= unit_end
         for ann in overlapping
     )
 
     if all_full:
-        # Simple case: stacked underlines on the whole sentence
-        style_parts = []
-        colors = []
-        for idx, ann in enumerate(overlapping):
-            offset_px = _UNDERLINE_OFFSETS[idx] if idx < len(_UNDERLINE_OFFSETS) else 15
-            colors.append(ann["colour"])
-            style_parts.append(f"{ann['colour']} {offset_px}px")
-        # Use box-shadow for stacked underlines (more reliable than text-decoration stacking)
-        shadows = ", ".join(f"inset 0 -{px}px 0 {c}" for c, px in zip(colors, [2] + [2] * (len(colors) - 1)) for _ in [None])
-        # Actually, simpler: use multiple box-shadows at different y-offsets
-        shadow_list = []
-        for idx, ann in enumerate(overlapping):
-            offset_px = _UNDERLINE_OFFSETS[idx] if idx < len(_UNDERLINE_OFFSETS) else 15
-            shadow_list.append(f"inset 0 -{offset_px}px 0 -1px {ann['colour']}")
-        style = f' style="text-decoration:none;box-shadow:{",".join(shadow_list)};"'
+        # Nest spans inside-out: first annotation is outermost (lowest underline offset)
         escaped = html.escape(text)
-        return f"<span{style}>{escaped}</span>"
+        for idx in range(len(overlapping) - 1, -1, -1):
+            ann = overlapping[idx]
+            offset_px = _UNDERLINE_OFFSETS[idx] if idx < len(_UNDERLINE_OFFSETS) else 11
+            escaped = (
+                f'<span style="text-decoration:underline;text-decoration-color:{ann["colour"]};'
+                f'text-underline-offset:{offset_px}px;text-decoration-thickness:2px;">'
+                f'{escaped}</span>'
+            )
+        return escaped
 
-    # Complex case: partial annotations — render with <mark> tags for each range
-    # Sort events and walk through text building segments
+    # Partial annotations — build segments with <mark> wrappers
+    events: list[tuple[int, int, str, dict]] = []
+    for ann in overlapping:
+        rel_start = max(0, ann["start_offset"] - unit_start)
+        rel_end = min(len(text), ann["end_offset"] - unit_start)
+        events.append((rel_start, 0, "open", ann))
+        events.append((rel_end, 1, "close", ann))
+    events.sort(key=lambda e: (e[0], e[1]))
+
     pos = 0
     result: list[str] = []
     active: list[dict] = []
@@ -218,13 +206,18 @@ def _render_inner_text(
 
 
 def _wrap_underlines(text: str, annotations: list[dict]) -> str:
-    """Wrap text in a <mark> with stacked underline styles."""
-    shadow_list = []
-    for idx, ann in enumerate(annotations):
-        offset_px = _UNDERLINE_OFFSETS[idx] if idx < len(_UNDERLINE_OFFSETS) else 15
-        shadow_list.append(f"inset 0 -{offset_px}px 0 -1px {ann['colour']}")
-    style = f"background:transparent;box-shadow:{','.join(shadow_list)};"
-    return f'<mark style="{style}">{text}</mark>'
+    """Wrap text in nested spans with stacked text-decoration underlines."""
+    result = text
+    for idx in range(len(annotations) - 1, -1, -1):
+        ann = annotations[idx]
+        offset_px = _UNDERLINE_OFFSETS[idx] if idx < len(_UNDERLINE_OFFSETS) else 11
+        result = (
+            f'<mark style="background:transparent;color:inherit;'
+            f'text-decoration:underline;text-decoration-color:{ann["colour"]};'
+            f'text-underline-offset:{offset_px}px;text-decoration-thickness:2px;">'
+            f'{result}</mark>'
+        )
+    return result
 
 
 def _is_para_break(idx: int, units: list[dict]) -> bool:
