@@ -45,7 +45,7 @@
     <span class="ace-coding-header-title">{{ project_name }}</span>
     <div class="ace-coding-header-right">
       <span class="ace-completion">{{ complete_count }}/{{ total_sources }} ({{ complete_pct }}%)</span>
-      <a href="/api/export">Export</a>
+      <a href="/api/export/annotations">Export</a>
       <span>{{ coder_name }}</span>
     </div>
   </div>
@@ -90,13 +90,22 @@
           <span class="ace-code-dot" style="background: {{ code['colour'] }};"></span>
           <span class="ace-code-name">{{ code["name"] }}</span>
           <span class="ace-code-count">{{ code_counts.get(code["id"], 0) or "" }}</span>
-          {% if loop.index <= 9 %}
-          <span class="ace-keycap">{{ loop.index }}</span>
+          {% if loop.index0 < 9 %}
+          <span class="ace-keycap">{{ loop.index0 + 1 }}</span>
+          {% elif loop.index0 == 9 %}
+          <span class="ace-keycap">0</span>
+          {% elif loop.index0 < 36 %}
+          <span class="ace-keycap">{{ "abcdefghijklmnopqrstuvwxyz"[loop.index0 - 10] }}</span>
           {% endif %}
           <button class="ace-code-menu-btn" title="Code options"
-                  onclick="event.stopPropagation();">&hellip;</button>
+                  onclick="event.stopPropagation(); aceCodeMenu(event, '{{ code["id"] }}')">&hellip;</button>
         </div>
         {% endfor %}
+        {% if not codes %}
+        <div style="padding: 16px; color: var(--ace-text-muted); font-size: 13px; text-align: center;">
+          Type a name above and press Enter to create your first code.
+        </div>
+        {% endif %}
       </div>
     </div>
     {% endblock %}
@@ -124,7 +133,7 @@
       {% block annotation_list %}
       <div id="annotation-list" class="ace-annotation-list">
         {% for ann in annotations %}
-        <div class="ace-annotation-row" data-annotation-id="{{ ann['id'] }}">
+        <div class="ace-annotation-row" data-annotation-id="{{ ann['id'] }}" onclick="aceFlashAnnotation('{{ ann["id"] }}')" style="cursor: pointer;">
           <span class="ace-code-dot" style="background: {{ codes_by_id.get(ann['code_id'], {}).get('colour', '#999') if codes_by_id.get(ann['code_id']) else '#999' }};"></span>
           <span class="ace-annotation-code">{{ codes_by_id.get(ann['code_id'], {}).get('name', 'Unknown') if codes_by_id.get(ann['code_id']) else 'Unknown' }}</span>
           <span class="ace-annotation-text">"{{ ann['selected_text'][:50] }}{{ '…' if ann['selected_text']|length > 50 else '' }}"</span>
@@ -135,6 +144,11 @@
                   hx-swap="outerHTML">&times;</button>
         </div>
         {% endfor %}
+        {% if not annotations %}
+        <div style="padding: 12px; color: var(--ace-text-muted); font-size: 12px; text-align: center;">
+          No annotations yet
+        </div>
+        {% endif %}
       </div>
       {% endblock %}
 
@@ -147,6 +161,7 @@
     <button class="ace-nav-btn" id="btn-prev"
             {% if current_index <= 0 %}disabled{% endif %}
             onclick="aceNavigate({{ current_index - 1 }})">&larr; Prev</button>
+    <button class="ace-btn-icon" title="Source grid (G)" onclick="aceToggleGrid()">&#9783;</button>
     <span class="ace-nav-counter">{{ current_index + 1 }} / {{ total_sources }}</span>
     <button class="ace-nav-btn" id="btn-next"
             {% if current_index >= total_sources - 1 %}disabled{% endif %}
