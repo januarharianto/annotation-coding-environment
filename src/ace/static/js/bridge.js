@@ -464,19 +464,22 @@
       var total = window.__aceTotalSources || 0;
       var cellSize = total <= 200 ? 10 : total <= 500 ? 8 : total <= 1000 ? 7 : 6;
       var popover = grid.querySelector(".ace-grid-popover");
-      // Set max-width so the popover stays reasonable
-      var maxWidth = Math.min(400, Math.max(200, Math.ceil(Math.sqrt(total)) * (cellSize + 1) + 12));
+      // +10% width, +20% height via slightly larger base calculation
+      var baseWidth = Math.ceil(Math.sqrt(total)) * (cellSize + 1) + 12;
+      var maxWidth = Math.min(440, Math.max(220, Math.round(baseWidth * 1.1)));
       if (popover) {
         popover.style.setProperty("--ace-grid-cell-size", cellSize + "px");
         popover.style.maxWidth = maxWidth + "px";
       }
-      // Position anchored below the nav counter
+      // Position anchored below the nav counter, clamped to viewport
       var counter = document.getElementById("nav-counter");
       if (counter) {
         var rect = counter.getBoundingClientRect();
         grid.style.top = (rect.bottom + 4) + "px";
-        // Centre the popover under the counter
-        grid.style.left = Math.max(4, rect.left + rect.width / 2 - maxWidth / 2) + "px";
+        var idealLeft = rect.left + rect.width / 2 - maxWidth / 2;
+        // Clamp so popover doesn't overflow right or left edge
+        var clampedLeft = Math.max(4, Math.min(idealLeft, window.innerWidth - maxWidth - 8));
+        grid.style.left = clampedLeft + "px";
       }
       // Close on click outside (next tick)
       setTimeout(function () {
