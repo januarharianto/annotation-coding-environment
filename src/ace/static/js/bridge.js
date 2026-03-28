@@ -460,17 +460,24 @@
     var wasHidden = grid.classList.contains("ace-hidden");
     grid.classList.toggle("ace-hidden");
     if (wasHidden) {
-      // Adaptive cell size: 10px for ≤200 sources, scales down to 6px for 1000+
+      // Adaptive cell size to fit within 300x300 popover
       var total = window.__aceTotalSources || 0;
-      var cellSize = total <= 200 ? 10 : total <= 500 ? 8 : total <= 1000 ? 7 : 6;
       var popover = grid.querySelector(".ace-grid-popover");
-      // +10% width, +20% height via slightly larger base calculation
-      var baseWidth = Math.ceil(Math.sqrt(total)) * (cellSize + 1) + 12;
-      var maxWidth = Math.min(440, Math.max(220, Math.round(baseWidth * 1.1)));
+      var innerSize = 300 - 12; // 300px minus 6px padding each side
+      // Calculate cell size that fits all sources in a ~square grid within 288px
+      var cols = Math.ceil(Math.sqrt(total)) || 1;
+      var cellSize = Math.max(4, Math.min(10, Math.floor((innerSize - (cols - 1)) / cols)));
       if (popover) {
         popover.style.setProperty("--ace-grid-cell-size", cellSize + "px");
-        popover.style.maxWidth = maxWidth + "px";
+        var cellsContainer = popover.querySelector(".ace-grid-cells");
+        if (cellsContainer) {
+          // Snap width to exact multiple of (cellSize + 1px gap)
+          var cellStep = cellSize + 1;
+          var fitCols = Math.floor(innerSize / cellStep);
+          cellsContainer.style.maxWidth = (fitCols * cellStep - 1) + "px";
+        }
       }
+      var maxWidth = 300;
       // Position anchored below the nav counter, clamped to viewport
       var counter = document.getElementById("nav-counter");
       if (counter) {
