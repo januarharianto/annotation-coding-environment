@@ -16,7 +16,7 @@
 {% block content %}
 <div id="coding-workspace" hx-ext="morph" hx-sync="this:queue all">
 
-  {# Hidden state inputs #}
+  {# Hidden state #}
   <input type="hidden" id="current-index" name="current_index" value="{{ current_index }}">
 
   {# Hidden HTMX triggers #}
@@ -33,151 +33,147 @@
             hx-post="/api/code/flag"
             hx-target="#text-panel"
             hx-swap="outerHTML">Flag</button>
-    <button id="trigger-navigate"
-            hx-post="/api/code/navigate"
+    <button id="trigger-apply"
+            hx-post="/api/code/apply-sentence"
             hx-target="#text-panel"
-            hx-swap="outerHTML">Navigate</button>
+            hx-swap="outerHTML">Apply</button>
+    <button id="trigger-delete-sentence"
+            hx-post="/api/code/delete-sentence"
+            hx-target="#text-panel"
+            hx-swap="outerHTML">Delete Sentence</button>
+    <button id="trigger-apply-selection"
+            hx-post="/api/code/apply"
+            hx-target="#text-panel"
+            hx-swap="outerHTML">Apply Selection</button>
   </div>
 
-  {# Page header #}
-  <div class="ace-coding-header">
+  {# Header with merged nav #}
+  {% block coding_header %}
+  <div id="coding-header" class="ace-coding-header">
     <a href="/" class="ace-coding-header-back">&larr; Home</a>
     <span class="ace-coding-header-title">{{ project_name }}</span>
+    <div class="ace-nav-cluster">
+      <button class="ace-nav-btn" id="btn-prev"
+              {% if current_index <= 0 %}disabled{% endif %}
+              onclick="aceNavigatePrev()">&laquo;</button>
+      <span class="ace-nav-counter" id="nav-counter"
+            onclick="aceToggleGrid()" title="Open source grid">
+        <span class="ace-status-badge ace-status-badge--{{ current_status }}"></span>
+        {{ current_index + 1 }} / {{ total_sources }} &#9783;
+      </span>
+      <button class="ace-nav-btn" id="btn-next"
+              {% if current_index >= total_sources - 1 %}disabled{% endif %}
+              onclick="aceNavigateNext()">&raquo;</button>
+    </div>
     <div class="ace-coding-header-right">
-      <span class="ace-completion">{{ complete_count }}/{{ total_sources }} ({{ complete_pct }}%)</span>
+      <span class="ace-completion">{{ complete_pct }}%</span>
       <a href="/api/export/annotations">Export</a>
       <span>{{ coder_name }}</span>
     </div>
   </div>
-
-  {# Source header #}
-  {% block source_header %}
-  <div id="source-header" class="ace-source-header">
-    {% if current_source %}
-    <span class="ace-status-badge ace-status-badge--{{ current_status }}"></span>
-    <span class="ace-source-id">{{ current_source["display_id"] }}</span>
-    <span style="color: var(--ace-text-muted); font-size: 12px;">
-      {{ current_index + 1 }} of {{ total_sources }}
-    </span>
-    <div class="ace-source-header-actions">
-      <button class="ace-btn-icon" title="Flag source"
-              hx-post="/api/code/flag"
-              hx-vals='{"source_index": "{{ current_index }}"}'
-              hx-target="#text-panel"
-              hx-swap="outerHTML">&#9873;</button>
-    </div>
-    {% endif %}
-  </div>
   {% endblock %}
 
-  {# Main two-pane layout #}
-  <div class="ace-split">
+  {# Three-column layout #}
+  <div class="ace-three-col" id="three-col">
 
-    {# Left: code sidebar #}
+    {# Left: tabbed code sidebar #}
     {% block code_sidebar %}
     <div id="code-sidebar" class="ace-sidebar">
-      <div class="ace-sidebar-header">
-        <input type="text" class="ace-sidebar-filter" placeholder="Filter or create code…"
-               id="code-filter-input" autocomplete="off">
+      <div class="ace-sidebar-tabs">
+        <button class="ace-sidebar-tab" data-tab="recent" onclick="aceSwitchTab(this, 'recent')">Recent</button>
+        <button class="ace-sidebar-tab ace-sidebar-tab--active" data-tab="groups" onclick="aceSwitchTab(this, 'groups')">Groups</button>
+        <button class="ace-sidebar-tab" data-tab="all" onclick="aceSwitchTab(this, 'all')">All</button>
       </div>
-      <div class="ace-code-list" id="code-list">
-        {% for code in codes %}
-        <div class="ace-code-row" data-code-id="{{ code['id'] }}"
-             hx-post="/api/code/apply"
-             hx-vals='{"code_id": "{{ code["id"] }}"}'
-             hx-target="#text-panel"
-             hx-swap="outerHTML">
+      <div class="ace-sidebar-view" id="view-recent"></div>
+      <div class="ace-sidebar-view ace-sidebar-view--active" id="view-groups">
+        {% for group_name, group_codes in grouped_codes %}
+        <div class="ace-code-group-header">&#9662; {{ group_name }} ({{ group_codes | length }})</div>
+        {% for code in group_codes %}
+        <div class="ace-code-row" data-code-id="{{ code['id'] }}">
           <span class="ace-code-dot" style="background: {{ code['colour'] }};"></span>
-          <span class="ace-code-name">{{ code["name"] }}</span>
-          <span class="ace-code-count">{{ code_counts.get(code["id"], 0) or "" }}</span>
-          {% if loop.index0 < 9 %}
-          <span class="ace-keycap">{{ loop.index0 + 1 }}</span>
-          {% elif loop.index0 == 9 %}
-          <span class="ace-keycap">0</span>
-          {% elif loop.index0 < 36 %}
-          <span class="ace-keycap">{{ "abcdefghijklmnopqrstuvwxyz"[loop.index0 - 10] }}</span>
-          {% endif %}
-          <button class="ace-code-menu-btn" title="Code options"
-                  onclick="event.stopPropagation(); aceCodeMenu(event, '{{ code["id"] }}')">&hellip;</button>
+          <span class="ace-code-name">{{ code['name'] }}</span>
+          <span class="ace-keycap"></span>
+        </div>
+        {% endfor %}
+        {% endfor %}
+        {% for code in ungrouped_codes %}
+        <div class="ace-code-row" data-code-id="{{ code['id'] }}">
+          <span class="ace-code-dot" style="background: {{ code['colour'] }};"></span>
+          <span class="ace-code-name">{{ code['name'] }}</span>
+          <span class="ace-keycap"></span>
         </div>
         {% endfor %}
         {% if not codes %}
-        <div style="padding: 16px; color: var(--ace-text-muted); font-size: 13px; text-align: center;">
-          Type a name above and press Enter to create your first code.
-        </div>
+        <div class="ace-sidebar-empty">No codes yet. Use management mode to add codes.</div>
         {% endif %}
       </div>
+      <div class="ace-sidebar-view" id="view-all"></div>
     </div>
     {% endblock %}
 
     {# Resize handle #}
     <div class="ace-resize-handle" id="resize-handle"></div>
 
-    {# Right: main content #}
-    <div class="ace-main">
-
-      {# Text panel #}
-      {% block text_panel %}
-      <div id="text-panel" class="ace-text-content">
-        {% if annotated_html %}
-        {{ annotated_html | safe }}
-        {% elif source_text %}
-        {{ source_text }}
-        {% else %}
-        <p style="color: var(--ace-text-muted);">No source content.</p>
-        {% endif %}
-      </div>
-      {% endblock %}
-
-      {# Annotation list #}
-      {% block annotation_list %}
-      <div id="annotation-list" class="ace-annotation-list">
-        {% for ann in annotations %}
-        <div class="ace-annotation-row" data-annotation-id="{{ ann['id'] }}" onclick="aceFlashAnnotation('{{ ann["id"] }}')" style="cursor: pointer;">
-          <span class="ace-code-dot" style="background: {{ codes_by_id.get(ann['code_id'], {}).get('colour', '#999') if codes_by_id.get(ann['code_id']) else '#999' }};"></span>
-          <span class="ace-annotation-code">{{ codes_by_id.get(ann['code_id'], {}).get('name', 'Unknown') if codes_by_id.get(ann['code_id']) else 'Unknown' }}</span>
-          <span class="ace-annotation-text">"{{ ann['selected_text'][:50] }}{{ '…' if ann['selected_text']|length > 50 else '' }}"</span>
-          <button class="ace-btn-icon ace-hover-action" title="Delete annotation"
-                  hx-post="/api/code/delete-annotation"
-                  hx-vals='{"annotation_id": "{{ ann["id"] }}"}'
-                  hx-target="#text-panel"
-                  hx-swap="outerHTML">&times;</button>
-        </div>
-        {% endfor %}
-        {% if not annotations %}
-        <div style="padding: 12px; color: var(--ace-text-muted); font-size: 12px; text-align: center;">
-          No annotations yet
-        </div>
-        {% endif %}
-      </div>
-      {% endblock %}
-
+    {# Centre: text panel #}
+    {% block text_panel %}
+    <div id="text-panel" class="ace-text-panel" tabindex="0">
+      {% if sentence_html %}
+      {{ sentence_html | safe }}
+      {% elif source_text %}
+      <p>{{ source_text }}</p>
+      {% else %}
+      <p class="ace-text-empty">No source content.</p>
+      {% endif %}
     </div>
+    {% endblock %}
+
+    {# Right: margin annotations #}
+    {% block margin_panel %}
+    <div id="margin-panel" class="ace-margin-panel">
+      {% for group in margin_annotations %}
+      <div class="ace-margin-note" data-start-idx="{{ group['start_idx'] }}" data-end-idx="{{ group['end_idx'] }}">
+        <div class="ace-margin-note-bar" style="background: {{ group['colour'] }};"></div>
+        <div class="ace-margin-note-code">{{ group['code_name'] }}</div>
+        <div class="ace-margin-note-text">&ldquo;{{ group['texts'][0][:40] }}&hellip;&rdquo;</div>
+        {% if group['texts'] | length > 1 %}
+        <div class="ace-margin-note-merged">{{ group['texts'] | length }} sentences merged</div>
+        {% endif %}
+      </div>
+      {% endfor %}
+      {% if not margin_annotations %}
+      <div class="ace-margin-empty">No annotations yet</div>
+      {% endif %}
+    </div>
+    {% endblock %}
+
   </div>
 
-  {# Bottom navigation bar #}
-  {% block bottom_bar %}
-  <div id="bottom-bar" class="ace-bottom-bar">
-    <button class="ace-nav-btn" id="btn-prev"
-            {% if current_index <= 0 %}disabled{% endif %}
-            onclick="aceNavigate({{ current_index - 1 }})">&larr; Prev</button>
-    <button class="ace-btn-icon" title="Source grid (G)" onclick="aceToggleGrid()">&#9783;</button>
-    <span class="ace-nav-counter">{{ current_index + 1 }} / {{ total_sources }}</span>
-    <button class="ace-nav-btn" id="btn-next"
-            {% if current_index >= total_sources - 1 %}disabled{% endif %}
-            onclick="aceNavigate({{ current_index + 1 }})">&rarr; Next</button>
+  {# Bottom hint bar #}
+  {% block hint_bar %}
+  <div id="hint-bar" class="ace-hint-bar">
+    <kbd>&uarr;</kbd><kbd>&darr;</kbd> navigate &nbsp;&nbsp;
+    <kbd>1</kbd>–<kbd>9</kbd> <kbd>0</kbd> <kbd>a</kbd>–<kbd>z</kbd> apply code &nbsp;&nbsp;
+    <kbd>Q</kbd> repeat &nbsp;&nbsp;
+    <kbd>Z</kbd> undo &nbsp;&nbsp;
+    <kbd>X</kbd> remove &nbsp;&nbsp;
+    <kbd>?</kbd> help
   </div>
   {% endblock %}
 
-  {# Source grid (hidden by default) #}
+  {# Source grid overlay (hidden) #}
   {% block source_grid %}
-  <div id="source-grid" class="ace-source-grid ace-hidden">
-    {% for assignment in assignments %}
-    <div class="ace-grid-cell{% if loop.index0 == current_index %} ace-grid-cell--active{% endif %}{% if annotation_counts.get(assignment['source_id'], 0) > 0 %} ace-grid-cell--annotated{% endif %}{% if assignment['status'] == 'complete' %} ace-grid-cell--complete{% endif %}{% if assignment['status'] == 'flagged' %} ace-grid-cell--flagged{% endif %}"
-         title="{{ assignment['display_id'] }}"
-         onclick="aceNavigate({{ loop.index0 }})">
+  <div id="source-grid-overlay" class="ace-grid-overlay ace-hidden">
+    <div class="ace-grid-backdrop" onclick="aceToggleGrid()"></div>
+    <div class="ace-grid-popover">
+      <div class="ace-grid-cells">
+        {% for assignment in assignments %}
+        <div class="ace-grid-cell{% if loop.index0 == current_index %} ace-grid-cell--active{% endif %}{% if annotation_counts.get(assignment['source_id'], 0) > 0 %} ace-grid-cell--annotated{% endif %}{% if assignment['status'] == 'complete' %} ace-grid-cell--complete{% endif %}{% if assignment['status'] == 'flagged' %} ace-grid-cell--flagged{% endif %}"
+             title="{{ assignment['display_id'] }}"
+             onclick="aceNavigate({{ loop.index0 }})">
+        </div>
+        {% endfor %}
+      </div>
     </div>
-    {% endfor %}
   </div>
   {% endblock %}
 
@@ -192,8 +188,10 @@
 <script src="/static/js/Sortable.min.js"></script>
 <script>
   window.__aceCurrentIndex = {{ current_index }};
-  window.__aceLastSelection = null;
-  window.__aceLastAppliedCodeId = null;
   window.__aceTotalSources = {{ total_sources }};
+  window.__aceFocusIndex = -1;
+  window.__aceCodes = {{ codes | tojson }};
+  window.__aceRecentCodeIds = {{ recent_code_ids | tojson }};
+  window.__aceLastCodeId = null;
 </script>
 {% endblock %}
