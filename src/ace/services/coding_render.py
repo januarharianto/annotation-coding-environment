@@ -160,3 +160,55 @@ def _is_para_break(idx: int, units: list[dict]) -> bool:
     if curr["start_offset"] - prev["end_offset"] > 1:
         return True
     return False
+
+
+def build_margin_annotations(
+    units: list[dict],
+    annotations: list[dict],
+    codes_by_id: dict,
+) -> list[dict]:
+    """Build merged annotation groups for the right margin panel.
+
+    Adjacent sentences coded with the same code are visually merged
+    into a single margin note. Returns list of dicts with keys:
+        code_id, code_name, colour, start_idx, end_idx, texts
+    """
+    if not units or not annotations:
+        return []
+
+    # Map each annotation to the sentence index it overlaps
+    ann_sentences: list[tuple[int, dict]] = []
+    for ann in annotations:
+        for i, unit in enumerate(units):
+            if ann["start_offset"] < unit["end_offset"] and ann["end_offset"] > unit["start_offset"]:
+                ann_sentences.append((i, ann))
+                break
+
+    # Sort by sentence index
+    ann_sentences.sort(key=lambda x: x[0])
+
+    # Group adjacent same-code annotations
+    groups: list[dict] = []
+    for sent_idx, ann in ann_sentences:
+        code = codes_by_id.get(ann["code_id"])
+        if not code:
+            continue
+
+        if (
+            groups
+            and groups[-1]["code_id"] == ann["code_id"]
+            and groups[-1]["end_idx"] == sent_idx - 1
+        ):
+            groups[-1]["end_idx"] = sent_idx
+            groups[-1]["texts"].append(ann.get("selected_text") or units[sent_idx]["text"])
+        else:
+            groups.append({
+                "code_id": ann["code_id"],
+                "code_name": code["name"],
+                "colour": code["colour"],
+                "start_idx": sent_idx,
+                "end_idx": sent_idx,
+                "texts": [ann.get("selected_text") or units[sent_idx]["text"]],
+            })
+
+    return groups
