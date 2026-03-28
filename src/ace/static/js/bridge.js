@@ -1,22 +1,21 @@
 /**
- * ACE Bridge — client-side utilities for the FastAPI + HTMX coding page.
+ * ACE Bridge — client-side utilities for the coding page.
  *
  * Sections:
  *  1. Toast notifications
- *  2. Text selection capture
- *  3. Apply code (click + keyboard)
- *  4. Keyboard shortcuts
- *  5. Navigation
- *  6. Grid toggle
- *  7. Cheat sheet overlay
- *  8. Annotation flash
- *  9. Resize handle
- * 10. SortableJS lifecycle
- * 11. Code filter
- * 12. ace-navigate event listener
- * 13. Dialog close cleanup
- * 14. HTMX request enrichment (inject selection into code apply)
- * 15. DOMContentLoaded init
+ *  2. Sentence navigation (↑/↓ focus)
+ *  3. Tab management (Recent / Groups / All)
+ *  4. Keymap (dynamic per-tab keycap assignment)
+ *  5. Apply code (sentence-based + custom selection)
+ *  6. Keyboard shortcuts
+ *  7. Navigation (prev/next source)
+ *  8. Source grid overlay
+ *  9. Cheat sheet overlay
+ * 10. Resize handle
+ * 11. Dialog close cleanup
+ * 12. HTMX integration (configRequest, afterSwap, afterRequest)
+ * 13. Code menu dropdown (management mode)
+ * 14. DOMContentLoaded init
  */
 
 (function () {
@@ -30,159 +29,258 @@
     duration = duration || 3000;
     var container = document.getElementById("toast");
     if (!container) return;
-
     var el = document.createElement("div");
     el.className = "toast-msg";
     el.textContent = message;
     container.appendChild(el);
-
     setTimeout(function () {
       el.classList.add("fade-out");
-      el.addEventListener("transitionend", function () {
-        el.remove();
-      });
+      el.addEventListener("transitionend", function () { el.remove(); });
     }, duration);
   };
 
-  // Listen for HTMX custom events that carry toast messages
   document.addEventListener("htmx:afterRequest", function (e) {
     var msg = e.detail.xhr && e.detail.xhr.getResponseHeader("X-ACE-Toast");
-    if (msg) {
-      window.aceToast(msg);
-    }
+    if (msg) window.aceToast(msg);
   });
 
   /* ================================================================
-   * 2. Text selection capture
+   * 2. Sentence navigation
    * ================================================================ */
 
-  /**
-   * Walk text nodes under `root` and return the cumulative character
-   * offset of `node` at `offset` within that text-node stream.
-   */
-  function getTextOffset(root, node, offset) {
-    var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
-    var total = 0;
-    var current;
-    while ((current = walker.nextNode())) {
-      if (current === node) return total + offset;
-      total += current.textContent.length;
-    }
-    return total + offset;
+  function _getSentences() {
+    return document.querySelectorAll(".ace-sentence");
   }
 
-  document.addEventListener("mouseup", function () {
-    var container = document.querySelector(".ace-text-content");
-    if (!container) return;
+  function _focusSentence(idx) {
+    var sentences = _getSentences();
+    if (idx < 0 || idx >= sentences.length) return;
 
-    var sel = window.getSelection();
-    if (!sel || sel.isCollapsed || sel.rangeCount === 0) {
-      window.__aceLastSelection = null;
-      return;
-    }
+    // Remove old focus
+    var old = document.querySelector(".ace-sentence--focused");
+    if (old) old.classList.remove("ace-sentence--focused");
 
-    var range = sel.getRangeAt(0);
+    // Set new focus
+    window.__aceFocusIndex = idx;
+    var el = sentences[idx];
+    el.classList.add("ace-sentence--focused");
+    el.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }
 
-    // Only capture selections inside the text content area
-    if (!container.contains(range.startContainer) || !container.contains(range.endContainer)) {
-      return;
-    }
-
-    var start = getTextOffset(container, range.startContainer, range.startOffset);
-    var end = getTextOffset(container, range.endContainer, range.endOffset);
-    var text = sel.toString();
-
-    if (!text || start === end) {
-      window.__aceLastSelection = null;
-      return;
-    }
-
-    window.__aceLastSelection = { start: start, end: end, text: text };
-  });
+  function _restoreFocus() {
+    var idx = window.__aceFocusIndex;
+    if (idx >= 0) _focusSentence(idx);
+  }
 
   /* ================================================================
-   * 3. Apply code (click on code row or keyboard shortcut)
+   * 3. Tab management
    * ================================================================ */
 
-  /**
-   * Apply a code by triggering the HTMX request on a code row.
-   * The selection data is injected via the htmx:configRequest listener (section 14).
-   */
-  window.aceApplyCode = function (codeId) {
+  var _activeTab = "groups";
+
+  window.aceSwitchTab = function (btn, tabId) {
+    // Update tab buttons
+    var tabs = btn.parentElement.querySelectorAll(".ace-sidebar-tab");
+    tabs.forEach(function (t) { t.classList.remove("ace-sidebar-tab--active"); });
+    btn.classList.add("ace-sidebar-tab--active");
+
+    // Update views
+    document.querySelectorAll(".ace-sidebar-view").forEach(function (v) {
+      v.classList.remove("ace-sidebar-view--active");
+    });
+    document.getElementById("view-" + tabId).classList.add("ace-sidebar-view--active");
+
+    _activeTab = tabId;
+    _buildTabContent(tabId);
+    _updateKeycaps();
+
+    // Return focus to text panel
+    var tp = document.getElementById("text-panel");
+    if (tp) tp.focus();
+  };
+
+  function _buildTabContent(tabId) {
+    var codes = window.__aceCodes || [];
+    if (tabId === "recent") {
+      _buildRecentTab(codes);
+    } else if (tabId === "all") {
+      _buildAllTab(codes);
+    }
+    // "groups" tab is server-rendered — no client rebuild needed
+  }
+
+  function _buildRecentTab(codes) {
+    var view = document.getElementById("view-recent");
+    if (!view) return;
+    var recentIds = window.__aceRecentCodeIds || [];
+    if (!recentIds.length) {
+      view.innerHTML = '<div class="ace-sidebar-empty">No recent codes</div>';
+      return;
+    }
+    var codeMap = {};
+    codes.forEach(function (c) { codeMap[c.id] = c; });
+    var html = "";
+    recentIds.forEach(function (id) {
+      var c = codeMap[id];
+      if (!c) return;
+      html += _buildCodeRowHtml(c);
+    });
+    view.innerHTML = html;
+  }
+
+  function _buildAllTab(codes) {
+    var view = document.getElementById("view-all");
+    if (!view) return;
+    var sorted = codes.slice().sort(function (a, b) {
+      return a.name.localeCompare(b.name);
+    });
+    var html = "";
+    sorted.forEach(function (c) { html += _buildCodeRowHtml(c); });
+    view.innerHTML = html;
+  }
+
+  function _buildCodeRowHtml(code) {
+    var esc = _escHtml(code.name);
+    return '<div class="ace-code-row" data-code-id="' + code.id + '">'
+      + '<span class="ace-code-dot" style="background:' + code.colour + ';"></span>'
+      + '<span class="ace-code-name">' + esc + '</span>'
+      + '<span class="ace-keycap"></span>'
+      + '</div>';
+  }
+
+  function _escHtml(s) {
+    var d = document.createElement("div");
+    d.textContent = s;
+    return d.innerHTML;
+  }
+
+  /* ================================================================
+   * 4. Keymap — dynamic keycap assignment per tab
+   * ================================================================ */
+
+  var _currentKeyMap = []; // array of code IDs in keycap order
+
+  function _updateKeycaps() {
+    var view = document.querySelector(".ace-sidebar-view--active");
+    if (!view) return;
+    var rows = view.querySelectorAll(".ace-code-row");
+    _currentKeyMap = [];
+    rows.forEach(function (row, i) {
+      _currentKeyMap.push(row.getAttribute("data-code-id"));
+      var keycap = row.querySelector(".ace-keycap");
+      if (keycap) keycap.textContent = _keylabel(i);
+    });
+  }
+
+  function _keylabel(i) {
+    if (i < 9) return "" + (i + 1);
+    if (i === 9) return "0";
+    if (i < 36) return String.fromCharCode(97 + i - 10);
+    return "";
+  }
+
+  function _keyToPosition(key) {
+    if (key >= "1" && key <= "9") return parseInt(key) - 1;
+    if (key === "0") return 9;
+    var c = key.toLowerCase().charCodeAt(0);
+    if (c >= 97 && c <= 122) return c - 97 + 10;
+    return -1;
+  }
+
+  /* ================================================================
+   * 5. Apply code — uses parameter queue to avoid hx-sync race condition
+   *
+   * IMPORTANT: Do NOT use setAttribute("hx-vals") + htmx.trigger() on
+   * shared hidden buttons. With hx-sync="this:queue all", queued requests
+   * read hx-vals at execution time (not queue time), so rapid keypresses
+   * overwrite each other's params. Instead, push params into a queue and
+   * inject them via htmx:configRequest at request time.
+   * ================================================================ */
+
+  var _pendingApplyParams = [];    // queue for trigger-apply
+  var _pendingSelectionParams = []; // queue for trigger-apply-selection
+  var _pendingDeleteParams = [];    // queue for trigger-delete-sentence
+
+  function _applyCodeToSentence(codeId) {
+    if (window.__aceFocusIndex < 0) return;
+
+    _pendingApplyParams.push({
+      code_id: codeId,
+      sentence_index: window.__aceFocusIndex,
+      current_index: window.__aceCurrentIndex,
+    });
+
+    var applyBtn = document.getElementById("trigger-apply");
+    if (applyBtn) htmx.trigger(applyBtn, "click");
+
+    window.__aceLastCodeId = codeId;
+    _trackRecent(codeId);
+    _flashCodeRow(codeId);
+  }
+
+  function _applyCodeToSelection(codeId) {
     var sel = window.__aceLastSelection;
     if (!sel) return;
 
-    var row = document.querySelector('.ace-code-row[data-code-id="' + codeId + '"]');
-    if (!row) return;
+    _pendingSelectionParams.push({
+      code_id: codeId,
+      start_offset: sel.start,
+      end_offset: sel.end,
+      selected_text: sel.text,
+      current_index: window.__aceCurrentIndex,
+    });
 
-    // Trigger the HTMX request on the row
-    htmx.trigger(row, "click");
+    var applyBtn = document.getElementById("trigger-apply-selection");
+    if (applyBtn) htmx.trigger(applyBtn, "click");
 
-    window.__aceLastAppliedCodeId = codeId;
+    window.__aceLastCodeId = codeId;
     window.__aceLastSelection = null;
     window.getSelection().removeAllRanges();
-
-    // Flash feedback
-    _flashRow(row);
-  };
-
-  function _flashRow(row) {
-    row.classList.add("active");
-    setTimeout(function () {
-      row.classList.remove("active");
-    }, 200);
+    _trackRecent(codeId);
+    _flashCodeRow(codeId);
   }
 
-  // Delegated click handler: flash feedback on code row clicks,
-  // but skip if clicking the menu button.
-  document.addEventListener("click", function (e) {
-    if (e.target.closest(".ace-code-menu-btn")) return;
-    var row = e.target.closest(".ace-code-row");
-    if (!row) return;
+  function _deleteSentenceAnnotation() {
+    if (window.__aceFocusIndex < 0) return;
 
-    // Store last applied code
-    var codeId = row.getAttribute("data-code-id");
-    if (codeId) {
-      window.__aceLastAppliedCodeId = codeId;
-    }
+    _pendingDeleteParams.push({
+      sentence_index: window.__aceFocusIndex,
+      current_index: window.__aceCurrentIndex,
+    });
 
-    // Clear selection after click
-    if (window.__aceLastSelection) {
-      window.__aceLastSelection = null;
-      window.getSelection().removeAllRanges();
-    }
+    var btn = document.getElementById("trigger-delete-sentence");
+    if (btn) htmx.trigger(btn, "click");
+  }
 
-    _flashRow(row);
-  });
+  function _flashCodeRow(codeId) {
+    document.querySelectorAll('.ace-code-row[data-code-id="' + codeId + '"]').forEach(function (r) {
+      r.classList.add("ace-code-row--flash");
+      setTimeout(function () { r.classList.remove("ace-code-row--flash"); }, 300);
+    });
+  }
+
+  function _trackRecent(codeId) {
+    var recent = window.__aceRecentCodeIds || [];
+    var idx = recent.indexOf(codeId);
+    if (idx >= 0) recent.splice(idx, 1);
+    recent.unshift(codeId);
+    if (recent.length > 20) recent.length = 20;
+    window.__aceRecentCodeIds = recent;
+  }
 
   /* ================================================================
-   * 4. Keyboard shortcuts
+   * 6. Keyboard shortcuts
    * ================================================================ */
+
+  // Custom selection tracking (for click-drag)
+  window.__aceLastSelection = null;
 
   function _isTyping() {
     var tag = document.activeElement && document.activeElement.tagName;
     return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
   }
 
-  /**
-   * Find a code row by its positional index (0-based) in the visible
-   * (not display:none) rows. Returns the data-code-id or null.
-   */
-  function _getCodeIdAtIndex(index) {
-    var rows = document.querySelectorAll(".ace-code-row");
-    var visibleIndex = 0;
-    for (var i = 0; i < rows.length; i++) {
-      if (rows[i].style.display === "none") continue;
-      if (visibleIndex === index) {
-        return rows[i].getAttribute("data-code-id");
-      }
-      visibleIndex++;
-    }
-    return null;
-  }
-
   document.addEventListener("keydown", function (e) {
-    // Don't handle shortcuts while typing in form fields
     if (_isTyping()) return;
 
     var key = e.key;
@@ -207,45 +305,63 @@
       return;
     }
 
-    // Alt+Left — Navigate previous
-    if (e.altKey && key === "ArrowLeft") {
-      e.preventDefault();
-      window.aceNavigate(window.__aceCurrentIndex - 1);
-      return;
-    }
-
-    // Alt+Right — Navigate next
-    if (e.altKey && key === "ArrowRight") {
-      e.preventDefault();
-      window.aceNavigate(window.__aceCurrentIndex + 1);
-      return;
-    }
-
-    // Skip remaining shortcuts if modifier keys are held
+    // Skip remaining if modifier keys held
     if (ctrl || e.altKey) return;
 
-    // G — Toggle source grid
-    if (key === "G" && shift) {
+    // ↓ — Navigate to next sentence
+    if (key === "ArrowDown") {
       e.preventDefault();
-      window.aceToggleGrid();
+      var sentences = _getSentences();
+      if (window.__aceFocusIndex < sentences.length - 1) {
+        _focusSentence(window.__aceFocusIndex + 1);
+      }
       return;
     }
 
-    // F — Flag
+    // ↑ — Navigate to previous sentence
+    if (key === "ArrowUp") {
+      e.preventDefault();
+      if (window.__aceFocusIndex > 0) {
+        _focusSentence(window.__aceFocusIndex - 1);
+      }
+      return;
+    }
+
+    // Z — Undo (no modifier needed in sentence mode)
+    if ((key === "z" || key === "Z") && !ctrl) {
+      e.preventDefault();
+      _updateCurrentIndex();
+      var undoBtn2 = document.getElementById("trigger-undo");
+      if (undoBtn2) htmx.trigger(undoBtn2, "click");
+      return;
+    }
+
+    // Q — Repeat last code
+    if (key === "q" || key === "Q") {
+      e.preventDefault();
+      if (window.__aceLastCodeId && window.__aceFocusIndex >= 0) {
+        if (window.__aceLastSelection) {
+          _applyCodeToSelection(window.__aceLastCodeId);
+        } else {
+          _applyCodeToSentence(window.__aceLastCodeId);
+        }
+      }
+      return;
+    }
+
+    // X — Delete annotation on focused sentence
+    if (key === "x" || key === "X") {
+      e.preventDefault();
+      _deleteSentenceAnnotation();
+      return;
+    }
+
+    // F — Flag (Shift+F)
     if (key === "F" && shift) {
       e.preventDefault();
       _updateCurrentIndex();
       var flagBtn = document.getElementById("trigger-flag");
       if (flagBtn) htmx.trigger(flagBtn, "click");
-      return;
-    }
-
-    // Q — Apply last used code
-    if (key === "Q" && shift) {
-      e.preventDefault();
-      if (window.__aceLastAppliedCodeId) {
-        window.aceApplyCode(window.__aceLastAppliedCodeId);
-      }
       return;
     }
 
@@ -256,30 +372,21 @@
       return;
     }
 
-    // Escape — Clear selection / close grid / close dialog / navigate back
+    // Escape cascade
     if (key === "Escape") {
-      // Close cheat sheet if open
       var cheatSheet = document.getElementById("ace-cheat-sheet");
-      if (cheatSheet) {
-        cheatSheet.remove();
-        return;
-      }
+      if (cheatSheet) { cheatSheet.remove(); return; }
 
-      // Close open dialog
       var dialog = document.querySelector("dialog[open]");
-      if (dialog) {
-        dialog.close();
-        return;
-      }
+      if (dialog) { dialog.close(); return; }
 
-      // Close source grid
-      var grid = document.getElementById("source-grid");
+      var grid = document.getElementById("source-grid-overlay");
       if (grid && !grid.classList.contains("ace-hidden")) {
         grid.classList.add("ace-hidden");
         return;
       }
 
-      // Clear text selection
+      // Clear custom selection
       if (window.__aceLastSelection) {
         window.__aceLastSelection = null;
         window.getSelection().removeAllRanges();
@@ -287,80 +394,61 @@
       return;
     }
 
-    // 1-9 — Apply code at index 0-8 (only when text is selected)
-    if (key >= "1" && key <= "9") {
-      var idx = parseInt(key, 10) - 1;
-      var codeId = _getCodeIdAtIndex(idx);
-      if (codeId && window.__aceLastSelection) {
+    // 1-9, 0, a-z — Apply code at keymap position
+    if (!shift) {
+      var pos = _keyToPosition(key);
+      if (pos >= 0 && pos < _currentKeyMap.length) {
         e.preventDefault();
-        window.aceApplyCode(codeId);
+        var codeId = _currentKeyMap[pos];
+        if (window.__aceLastSelection) {
+          _applyCodeToSelection(codeId);
+        } else if (window.__aceFocusIndex >= 0) {
+          _applyCodeToSentence(codeId);
+        }
       }
-      return;
-    }
-
-    // 0 — Apply code at index 9
-    if (key === "0") {
-      var codeId0 = _getCodeIdAtIndex(9);
-      if (codeId0 && window.__aceLastSelection) {
-        e.preventDefault();
-        window.aceApplyCode(codeId0);
-      }
-      return;
-    }
-
-    // a-z — Apply code at index 10-35
-    if (key >= "a" && key <= "z" && !shift) {
-      var letterIdx = key.charCodeAt(0) - 97 + 10;
-      var codeIdLetter = _getCodeIdAtIndex(letterIdx);
-      if (codeIdLetter && window.__aceLastSelection) {
-        e.preventDefault();
-        window.aceApplyCode(codeIdLetter);
-      }
-      return;
     }
   });
 
-  /**
-   * Update the hidden current-index input before triggering HTMX actions.
-   */
   function _updateCurrentIndex() {
     var input = document.getElementById("current-index");
-    if (input) {
-      input.value = window.__aceCurrentIndex;
-    }
+    if (input) input.value = window.__aceCurrentIndex;
   }
 
   /* ================================================================
-   * 5. Navigation
+   * 7. Navigation
    * ================================================================ */
 
   window.aceNavigate = function (index) {
     if (index < 0 || index >= window.__aceTotalSources) return;
     window.__aceCurrentIndex = index;
+    window.__aceFocusIndex = -1;
     window.location.href = "/code?index=" + index;
   };
 
-  /* ================================================================
-   * 6. Grid toggle
-   * ================================================================ */
+  window.aceNavigatePrev = function () {
+    window.aceNavigate(window.__aceCurrentIndex - 1);
+  };
 
-  window.aceToggleGrid = function () {
-    var grid = document.getElementById("source-grid");
-    if (grid) {
-      grid.classList.toggle("ace-hidden");
-    }
+  window.aceNavigateNext = function () {
+    window.aceNavigate(window.__aceCurrentIndex + 1);
   };
 
   /* ================================================================
-   * 7. Cheat sheet overlay
+   * 8. Source grid overlay
+   * ================================================================ */
+
+  window.aceToggleGrid = function () {
+    var grid = document.getElementById("source-grid-overlay");
+    if (grid) grid.classList.toggle("ace-hidden");
+  };
+
+  /* ================================================================
+   * 9. Cheat sheet overlay
    * ================================================================ */
 
   function _toggleCheatSheet() {
     var existing = document.getElementById("ace-cheat-sheet");
-    if (existing) {
-      existing.remove();
-      return;
-    }
+    if (existing) { existing.remove(); return; }
 
     var overlay = document.createElement("div");
     overlay.id = "ace-cheat-sheet";
@@ -377,75 +465,45 @@
     card.innerHTML =
       '<h3 style="margin:0 0 12px;font-size:15px;font-weight:600;">Keyboard shortcuts</h3>' +
       '<table style="width:100%;border-collapse:collapse;">' +
-      _shortcutRow("1 – 9", "Apply code 1–9") +
-      _shortcutRow("0", "Apply code 10") +
-      _shortcutRow("a – z", "Apply code 11–36") +
-      _shortcutRow("Q", "Re-apply last used code") +
+      _shortcutRow("↑ / ↓", "Navigate sentences") +
+      _shortcutRow("1 – 9, 0, a – z", "Apply code (per tab)") +
+      _shortcutRow("Q", "Repeat last code") +
+      _shortcutRow("X", "Remove code from sentence") +
+      _shortcutRow("Z", "Undo") +
       _shortcutRow("Ctrl/⌘ + Z", "Undo") +
       _shortcutRow("Ctrl/⌘ + Shift + Z", "Redo") +
-      _shortcutRow("Alt + ←", "Previous source") +
-      _shortcutRow("Alt + →", "Next source") +
-      _shortcutRow("G", "Toggle source grid") +
-      _shortcutRow("F", "Flag/unflag source") +
+      _shortcutRow("Shift + F", "Flag/unflag source") +
       _shortcutRow("?", "Toggle this cheat sheet") +
-      _shortcutRow("Escape", "Close / clear / go back") +
+      _shortcutRow("Esc", "Close overlay / clear") +
       "</table>";
 
     overlay.appendChild(card);
     document.body.appendChild(overlay);
-
-    // Close on click outside the card
     overlay.addEventListener("click", function (e) {
-      if (e.target === overlay) {
-        overlay.remove();
-      }
+      if (e.target === overlay) overlay.remove();
     });
   }
 
   function _shortcutRow(key, desc) {
-    return (
-      '<tr style="border-bottom:1px solid var(--ace-border-light,#e0e0e0);">' +
-      '<td style="padding:4px 12px 4px 0;font-family:\'SF Mono\',Menlo,Consolas,monospace;' +
-      'font-size:12px;white-space:nowrap;color:var(--ace-text-muted,#777);">' +
-      key +
-      "</td>" +
-      '<td style="padding:4px 0;">' +
-      desc +
-      "</td></tr>"
-    );
+    return '<tr style="border-bottom:1px solid var(--ace-border-light,#e0e0e0);">'
+      + '<td style="padding:4px 12px 4px 0;font-family:\'SF Mono\',Menlo,Consolas,monospace;'
+      + 'font-size:12px;white-space:nowrap;color:var(--ace-text-muted,#777);">' + key + "</td>"
+      + '<td style="padding:4px 0;">' + desc + "</td></tr>";
   }
 
   /* ================================================================
-   * 8. Annotation flash
-   * ================================================================ */
-
-  window.aceFlashAnnotation = function (annotationId) {
-    var el = document.querySelector(
-      '.ace-annotation[data-annotation-id="' + annotationId + '"]'
-    );
-    if (!el) return;
-    el.scrollIntoView({ behavior: "smooth", block: "center" });
-    el.classList.add("ace-annotation--flash");
-    setTimeout(function () {
-      el.classList.remove("ace-annotation--flash");
-    }, 600);
-  };
-
-  /* ================================================================
-   * 9. Resize handle
+   * 10. Resize handle
    * ================================================================ */
 
   function _initResize() {
     var handle = document.getElementById("resize-handle");
     if (!handle) return;
-
-    var split = handle.closest(".ace-split");
+    var split = handle.closest(".ace-three-col");
     if (!split) return;
 
-    // Restore saved width
     var saved = localStorage.getItem("ace-sidebar-width");
     if (saved) {
-      split.style.gridTemplateColumns = saved + "px 1px 1fr";
+      split.style.gridTemplateColumns = saved + "px 1px 1fr 200px";
     }
 
     var dragging = false;
@@ -462,10 +520,10 @@
       if (!dragging) return;
       var rect = split.getBoundingClientRect();
       var x = e.clientX - rect.left;
-      var min = 180;
-      var max = rect.width * 0.5;
+      var min = 150;
+      var max = rect.width * 0.4;
       x = Math.max(min, Math.min(max, x));
-      split.style.gridTemplateColumns = x + "px 1px 1fr";
+      split.style.gridTemplateColumns = x + "px 1px 1fr 200px";
     });
 
     document.addEventListener("pointerup", function () {
@@ -473,8 +531,6 @@
       dragging = false;
       document.body.style.cursor = "";
       document.body.style.userSelect = "";
-
-      // Save current width to localStorage
       var cols = split.style.gridTemplateColumns;
       if (cols) {
         var width = parseInt(cols, 10);
@@ -484,187 +540,154 @@
   }
 
   /* ================================================================
-   * 10. SortableJS lifecycle
+   * 11. Dialog close cleanup
    * ================================================================ */
 
-  var _currentSortable = null;
+  document.addEventListener("close", function (evt) {
+    if (evt.target.tagName === "DIALOG") {
+      var container = document.getElementById("modal-container");
+      if (container) container.innerHTML = "";
+    }
+  }, true);
 
-  function _initSortable() {
-    if (_currentSortable) {
-      _currentSortable.destroy();
-      _currentSortable = null;
+  /* ================================================================
+   * 12. HTMX integration
+   * ================================================================ */
+
+  // Custom selection capture (for click-drag)
+  document.addEventListener("mouseup", function () {
+    var container = document.querySelector(".ace-text-panel");
+    if (!container) return;
+
+    var sel = window.getSelection();
+    if (!sel || sel.isCollapsed || sel.rangeCount === 0) {
+      window.__aceLastSelection = null;
+      return;
     }
 
-    var list = document.getElementById("code-list");
-    if (!list || typeof Sortable === "undefined") return;
+    var range = sel.getRangeAt(0);
+    if (!container.contains(range.startContainer) || !container.contains(range.endContainer)) {
+      return;
+    }
 
-    _currentSortable = new Sortable(list, {
-      animation: 150,
-      handle: ".ace-code-row",
-      ghostClass: "active",
-      onEnd: function () {
-        var rows = list.querySelectorAll(".ace-code-row");
-        var ids = [];
-        rows.forEach(function (row) {
-          var id = row.getAttribute("data-code-id");
-          if (id) ids.push(id);
-        });
+    var start = _getTextOffset(container, range.startContainer, range.startOffset);
+    var end = _getTextOffset(container, range.endContainer, range.endOffset);
+    var text = sel.toString();
 
-        // POST new order to server
-        if (typeof htmx !== "undefined") {
-          htmx.ajax("POST", "/api/codes/reorder", {
-            values: { code_ids: JSON.stringify(ids) },
-          });
-        }
-      },
-    });
+    if (!text || start === end) {
+      window.__aceLastSelection = null;
+      return;
+    }
+
+    window.__aceLastSelection = { start: start, end: end, text: text };
+  });
+
+  function _getTextOffset(root, node, offset) {
+    var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
+    var total = 0;
+    var current;
+    while ((current = walker.nextNode())) {
+      if (current === node) return total + offset;
+      total += current.textContent.length;
+    }
+    return total + offset;
   }
 
-  // Destroy SortableJS before sidebar swap to avoid stale references
-  document.addEventListener("htmx:beforeSwap", function (evt) {
-    var target = evt.detail.target;
-    if (target && (target.id === "code-sidebar" || target.id === "coding-workspace")) {
-      if (_currentSortable) {
-        _currentSortable.destroy();
-        _currentSortable = null;
+  // Click on sentence to focus it
+  document.addEventListener("click", function (e) {
+    var sentence = e.target.closest(".ace-sentence");
+    if (sentence) {
+      var idx = parseInt(sentence.dataset.idx, 10);
+      if (!isNaN(idx)) {
+        _focusSentence(idx);
+        // Clear custom selection if this was a simple click (not drag)
+        if (!window.__aceLastSelection) {
+          window.getSelection().removeAllRanges();
+        }
       }
+    }
+
+    // Click on margin note to highlight corresponding sentences
+    var note = e.target.closest(".ace-margin-note");
+    if (note) {
+      var startIdx = parseInt(note.dataset.startIdx, 10);
+      if (!isNaN(startIdx)) _focusSentence(startIdx);
     }
   });
 
-  // Re-init SortableJS after sidebar or workspace swap
+  // After HTMX swap: restore focus, rebuild tabs, update keycaps
   document.addEventListener("htmx:afterSwap", function (evt) {
     var target = evt.detail.target;
-    if (
-      target &&
-      (target.id === "code-sidebar" || target.id === "coding-workspace")
-    ) {
-      _initSortable();
+    if (!target) return;
+
+    if (target.id === "text-panel" || target.id === "coding-workspace") {
+      _restoreFocus();
     }
 
-    // Auto-open dialogs loaded into modal-container
-    if (target && target.id === "modal-container") {
+    if (target.id === "code-sidebar" || target.id === "coding-workspace") {
+      _buildTabContent("recent");
+      _buildTabContent("all");
+      _updateKeycaps();
+    }
+
+    // Auto-open dialogs
+    if (target.id === "modal-container") {
       var dialog = target.querySelector("dialog");
       if (dialog && !dialog.open) dialog.showModal();
     }
   });
 
-  /* ================================================================
-   * 11. Code filter
-   * ================================================================ */
+  // Inject parameters at request time from queues (avoids hx-sync race condition)
+  document.addEventListener("htmx:configRequest", function (e) {
+    var elt = e.detail.elt;
+    if (!elt || !elt.id) return;
 
-  function _initCodeFilter() {
-    // Use event delegation so it works after HTMX swaps
-    document.addEventListener("input", function (e) {
-      if (e.target.id !== "code-filter-input") return;
-      var query = e.target.value.toLowerCase();
-      var rows = document.querySelectorAll(".ace-code-row");
-      rows.forEach(function (row) {
-        var name = row.querySelector(".ace-code-name");
-        if (!name) return;
-        row.style.display =
-          name.textContent.toLowerCase().indexOf(query) >= 0 ? "" : "none";
-      });
+    // Sentence apply — shift params from queue
+    if (elt.id === "trigger-apply" && _pendingApplyParams.length) {
+      var params = _pendingApplyParams.shift();
+      Object.keys(params).forEach(function (k) { e.detail.parameters[k] = params[k]; });
+      return;
+    }
 
-      // Show/hide "no matches" hint
-      var visibleCount = document.querySelectorAll('.ace-code-row:not([hidden]):not([style*="display: none"])').length;
-      var hint = document.getElementById('filter-no-match-hint');
-      if (hint) {
-        hint.style.display = (query && visibleCount === 0) ? 'block' : 'none';
-      }
-    });
+    // Selection apply — shift params from queue
+    if (elt.id === "trigger-apply-selection" && _pendingSelectionParams.length) {
+      var params2 = _pendingSelectionParams.shift();
+      Object.keys(params2).forEach(function (k) { e.detail.parameters[k] = params2[k]; });
+      return;
+    }
 
-    // Enter to create a new code when no matches
-    document.addEventListener("keydown", function (e) {
-      if (e.target.id !== "code-filter-input") return;
-      if (e.key !== "Enter") return;
+    // Delete sentence — shift params from queue
+    if (elt.id === "trigger-delete-sentence" && _pendingDeleteParams.length) {
+      var params3 = _pendingDeleteParams.shift();
+      Object.keys(params3).forEach(function (k) { e.detail.parameters[k] = params3[k]; });
+      return;
+    }
 
-      var query = e.target.value.trim();
-      if (!query) return;
+    // Undo/redo/flag — inject current_index directly
+    if (["trigger-undo", "trigger-redo", "trigger-flag"].indexOf(elt.id) >= 0) {
+      e.detail.parameters.current_index = window.__aceCurrentIndex;
+    }
+    if (elt.id === "trigger-flag") {
+      e.detail.parameters.source_index = window.__aceCurrentIndex;
+    }
+  });
 
-      var rows = document.querySelectorAll(".ace-code-row");
-      var hasVisible = false;
-      rows.forEach(function (row) {
-        if (row.style.display !== "none") hasVisible = true;
-      });
-
-      if (!hasVisible && typeof htmx !== "undefined") {
-        e.preventDefault();
-        htmx.ajax("POST", "/api/codes", {
-          values: { name: query },
-          target: "#code-sidebar",
-          swap: "morph:innerHTML",
-        });
-        e.target.value = "";
-      }
-    });
-  }
-
-  /* ================================================================
-   * 12. ace-navigate event listener
-   * ================================================================ */
-
-  // Custom event dispatched by HX-Trigger header after navigation
+  // ace-navigate event from HX-Trigger header
   document.addEventListener("ace-navigate", function (e) {
     var detail = e.detail || {};
-    if (detail.current_index !== undefined) {
-      window.__aceCurrentIndex = parseInt(detail.current_index, 10);
+    if (detail.index !== undefined) {
+      window.__aceCurrentIndex = parseInt(detail.index, 10);
     }
-    if (detail.total_sources !== undefined) {
-      window.__aceTotalSources = parseInt(detail.total_sources, 10);
+    if (detail.total !== undefined) {
+      window.__aceTotalSources = parseInt(detail.total, 10);
     }
+    window.__aceFocusIndex = -1;
     var input = document.getElementById("current-index");
-    if (input) {
-      input.value = window.__aceCurrentIndex;
-    }
+    if (input) input.value = window.__aceCurrentIndex;
   });
 
   /* ================================================================
-   * 13. Dialog close cleanup
-   * ================================================================ */
-
-  document.addEventListener(
-    "close",
-    function (evt) {
-      if (evt.target.tagName === "DIALOG") {
-        var container = document.getElementById("modal-container");
-        if (container) container.innerHTML = "";
-      }
-    },
-    true
-  );
-
-  /* ================================================================
-   * 14. HTMX request enrichment — inject selection data into code apply
-   * ================================================================ */
-
-  // Cancel code apply if no text is selected
-  document.addEventListener("htmx:confirm", function (e) {
-    var elt = e.detail.elt;
-    if (!elt || !elt.classList || !elt.classList.contains("ace-code-row")) return;
-    if (!window.__aceLastSelection) {
-      e.preventDefault();
-      aceToast("Select text first");
-    }
-  });
-
-  document.addEventListener("htmx:configRequest", function (e) {
-    // Only inject for code apply requests
-    var elt = e.detail.elt;
-    if (!elt || !elt.classList || !elt.classList.contains("ace-code-row")) return;
-
-    var sel = window.__aceLastSelection;
-    if (sel) {
-      e.detail.parameters.start_offset = sel.start;
-      e.detail.parameters.end_offset = sel.end;
-      e.detail.parameters.selected_text = sel.text;
-    }
-
-    // Always include current index
-    e.detail.parameters.current_index = window.__aceCurrentIndex;
-  });
-
-  /* ================================================================
-   * 15. Code menu dropdown
+   * 13. Code menu dropdown (management mode)
    * ================================================================ */
 
   var _activeCodeMenu = null;
@@ -678,7 +701,6 @@
 
   window.aceCodeMenu = function (event, codeId) {
     _closeCodeMenu();
-
     var btn = event.currentTarget;
     var rect = btn.getBoundingClientRect();
 
@@ -710,7 +732,6 @@
     document.body.appendChild(menu);
     _activeCodeMenu = menu;
 
-    // Position below the button, or above if near bottom
     var menuHeight = menu.offsetHeight;
     var spaceBelow = window.innerHeight - rect.bottom;
     if (spaceBelow < menuHeight + 8) {
@@ -720,7 +741,6 @@
     }
     menu.style.left = Math.min(rect.left, window.innerWidth - menu.offsetWidth - 8) + "px";
 
-    // Close on outside click (next tick so this click doesn't close it)
     setTimeout(function () {
       document.addEventListener("click", _onCodeMenuOutsideClick);
       document.addEventListener("keydown", _onCodeMenuEscape);
@@ -744,12 +764,17 @@
   }
 
   /* ================================================================
-   * 16. DOMContentLoaded init
+   * 14. DOMContentLoaded init
    * ================================================================ */
 
   document.addEventListener("DOMContentLoaded", function () {
     _initResize();
-    _initSortable();
-    _initCodeFilter();
+    _buildTabContent("recent");
+    _buildTabContent("all");
+    _updateKeycaps();
+
+    // Focus the text panel for keyboard navigation
+    var tp = document.getElementById("text-panel");
+    if (tp) tp.focus();
   });
 })();
