@@ -82,60 +82,78 @@ def render_sentence_text(
     annotations: list[dict],
     codes_by_id: dict,
 ) -> str:
-    """Render source text as sentence spans with stacked underline annotations.
+    """Render source text as sentence spans with highlighter backgrounds.
 
-    Supports multiple overlapping codes per sentence. Each annotation adds
-    a coloured underline at increasing offset (3px, 6px, 9px...).
-    Partial annotations (custom selections) are rendered as inner <mark> spans.
+    Full-sentence annotations use an outer <mark> that wraps consecutive
+    sentence spans sharing the same annotation — producing a seamless
+    highlight with no gap or text shift.
+    Partial annotations (custom selections) use inner <mark> elements.
     """
     if not units:
         return ""
 
+    # Pre-compute overlapping annotations for each unit
+    unit_annotations = [_get_sentence_annotations(u, annotations, codes_by_id) for u in units]
+
     parts: list[str] = []
+    open_mark_ann_ids: set[str] = set()  # annotation IDs with open <mark> wrappers
 
     for i, unit in enumerate(units):
         if _is_para_break(i, units):
+            # Close any open marks before a paragraph break
+            if open_mark_ann_ids:
+                parts.append("</mark>" * len(open_mark_ann_ids))
+                open_mark_ann_ids = set()
             parts.append('<span class="ace-para-break"></span>')
 
-        overlapping = _get_sentence_annotations(unit, annotations, codes_by_id)
+        overlapping = unit_annotations[i]
+        s = unit["start_offset"]
+        e = unit["end_offset"]
+        unit_end = s + len(unit["text"])
 
+        # Which full-sentence annotations cover this unit?
+        full_anns = [
+            ann for ann in overlapping
+            if ann["start_offset"] <= s and ann["end_offset"] >= unit_end
+        ]
+        full_ann_ids = {ann["annotation_id"] for ann in full_anns}
+
+        # Close marks that no longer apply
+        to_close = open_mark_ann_ids - full_ann_ids
+        if to_close:
+            parts.append("</mark>" * len(to_close))
+            open_mark_ann_ids -= to_close
+
+        # Open marks for new annotations
+        to_open = full_ann_ids - open_mark_ann_ids
+        for ann in full_anns:
+            if ann["annotation_id"] in to_open:
+                bg = _hex_to_rgba(ann["colour"], 0.15)
+                parts.append(f'<mark style="background:{bg};">')
+                open_mark_ann_ids.add(ann["annotation_id"])
+
+        # Build sentence span (no background on the span itself)
         classes = ["ace-sentence"]
         if unit["type"] == "list":
             classes.append("ace-sentence--list")
         if overlapping:
             classes.append("ace-sentence--coded")
 
-        s = unit["start_offset"]
-        e = unit["end_offset"]
-        unit_end = s + len(unit["text"])
-
-        # Check if all annotations cover the full sentence (common case)
-        all_full = overlapping and all(
-            ann["start_offset"] <= s and ann["end_offset"] >= unit_end
-            for ann in overlapping
-        )
-
-        if all_full:
-            # Put background directly on the span (no <mark>) for seamless merging
-            bg_parts = []
-            for ann in overlapping:
-                bg_parts.append(_hex_to_rgba(ann["colour"], 0.15))
-            # Layer backgrounds via multiple gradients
-            if len(bg_parts) == 1:
-                bg_style = f' style="background:{bg_parts[0]};"'
-            else:
-                layers = ",".join(f"linear-gradient({bg},{bg})" for bg in bg_parts)
-                bg_style = f' style="background:{layers};"'
-            inner = html.escape(unit["text"])
+        # Partial annotations get inner <mark> treatment
+        partial_anns = [ann for ann in overlapping if ann["annotation_id"] not in full_ann_ids]
+        if partial_anns:
+            inner = _render_inner_text(unit["text"], s, partial_anns)
         else:
-            bg_style = ""
-            inner = _render_inner_text(unit["text"], s, overlapping)
+            inner = html.escape(unit["text"])
 
         cls = " ".join(classes)
-
         parts.append(
-            f'<span id="s-{i}" class="{cls}" data-idx="{i}" data-start="{s}" data-end="{e}"{bg_style}>{inner}</span> '
+            f'<span id="s-{i}" class="{cls}" data-idx="{i}" data-start="{s}" data-end="{e}">{inner}</span> '
         )
+
+    # Close any remaining open marks
+    if open_mark_ann_ids:
+        parts.append("</mark>" * len(open_mark_ann_ids))
 
     return "".join(parts)
 
