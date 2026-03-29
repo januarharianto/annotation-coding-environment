@@ -133,21 +133,8 @@ def render_sentence_text(
 
         cls = " ".join(classes)
 
-        # When next sentence shares an annotation, include the space inside
-        # this span so the highlight covers it (no gap, no text shift)
-        trailing = " "
-        if overlapping and i + 1 < len(units):
-            next_overlapping = _get_sentence_annotations(units[i + 1], annotations, codes_by_id)
-            shared = any(
-                a["annotation_id"] == b["annotation_id"]
-                for a in overlapping for b in next_overlapping
-            )
-            if shared:
-                trailing = ""
-                inner += " "  # space inside the span, covered by background
-
         parts.append(
-            f'<span id="s-{i}" class="{cls}" data-idx="{i}" data-start="{s}" data-end="{e}"{bg_style}>{inner}</span>{trailing}'
+            f'<span id="s-{i}" class="{cls}" data-idx="{i}" data-start="{s}" data-end="{e}"{bg_style}>{inner}</span> '
         )
 
     return "".join(parts)
