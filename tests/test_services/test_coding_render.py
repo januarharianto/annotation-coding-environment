@@ -1,4 +1,4 @@
-"""Tests for sentence-based text rendering with highlight backgrounds."""
+"""Tests for sentence-based text rendering (no highlight markup)."""
 
 from ace.services.coding_render import render_sentence_text
 
@@ -15,13 +15,13 @@ def test_single_uncoded_sentence():
     assert "Hello world." in html
 
 
-def test_coded_sentence_has_highlight():
+def test_coded_sentence_has_coded_class():
     units = [{"text": "Hello.", "type": "prose", "start_offset": 0, "end_offset": 6}]
-    annotations = [{"id": "a1", "code_id": "c1", "start_offset": 0, "end_offset": 6, "selected_text": "Hello."}]
+    annotations = [{"id": "a1", "code_id": "c1", "start_offset": 0, "end_offset": 6}]
     codes_by_id = {"c1": {"id": "c1", "name": "Greeting", "colour": "#e53935"}}
     html = render_sentence_text(units, annotations, codes_by_id)
     assert "ace-sentence--coded" in html
-    assert "rgba(229,57,53,0.15)" in html
+    assert "<mark" not in html
 
 
 def test_uncoded_sentence_no_coded_class():
@@ -82,29 +82,28 @@ def test_data_start_end_attributes():
     assert 'data-end="11"' in html
 
 
-def test_multiple_overlapping_codes():
-    """Two codes on the same sentence produce nested highlight marks."""
+def test_no_mark_elements_with_annotations():
+    """Annotations produce ace-sentence--coded class but no <mark> elements."""
     units = [{"text": "Hello.", "type": "prose", "start_offset": 0, "end_offset": 6}]
     annotations = [
-        {"id": "a1", "code_id": "c1", "start_offset": 0, "end_offset": 6, "selected_text": "Hello."},
-        {"id": "a2", "code_id": "c2", "start_offset": 0, "end_offset": 6, "selected_text": "Hello."},
+        {"id": "a1", "code_id": "c1", "start_offset": 0, "end_offset": 6},
+        {"id": "a2", "code_id": "c2", "start_offset": 0, "end_offset": 6},
     ]
     codes_by_id = {
         "c1": {"id": "c1", "name": "Red", "colour": "#e53935"},
         "c2": {"id": "c2", "name": "Blue", "colour": "#1e88e5"},
     }
     html = render_sentence_text(units, annotations, codes_by_id)
-    assert "rgba(229,57,53,0.15)" in html
-    assert "rgba(30,136,229,0.15)" in html
     assert "ace-sentence--coded" in html
+    assert "<mark" not in html
+    assert "rgba(" not in html
 
 
-def test_partial_annotation_uses_mark():
-    """Custom selection within a sentence wraps only the selected text in <mark>."""
+def test_partial_annotation_no_mark():
+    """Custom selection within a sentence: no <mark>, just ace-sentence--coded."""
     units = [{"text": "Hello world.", "type": "prose", "start_offset": 0, "end_offset": 12}]
-    annotations = [{"id": "a1", "code_id": "c1", "start_offset": 6, "end_offset": 11, "selected_text": "world"}]
+    annotations = [{"id": "a1", "code_id": "c1", "start_offset": 6, "end_offset": 11}]
     codes_by_id = {"c1": {"id": "c1", "name": "Test", "colour": "#43a047"}}
     html = render_sentence_text(units, annotations, codes_by_id)
-    assert "<mark" in html
-    assert "Hello" in html  # uncoded prefix still present
-    assert "rgba(67,160,71,0.15)" in html
+    assert "ace-sentence--coded" in html
+    assert "<mark" not in html
