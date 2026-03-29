@@ -361,6 +361,17 @@
       return;
     }
 
+    // Delete/Backspace — double-press to confirm delete selected code
+    if ((key === "Delete" || key === "Backspace") && _lastSelectedCodeId && !shift && !ctrl) {
+      e.preventDefault();
+      if (_deleteTarget === _lastSelectedCodeId) {
+        _executeDelete(_lastSelectedCodeId);
+      } else {
+        _startDeleteConfirm(_lastSelectedCodeId);
+      }
+      return;
+    }
+
     // Z — Undo (no modifier needed in sentence mode)
     if ((key === "z" || key === "Z") && !ctrl) {
       e.preventDefault();
@@ -929,6 +940,51 @@
     var codeId = row.getAttribute("data-code-id");
     if (codeId) _startInlineRename(codeId);
   });
+
+  var _deleteTarget = null;
+  var _deleteTimer = null;
+
+  function _startDeleteConfirm(codeId) {
+    if (_deleteTimer) { clearTimeout(_deleteTimer); _clearDeleteConfirm(); }
+    var row = document.querySelector('.ace-code-row[data-code-id="' + codeId + '"]');
+    if (!row) return;
+    row.classList.add("ace-code-row--confirm-delete");
+    _deleteTarget = codeId;
+    _deleteTimer = setTimeout(function () { _clearDeleteConfirm(); }, 2000);
+  }
+
+  function _clearDeleteConfirm() {
+    if (_deleteTarget) {
+      var row = document.querySelector('.ace-code-row[data-code-id="' + _deleteTarget + '"]');
+      if (row) row.classList.remove("ace-code-row--confirm-delete");
+    }
+    _deleteTarget = null;
+    if (_deleteTimer) { clearTimeout(_deleteTimer); _deleteTimer = null; }
+  }
+
+  function _executeDelete(codeId) {
+    _clearDeleteConfirm();
+    _lastSelectedCodeId = null;
+    _codeAction("DELETE", "/api/codes/" + codeId + "?current_index=" + window.__aceCurrentIndex, null);
+  }
+
+  function _moveCode(codeId, direction) {
+    var codes = window.__aceCodes || [];
+    var ids = codes.map(function (c) { return c.id; });
+    var idx = ids.indexOf(codeId);
+    if (idx < 0) return;
+    var newIdx = idx + direction;
+    if (newIdx < 0 || newIdx >= ids.length) return;
+    ids[idx] = ids[newIdx];
+    ids[newIdx] = codeId;
+    _codeAction("POST", "/api/codes/reorder",
+      "code_ids=" + encodeURIComponent(JSON.stringify(ids)) + "&current_index=" + window.__aceCurrentIndex);
+  }
+
+  function _moveToGroup(codeId, groupName) {
+    _codeAction("PUT", "/api/codes/" + codeId,
+      "group_name=" + encodeURIComponent(groupName) + "&current_index=" + window.__aceCurrentIndex);
+  }
 
   /* ================================================================
    * 14. Code menu dropdown (management mode)
