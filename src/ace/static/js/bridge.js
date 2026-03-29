@@ -14,8 +14,11 @@
  * 10. Resize handle
  * 11. Dialog close cleanup
  * 12. HTMX integration (configRequest, afterSwap, afterRequest)
- * 13. Code menu dropdown (management mode)
- * 14. DOMContentLoaded init
+ * 13. Code management helpers
+ * 14. Code menu dropdown (management mode)
+ * 15. Add group (inline)
+ * 16. Code search / filter / create
+ * 17. DOMContentLoaded init
  */
 
 (function () {
@@ -755,7 +758,46 @@
   });
 
   /* ================================================================
-   * 13. Code menu dropdown (management mode)
+   * 13. Code management helpers
+   * ================================================================ */
+
+  var _menuOpen = false;
+  var _lastSelectedCodeId = null;
+
+  // No-op stubs — replaced by real implementations in later tasks
+  function _closeCodeMenu() {}
+  function _closeColourPopover() {}
+
+  function _closeAllPopovers() {
+    _closeCodeMenu();
+    _closeColourPopover();
+  }
+
+  function _refreshSidebar() {
+    htmx.ajax("POST", "/api/codes/reorder", {
+      target: "#code-sidebar",
+      swap: "outerHTML",
+      values: { code_ids: "[]", current_index: window.__aceCurrentIndex },
+    }).then(function () {
+      _buildTabContent("recent");
+      _buildTabContent("all");
+      _updateKeycaps();
+    });
+  }
+
+  function _codeAction(method, url, body) {
+    return fetch(url, {
+      method: method,
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: body,
+    }).then(function (r) {
+      if (!r.ok) { window.aceToast("Action failed"); return Promise.reject(); }
+      _refreshSidebar();
+    });
+  }
+
+  /* ================================================================
+   * 14. Code menu dropdown (management mode)
    * ================================================================ */
 
   var _activeCodeMenu = null;
@@ -857,7 +899,7 @@
   });
 
   /* ================================================================
-   * 14. Add group (inline)
+   * 15. Add group (inline)
    * ================================================================ */
 
   window.aceStartAddGroup = function (el) {
@@ -893,7 +935,7 @@
   };
 
   /* ================================================================
-   * 15. Code search / filter / create
+   * 16. Code search / filter / create
    * ================================================================ */
 
   // Filter code rows across all tabs as user types
@@ -961,7 +1003,7 @@
   });
 
   /* ================================================================
-   * 15. DOMContentLoaded init
+   * 17. DOMContentLoaded init
    * ================================================================ */
 
   document.addEventListener("DOMContentLoaded", function () {
