@@ -541,6 +541,35 @@
 .ace-code-menu-item:hover { background: var(--ace-bg-muted); }
 .ace-code-menu-item--danger { color: var(--ace-danger); }
 
+/* ---- Colour swatch popover ---- */
+
+.ace-colour-popover {
+  position: fixed;
+  z-index: 100;
+  background: var(--ace-bg);
+  border: 1px solid var(--ace-border);
+  box-shadow: var(--ace-shadow);
+  padding: 4px;
+  display: grid;
+  grid-template-columns: repeat(6, 28px);
+  gap: 2px;
+  border-radius: var(--ace-radius);
+}
+
+.ace-colour-swatch {
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 2px;
+  cursor: pointer;
+  padding: 0;
+}
+
+.ace-colour-swatch:hover {
+  outline: 2px solid var(--ace-text);
+  outline-offset: -1px;
+}
+
 /* ---- Utility ---- */
 
 .ace-hidden { display: none !important; }

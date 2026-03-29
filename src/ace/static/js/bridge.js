@@ -776,7 +776,72 @@
 
   // No-op stubs — replaced by real implementations in later tasks
   function _closeCodeMenu() {}
-  function _closeColourPopover() {}
+
+  var _COLOUR_PALETTE = ["#A91818","#557FE6","#6DA918","#E655D4","#18A991","#E6A455","#3C18A9","#5BE655","#A91848","#55B0E6","#9DA918","#C855E6","#18A960","#E67355","#1824A9","#8CE655","#A91879","#55E1E6","#A98418","#9755E6","#18A930","#E65567","#1855A9","#BCE655","#A918A9","#55E6BB","#A95418","#6755E6","#30A918","#E65598","#1885A9","#E6E055","#7818A9","#55E68B","#A92318","#5574E6"];
+
+  var _activeColourPopover = null;
+
+  function _closeColourPopover() {
+    if (_activeColourPopover) {
+      _activeColourPopover.remove();
+      _activeColourPopover = null;
+    }
+    document.removeEventListener("click", _onColourOutsideClick);
+    document.removeEventListener("keydown", _onColourEscape);
+  }
+
+  function _openColourPopover(codeId) {
+    _closeAllPopovers();
+    var row = document.querySelector('.ace-code-row[data-code-id="' + codeId + '"]');
+    if (!row) return;
+    var dot = row.querySelector(".ace-code-dot");
+    if (!dot) return;
+    var rect = dot.getBoundingClientRect();
+
+    var popover = document.createElement("div");
+    popover.className = "ace-colour-popover";
+
+    _COLOUR_PALETTE.forEach(function (hex) {
+      var swatch = document.createElement("button");
+      swatch.className = "ace-colour-swatch";
+      swatch.style.background = hex;
+      swatch.addEventListener("click", function () {
+        _closeAllPopovers();
+        _codeAction("PUT", "/api/codes/" + codeId,
+          "colour=" + encodeURIComponent(hex) + "&current_index=" + window.__aceCurrentIndex);
+      });
+      popover.appendChild(swatch);
+    });
+
+    document.body.appendChild(popover);
+    _activeColourPopover = popover;
+
+    popover.style.top = (rect.bottom + 4) + "px";
+    popover.style.left = rect.left + "px";
+
+    setTimeout(function () {
+      document.addEventListener("click", _onColourOutsideClick);
+      document.addEventListener("keydown", _onColourEscape);
+    }, 0);
+  }
+
+  function _onColourOutsideClick(e) {
+    if (_activeColourPopover && !_activeColourPopover.contains(e.target)) _closeColourPopover();
+  }
+
+  function _onColourEscape(e) {
+    if (e.key === "Escape") _closeColourPopover();
+  }
+
+  document.addEventListener("click", function (e) {
+    var dot = e.target.closest(".ace-code-dot");
+    if (!dot) return;
+    var row = dot.closest(".ace-code-row");
+    if (!row) return;
+    e.stopPropagation();
+    var codeId = row.getAttribute("data-code-id");
+    if (codeId) _openColourPopover(codeId);
+  });
 
   function _closeAllPopovers() {
     _closeCodeMenu();
