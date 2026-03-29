@@ -279,12 +279,15 @@
   window.__aceLastSelection = null;
 
   function _isTyping() {
-    var tag = document.activeElement && document.activeElement.tagName;
-    return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
+    var el = document.activeElement;
+    if (!el) return false;
+    var tag = el.tagName;
+    return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || el.isContentEditable;
   }
 
   document.addEventListener("keydown", function (e) {
     if (_isTyping()) return;
+    if (_menuOpen) return;
 
     var key = e.key;
     var ctrl = e.ctrlKey || e.metaKey;
@@ -348,6 +351,13 @@
       e.preventDefault();
       var step2 = shift ? 5 : 1;
       window.aceNavigate(window.__aceCurrentIndex + step2);
+      return;
+    }
+
+    // F2 — Inline rename selected code
+    if (key === "F2" && _lastSelectedCodeId) {
+      e.preventDefault();
+      _startInlineRename(_lastSelectedCodeId);
       return;
     }
 
@@ -795,6 +805,65 @@
       _refreshSidebar();
     });
   }
+
+  function _startInlineRename(codeId) {
+    var row = document.querySelector('.ace-code-row[data-code-id="' + codeId + '"]');
+    if (!row) return;
+    var nameEl = row.querySelector(".ace-code-name");
+    if (!nameEl) return;
+
+    var original = nameEl.textContent;
+    nameEl.contentEditable = "true";
+    nameEl.focus();
+
+    var range = document.createRange();
+    range.selectNodeContents(nameEl);
+    var sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+
+    var done = false;
+    function save() {
+      if (done) return;
+      done = true;
+      var newName = nameEl.textContent.trim();
+      nameEl.contentEditable = "false";
+      if (!newName || newName === original) {
+        nameEl.textContent = original;
+        document.getElementById("text-panel").focus();
+        return;
+      }
+      _codeAction("PUT", "/api/codes/" + codeId,
+        "name=" + encodeURIComponent(newName) + "&current_index=" + window.__aceCurrentIndex
+      ).catch(function () { nameEl.textContent = original; });
+      document.getElementById("text-panel").focus();
+    }
+
+    nameEl.addEventListener("keydown", function handler(e) {
+      if (e.key === "Enter") { e.preventDefault(); nameEl.removeEventListener("keydown", handler); save(); }
+      if (e.key === "Escape") { e.preventDefault(); nameEl.removeEventListener("keydown", handler); done = true; nameEl.textContent = original; nameEl.contentEditable = "false"; document.getElementById("text-panel").focus(); }
+    });
+
+    nameEl.addEventListener("blur", function blurHandler() {
+      nameEl.removeEventListener("blur", blurHandler);
+      setTimeout(function () { save(); }, 50);
+    });
+
+    nameEl.addEventListener("paste", function pasteHandler(e) {
+      e.preventDefault();
+      var text = (e.clipboardData || window.clipboardData).getData("text/plain");
+      document.execCommand("insertText", false, text.replace(/\n/g, " "));
+    });
+  }
+
+  document.addEventListener("dblclick", function (e) {
+    var nameEl = e.target.closest(".ace-code-name");
+    if (!nameEl) return;
+    var row = nameEl.closest(".ace-code-row");
+    if (!row) return;
+    var codeId = row.getAttribute("data-code-id");
+    if (codeId) _startInlineRename(codeId);
+  });
 
   /* ================================================================
    * 14. Code menu dropdown (management mode)
