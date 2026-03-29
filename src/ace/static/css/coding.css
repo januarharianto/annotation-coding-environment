@@ -216,6 +216,10 @@
   transition: none;
 }
 
+.ace-code-row--ghost {
+  opacity: 0.4;
+}
+
 .ace-code-row--confirm-delete {
   background: rgba(198, 40, 40, 0.08);
 }
@@ -555,6 +559,26 @@
 
 .ace-code-menu-item:hover { background: var(--ace-bg-muted); }
 .ace-code-menu-item--danger { color: var(--ace-danger); }
+
+.ace-code-menu-sub {
+  position: relative;
+  cursor: default;
+}
+
+.ace-code-submenu {
+  display: none;
+  position: absolute;
+  left: 100%;
+  top: 0;
+  background: var(--ace-bg);
+  border: 1px solid var(--ace-border);
+  box-shadow: var(--ace-shadow);
+  min-width: 120px;
+}
+
+.ace-code-menu-sub:hover .ace-code-submenu {
+  display: block;
+}
 
 /* ---- Colour swatch popover ---- */
 
