@@ -1044,7 +1044,10 @@ async def create_code(
         existing = list_codes(conn)
         colour = next_colour(len(existing))
         gn = group_name.strip() if group_name else None
-        add_code(conn, name, colour, group_name=gn or None)
+        try:
+            add_code(conn, name, colour, group_name=gn or None)
+        except Exception:
+            return _oob_toast(f"A code named '{name}' already exists.")
         content = _render_code_sidebar(request, conn, coder_id, current_index)
         return HTMLResponse(content)
     finally:
