@@ -75,7 +75,6 @@
       <div class="ace-sidebar-toolbar">
         <input type="text" class="ace-sidebar-search" placeholder="Search or create code…"
                id="code-search-input" autocomplete="off">
-        <button class="ace-btn-icon ace-manage-toggle" title="Manage codes" onclick="aceToggleManageMode()">&#9881;</button>
       </div>
       <div class="ace-sidebar-view" id="view-recent"></div>
       <div class="ace-sidebar-view ace-sidebar-view--active" id="view-groups">
@@ -86,8 +85,6 @@
           <span class="ace-code-dot" style="background: {{ code['colour'] }};"></span>
           <span class="ace-code-name">{{ code['name'] }}</span>
           <span class="ace-keycap"></span>
-          <button class="ace-code-menu-btn" title="Code options"
-                  onclick="event.stopPropagation(); aceCodeMenu(event, '{{ code['id'] }}')">&hellip;</button>
         </div>
         {% endfor %}
         {% endfor %}
@@ -98,8 +95,6 @@
           <span class="ace-code-dot" style="background: {{ code['colour'] }};"></span>
           <span class="ace-code-name">{{ code['name'] }}</span>
           <span class="ace-keycap"></span>
-          <button class="ace-code-menu-btn" title="Code options"
-                  onclick="event.stopPropagation(); aceCodeMenu(event, '{{ code['id'] }}')">&hellip;</button>
         </div>
         {% endfor %}
         {% endif %}
@@ -109,9 +104,6 @@
         <div class="ace-add-group" id="add-group-row" onclick="aceStartAddGroup(this)">+ New group</div>
       </div>
       <div class="ace-sidebar-view" id="view-all"></div>
-      <div class="ace-manage-create">
-        <input type="text" placeholder="New code name…" id="manage-create-input" autocomplete="off">
-      </div>
     </div>
     {% endblock %}
 

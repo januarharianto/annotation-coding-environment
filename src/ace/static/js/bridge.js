@@ -874,31 +874,6 @@
   }
 
   /* ================================================================
-   * Management mode toggle
-   * ================================================================ */
-
-  window.aceToggleManageMode = function () {
-    var sidebar = document.getElementById("code-sidebar");
-    if (!sidebar) return;
-    sidebar.classList.toggle("ace-sidebar--manage");
-  };
-
-  // Create code on Enter in management mode
-  document.addEventListener("keydown", function (e) {
-    if (e.target.id !== "manage-create-input") return;
-    if (e.key !== "Enter") return;
-    var name = e.target.value.trim();
-    if (!name) return;
-    e.preventDefault();
-    htmx.ajax("POST", "/api/codes", {
-      values: { name: name, current_index: window.__aceCurrentIndex },
-      target: "#code-sidebar",
-      swap: "outerHTML",
-    });
-    e.target.value = "";
-  });
-
-  /* ================================================================
    * 15. Add group (inline)
    * ================================================================ */
 
