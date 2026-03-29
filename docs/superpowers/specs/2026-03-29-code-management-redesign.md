@@ -74,7 +74,7 @@ Click swatch → `fetch PUT /api/codes/{id}` with new colour → update dot back
 
 ### 4. Drag-and-drop via SortableJS (~40 JS/CSS, 6 template)
 
-**Drag handle:** On hover, the keycap badge swaps to a grip icon (⠿). SortableJS `handle: ".ace-keycap"` option — the keycap element doubles as the drag handle. No extra DOM element needed. CSS: `.ace-code-row:hover .ace-keycap` changes content/appearance to show the grip. This prevents drag from conflicting with double-click rename on the code name.
+**No drag handle.** SortableJS `delay: 200` — hold anywhere on the row for 200ms to start dragging. Double-click fires before 200ms so rename is not affected. No extra DOM elements, no grid column changes, no CSS changes. Move Up/Move Down in context menu provides keyboard-accessible alternative.
 
 **Template change:** Wrap each group's code rows in `<div class="ace-code-group" data-group="GroupName">` container. Ungrouped codes in `<div class="ace-code-group" data-group="">` (explicit empty string, not absent attribute).
 
@@ -115,7 +115,7 @@ Current (flat siblings):
 <div class="ace-code-row" data-code-id="...">...</div>
 ```
 
-New (nested containers, keycap doubles as drag handle on hover):
+New (nested containers, no extra elements):
 ```html
 <div class="ace-code-group" data-group="Emotions">
   <div class="ace-code-group-header">▾ Emotions (3)</div>
@@ -126,7 +126,7 @@ New (nested containers, keycap doubles as drag handle on hover):
   </div>
 </div>
 ```
-CSS swaps keycap text to grip icon on hover via `content` or font change.
+No visual change to code rows. SortableJS `delay: 200` handles drag vs click.
 
 Ungrouped codes use `data-group=""` (explicit empty string):
 ```html
