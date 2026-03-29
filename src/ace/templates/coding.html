@@ -91,6 +91,8 @@
         </div>
         {% endfor %}
         {% endfor %}
+        {% if ungrouped_codes %}
+        <div class="ace-code-group-header">&#9662; Ungrouped ({{ ungrouped_codes | length }})</div>
         {% for code in ungrouped_codes %}
         <div class="ace-code-row" data-code-id="{{ code['id'] }}">
           <span class="ace-code-dot" style="background: {{ code['colour'] }};"></span>
@@ -100,6 +102,7 @@
                   onclick="event.stopPropagation(); aceCodeMenu(event, '{{ code['id'] }}')">&hellip;</button>
         </div>
         {% endfor %}
+        {% endif %}
         {% if not codes %}
         <div class="ace-sidebar-empty">No codes yet. Use management mode to add codes.</div>
         {% endif %}
