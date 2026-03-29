@@ -373,8 +373,8 @@
 }
 
 .ace-sentence--coded {
-  padding-right: 0.25em;
-  margin-right: -0.25em;
+  padding-right: 3px;
+  margin-right: -3px;
 }
 
 .ace-sentence--coded.ace-sentence--focused {
