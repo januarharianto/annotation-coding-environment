@@ -347,6 +347,8 @@
   overflow-y: auto;
   padding: var(--ace-space-6) var(--ace-space-8);
   outline: none;
+  line-height: 2;
+  font-size: var(--ace-font-size-base);
 }
 
 .ace-text-panel > * {
@@ -363,7 +365,7 @@
 
 .ace-sentence {
   cursor: text;
-  padding: 2px 2px 4px;
+  padding: 2px 0 4px;
   display: inline;
   font-size: var(--ace-font-size-base);
   line-height: 2;
@@ -384,10 +386,6 @@
   outline: 2px solid #212121;
 }
 
-.ace-sentence mark {
-  color: inherit;
-  padding: 1px 0;
-}
 
 .ace-para-break {
   display: block;

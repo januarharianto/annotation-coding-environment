@@ -1,7 +1,11 @@
 """Page routes — HTML responses rendered via Jinja2."""
 
+import html
+import json
 import sqlite3
 from pathlib import Path
+
+from markupsafe import Markup
 
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import HTMLResponse
@@ -149,6 +153,15 @@ def _coding_context(conn: sqlite3.Connection, coder_id: str, current_index: int)
         cid = ann["code_id"]
         code_counts[cid] = code_counts.get(cid, 0) + 1
 
+    # Annotation data for CSS Highlight API (client-side rendering)
+    # Only id/code_id/start/end — colour comes from ::highlight() CSS rules
+    annotation_highlights_json = Markup(html.escape(json.dumps([
+        {"id": ann["id"], "code_id": ann["code_id"],
+         "start": ann["start_offset"], "end": ann["end_offset"]}
+        for ann in annotations_list
+        if ann["code_id"] in codes_by_id
+    ])))
+
     # Completion stats
     complete_count = sum(1 for a in assignments if a["status"] == "complete")
     complete_pct = round(complete_count / total_sources * 100) if total_sources > 0 else 0
@@ -179,6 +192,7 @@ def _coding_context(conn: sqlite3.Connection, coder_id: str, current_index: int)
         "grouped_codes": grouped_codes,
         "ungrouped_codes": ungrouped_codes,
         "margin_annotations": margin_annotations,
+        "annotation_highlights_json": annotation_highlights_json,
         "recent_code_ids": recent_code_ids,
     }
 

@@ -18,6 +18,9 @@
 .ace-code-{{ code["id"] }} {
   background-color: rgba({{ code["colour"][1:3] | int(base=16) }}, {{ code["colour"][3:5] | int(base=16) }}, {{ code["colour"][5:7] | int(base=16) }}, var(--ace-annotation-alpha));
 }
+::highlight(ace-hl-{{ code["id"] }}) {
+  background-color: rgba({{ code["colour"][1:3] | int(base=16) }}, {{ code["colour"][3:5] | int(base=16) }}, {{ code["colour"][5:7] | int(base=16) }}, 0.3);
+}
 {% endfor %}
 </style>
 {% endblock %}
@@ -163,7 +166,7 @@
   {% block hint_bar %}
   <div id="hint-bar" class="ace-hint-bar">
     <kbd>&uarr;</kbd><kbd>&darr;</kbd> sentences &nbsp;&nbsp;
-    <kbd>&larr;</kbd><kbd>&rarr;</kbd> sources &nbsp;&nbsp;
+    <kbd>⇧&larr;</kbd><kbd>⇧&rarr;</kbd> sources &nbsp;&nbsp;
     <kbd>1</kbd>–<kbd>9</kbd> <kbd>0</kbd> <kbd>a</kbd>–<kbd>z</kbd> apply &nbsp;&nbsp;
     <kbd>Q</kbd> repeat &nbsp;&nbsp;
     <kbd>Z</kbd> undo &nbsp;&nbsp;
@@ -189,6 +192,10 @@
     </div>
   </div>
   {% endblock %}
+
+  {# Annotation data for CSS Highlight API (updated via OOB swap) #}
+  <div id="ace-ann-data" class="ace-hidden"
+       data-annotations="{{ annotation_highlights_json }}"></div>
 
   {# Modal container #}
   <div id="modal-container"></div>
