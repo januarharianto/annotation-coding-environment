@@ -243,7 +243,7 @@
 
 .ace-add-group {
   padding: 5px 10px;
-  font-size: var(--ace-font-size-2xs);
+  font-size: var(--ace-font-size-sm);
   color: var(--ace-text-muted);
   cursor: pointer;
   border-top: 1px solid var(--ace-border-light);
