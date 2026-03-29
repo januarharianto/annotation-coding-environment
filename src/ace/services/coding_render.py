@@ -107,10 +107,33 @@ def render_sentence_text(
 
         s = unit["start_offset"]
         e = unit["end_offset"]
-        cls = " ".join(classes)
-        inner = _render_inner_text(unit["text"], s, overlapping)
+        unit_end = s + len(unit["text"])
 
-        # Check if next sentence shares an annotation (for seamless highlight)
+        # Check if all annotations cover the full sentence (common case)
+        all_full = overlapping and all(
+            ann["start_offset"] <= s and ann["end_offset"] >= unit_end
+            for ann in overlapping
+        )
+
+        if all_full:
+            # Put background directly on the span (no <mark>) for seamless merging
+            bg_parts = []
+            for ann in overlapping:
+                bg_parts.append(_hex_to_rgba(ann["colour"], 0.15))
+            # Layer backgrounds via multiple gradients
+            if len(bg_parts) == 1:
+                bg_style = f' style="background:{bg_parts[0]};"'
+            else:
+                layers = ",".join(f"linear-gradient({bg},{bg})" for bg in bg_parts)
+                bg_style = f' style="background:{layers};"'
+            inner = html.escape(unit["text"])
+        else:
+            bg_style = ""
+            inner = _render_inner_text(unit["text"], s, overlapping)
+
+        cls = " ".join(classes)
+
+        # Remove space between consecutive sentences sharing an annotation
         sep = " "
         if overlapping and i + 1 < len(units):
             next_overlapping = _get_sentence_annotations(units[i + 1], annotations, codes_by_id)
@@ -122,7 +145,7 @@ def render_sentence_text(
                 sep = ""
 
         parts.append(
-            f'<span id="s-{i}" class="{cls}" data-idx="{i}" data-start="{s}" data-end="{e}">{inner}</span>{sep}'
+            f'<span id="s-{i}" class="{cls}" data-idx="{i}" data-start="{s}" data-end="{e}"{bg_style}>{inner}</span>{sep}'
         )
 
     return "".join(parts)
