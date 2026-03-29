@@ -267,10 +267,9 @@
 }
 
 .ace-group-placeholder {
-  padding: 6px 10px;
-  font-size: var(--ace-font-size-xs);
+  padding: 3px 10px 3px 24px;
+  font-size: var(--ace-font-size-sm);
   color: var(--ace-text-muted);
-  font-style: italic;
 }
 
 .ace-sidebar-empty {
