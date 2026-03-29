@@ -47,8 +47,10 @@
   {# Header with merged nav #}
   {% block coding_header %}
   <div id="coding-header" class="ace-coding-header">
-    <a href="/" class="ace-coding-header-back">&larr; Home</a>
-    <span class="ace-coding-header-title">{{ project_name }}</span>
+    <div class="ace-coding-header-left">
+      <a href="/" class="ace-coding-header-back">&larr; Home</a>
+      <span class="ace-coding-header-title">{{ project_name }}</span>
+    </div>
     <div class="ace-nav-cluster">
       <button class="ace-nav-btn" id="btn-prev"
               {% if current_index <= 0 %}disabled{% endif %}

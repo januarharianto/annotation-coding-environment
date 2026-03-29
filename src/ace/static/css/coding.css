@@ -38,9 +38,15 @@
   color: var(--ace-text);
 }
 
+.ace-coding-header-left {
+  display: flex;
+  align-items: center;
+  gap: var(--ace-space-3);
+  flex: 1;
+}
+
 .ace-coding-header-title {
   font-weight: var(--ace-weight-semibold);
-  flex: 1;
 }
 
 .ace-nav-cluster {
@@ -84,6 +90,8 @@
 .ace-coding-header-right {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
+  flex: 1;
   gap: var(--ace-space-3);
   font-size: var(--ace-font-size-sm);
   color: var(--ace-text-muted);
