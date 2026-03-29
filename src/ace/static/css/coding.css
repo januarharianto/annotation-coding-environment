@@ -204,6 +204,7 @@
   color: var(--ace-text);
   cursor: pointer;
   transition: background var(--ace-transition);
+  position: relative;
 }
 
 .ace-code-row:hover {
@@ -213,6 +214,20 @@
 .ace-code-row.ace-code-row--flash {
   background: var(--ace-bg-muted);
   transition: none;
+}
+
+.ace-code-row--confirm-delete {
+  background: rgba(198, 40, 40, 0.08);
+}
+
+.ace-code-row--confirm-delete::after {
+  content: "Delete?";
+  font-size: var(--ace-font-size-2xs);
+  color: var(--ace-danger);
+  position: absolute;
+  right: var(--ace-space-2);
+  top: 50%;
+  transform: translateY(-50%);
 }
 
 .ace-code-dot {
