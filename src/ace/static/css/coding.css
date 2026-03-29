@@ -354,7 +354,6 @@
 /* ---- Sentences ---- */
 
 .ace-sentence {
-  transition: background 0.1s;
   cursor: text;
   padding: 2px 2px 4px;
   display: inline;
