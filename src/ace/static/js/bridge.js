@@ -340,17 +340,15 @@
       return;
     }
 
-    // ← / → — Navigate between sources (Shift = jump 5)
-    if (key === "ArrowLeft") {
+    // Shift+← / Shift+→ — Navigate between sources
+    if (key === "ArrowLeft" && shift) {
       e.preventDefault();
-      var step = shift ? 5 : 1;
-      window.aceNavigate(window.__aceCurrentIndex - step);
+      window.aceNavigate(window.__aceCurrentIndex - 1);
       return;
     }
-    if (key === "ArrowRight") {
+    if (key === "ArrowRight" && shift) {
       e.preventDefault();
-      var step2 = shift ? 5 : 1;
-      window.aceNavigate(window.__aceCurrentIndex + step2);
+      window.aceNavigate(window.__aceCurrentIndex + 1);
       return;
     }
 
@@ -738,6 +736,7 @@
 
     if (target.id === "text-panel" || target.id === "coding-workspace") {
       _restoreFocus();
+      _paintHighlights();
     }
 
     if (target.id === "code-sidebar" || target.id === "coding-workspace") {
@@ -1251,6 +1250,118 @@
   });
 
   /* ================================================================
+   * 18. CSS Custom Highlight API — annotation rendering
+   * ================================================================ */
+
+  /**
+   * Build a flat list of {node, sourceStart, sourceEnd} entries
+   * for all text nodes inside sentence spans in the text panel.
+   */
+  function _buildTextIndex(container) {
+    var index = [];
+    var walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, null);
+    var node;
+    while ((node = walker.nextNode())) {
+      var sentence = node.parentElement.closest(".ace-sentence");
+      if (!sentence) continue;
+      var sentStart = parseInt(sentence.dataset.start, 10);
+      if (isNaN(sentStart)) continue;
+
+      var charsBefore = 0;
+      var tw = document.createTreeWalker(sentence, NodeFilter.SHOW_TEXT, null);
+      var t;
+      while ((t = tw.nextNode())) {
+        if (t === node) break;
+        charsBefore += t.textContent.length;
+      }
+
+      var nodeSourceStart = sentStart + charsBefore;
+      index.push({
+        node: node,
+        sourceStart: nodeSourceStart,
+        sourceEnd: nodeSourceStart + node.textContent.length,
+      });
+    }
+    return index;
+  }
+
+  /**
+   * Find the DOM position (node + offset) for a source character offset.
+   */
+  function _findDOMPosition(textIndex, sourceOffset) {
+    for (var i = 0; i < textIndex.length; i++) {
+      var entry = textIndex[i];
+      if (sourceOffset >= entry.sourceStart && sourceOffset <= entry.sourceEnd) {
+        return { node: entry.node, offset: sourceOffset - entry.sourceStart };
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Paint all annotation highlights using the CSS Custom Highlight API.
+   * Reads annotation data from the hidden #ace-ann-data element,
+   * groups by code_id, and registers CSS highlights.
+   */
+  function _paintHighlights() {
+    if (!CSS.highlights) return;
+    CSS.highlights.clear();
+
+    // Read annotation data from DOM element (updated by OOB swaps)
+    var dataEl = document.getElementById("ace-ann-data");
+    if (!dataEl) return;
+    var annotations = JSON.parse(dataEl.dataset.annotations || "[]");
+    if (!annotations.length) return;
+
+    var container = document.getElementById("text-panel");
+    if (!container) return;
+
+    var textIndex = _buildTextIndex(container);
+    if (!textIndex.length) return;
+
+    // Group ranges by code_id
+    var groups = {};
+    for (var i = 0; i < annotations.length; i++) {
+      var ann = annotations[i];
+      var startPos = _findDOMPosition(textIndex, ann.start);
+      var endPos = _findDOMPosition(textIndex, ann.end);
+      if (!startPos || !endPos) continue;
+
+      try {
+        var range = new Range();
+        range.setStart(startPos.node, startPos.offset);
+        range.setEnd(endPos.node, endPos.offset);
+
+        // If the range ends at a sentence boundary, extend to cover
+        // the trailing whitespace text node (bridges the gap between spans)
+        var endSentence = endPos.node.parentElement.closest(".ace-sentence");
+        if (endSentence && ann.end >= parseInt(endSentence.dataset.end, 10)) {
+          var next = endSentence.nextSibling;
+          if (next && next.nodeType === Node.TEXT_NODE) {
+            range.setEndAfter(next);
+          }
+        }
+
+        var codeId = ann.code_id;
+        if (!groups[codeId]) groups[codeId] = [];
+        groups[codeId].push(range);
+      } catch (e) {
+        // Invalid range (e.g. end before start) — skip
+      }
+    }
+
+    // Register highlights
+    for (var codeId in groups) {
+      if (!groups.hasOwnProperty(codeId)) continue;
+      var highlight = new Highlight();
+      for (var j = 0; j < groups[codeId].length; j++) {
+        highlight.add(groups[codeId][j]);
+      }
+      CSS.highlights.set("ace-hl-" + codeId, highlight);
+    }
+  }
+
+  /* ================================================================
    * 17. DOMContentLoaded init
    * ================================================================ */
 
@@ -1260,6 +1371,7 @@
     _buildTabContent("all");
     _updateKeycaps();
     _initSortable();
+    _paintHighlights();
 
     // Auto-focus first sentence so keyboard works immediately
     var sentences = _getSentences();

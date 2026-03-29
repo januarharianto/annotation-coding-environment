@@ -3,237 +3,51 @@
 import html
 
 
-def _annotation_span(data: dict, *, first: bool = False) -> str:
-    ann_id = html.escape(data["id"])
-    code_id = html.escape(data["code_id"])
-    code_name = html.escape(data["code_name"])
-    id_attr = f'id="ann-{ann_id}" ' if first else ""
-    return (
-        f'<span {id_attr}'
-        f'class="ace-annotation ace-code-{code_id}" '
-        f'data-annotation-id="{ann_id}" '
-        f'title="{code_name}" '
-        f'aria-label="{code_name}">'
-    )
-
-
-def render_annotated_text(text: str, annotations: list, codes_by_id: dict) -> str:
-    if not text:
-        return ""
-
-    events_list: list[tuple[int, int, str, dict | None]] = []
-    for ann in annotations:
-        start = ann["start_offset"]
-        end = ann["end_offset"]
-        code = codes_by_id.get(ann["code_id"])
-        code_name = code["name"] if code else "Unknown"
-        events_list.append((start, 0, "open", {
-            "id": ann["id"],
-            "code_id": ann["code_id"],
-            "code_name": code_name,
-        }))
-        events_list.append((end, 1, "close", {"id": ann["id"]}))
-
-    events_list.sort(key=lambda e: (e[0], e[1]))
-
-    parts: list[str] = []
-    pos = 0
-    open_stack: list[dict] = []
-    seen_ids: set[str] = set()
-
-    for offset, kind_order, kind, data in events_list:
-        if offset > pos:
-            parts.append(html.escape(text[pos:offset]))
-            pos = offset
-
-        if kind == "open":
-            first = data["id"] not in seen_ids
-            seen_ids.add(data["id"])
-            parts.append(_annotation_span(data, first=first))
-            open_stack.append(data)
-        else:
-            target_id = data["id"]
-            idx = None
-            for i in range(len(open_stack) - 1, -1, -1):
-                if open_stack[i]["id"] == target_id:
-                    idx = i
-                    break
-            if idx is not None:
-                to_reopen = []
-                for i in range(len(open_stack) - 1, idx, -1):
-                    parts.append("</span>")
-                    to_reopen.append(open_stack[i])
-                parts.append("</span>")
-                open_stack.pop(idx)
-                for item in reversed(to_reopen):
-                    parts.append(_annotation_span(item))
-
-    if pos < len(text):
-        parts.append(html.escape(text[pos:]))
-
-    for _ in open_stack:
-        parts.append("</span>")
-
-    return "".join(parts)
-
-
 def render_sentence_text(
     units: list[dict],
     annotations: list[dict],
     codes_by_id: dict,
 ) -> str:
-    """Render source text as sentence spans with highlighter backgrounds.
+    """Render source text as sentence spans (navigation only).
 
-    Full-sentence annotations use an outer <mark> that wraps consecutive
-    sentence spans sharing the same annotation — producing a seamless
-    highlight with no gap or text shift.
-    Partial annotations (custom selections) use inner <mark> elements.
+    Highlights are painted client-side via the CSS Custom Highlight API.
+    This function only adds the ``ace-sentence--coded`` class when at
+    least one annotation overlaps the sentence.
     """
     if not units:
         return ""
 
-    # Pre-compute overlapping annotations for each unit
-    unit_annotations = [_get_sentence_annotations(u, annotations, codes_by_id) for u in units]
-
     parts: list[str] = []
-    open_mark_ann_ids: set[str] = set()
 
     for i, unit in enumerate(units):
         if _is_para_break(i, units):
-            if open_mark_ann_ids:
-                parts.append("</mark>" * len(open_mark_ann_ids))
-                open_mark_ann_ids.clear()
             parts.append('<span class="ace-para-break"></span>')
 
-        overlapping = unit_annotations[i]
         s = unit["start_offset"]
         e = unit["end_offset"]
 
-        # Which full-sentence annotations cover this unit?
-        full_anns = [
-            ann for ann in overlapping
-            if ann["start_offset"] <= s and ann["end_offset"] >= e
-        ]
-        full_ann_ids = {ann["annotation_id"] for ann in full_anns}
-
-        # Close marks that no longer apply
-        to_close = open_mark_ann_ids - full_ann_ids
-        if to_close:
-            parts.append("</mark>" * len(to_close))
-            open_mark_ann_ids -= to_close
-
-        # Open marks for new annotations
-        for ann_id in full_ann_ids - open_mark_ann_ids:
-            ann = next(a for a in full_anns if a["annotation_id"] == ann_id)
-            bg = _hex_to_rgba(ann["colour"], _HIGHLIGHT_ALPHA)
-            parts.append(f'<mark style="background:{bg};">')
-            open_mark_ann_ids.add(ann_id)
-
-        # Build sentence span (no background on the span itself)
         classes = ["ace-sentence"]
         if unit["type"] == "list":
             classes.append("ace-sentence--list")
-        if overlapping:
+        if _has_overlap(s, e, annotations):
             classes.append("ace-sentence--coded")
 
-        # Partial annotations get inner <mark> treatment
-        partial_anns = [ann for ann in overlapping if ann["annotation_id"] not in full_ann_ids]
-        if partial_anns:
-            inner = _render_inner_text(unit["text"], s, partial_anns)
-        else:
-            inner = html.escape(unit["text"])
-
         cls = " ".join(classes)
+        inner = html.escape(unit["text"])
         parts.append(
-            f'<span id="s-{i}" class="{cls}" data-idx="{i}" data-start="{s}" data-end="{e}">{inner}</span> '
+            f'<span id="s-{i}" class="{cls}" data-idx="{i}" '
+            f'data-start="{s}" data-end="{e}">{inner}</span> '
         )
-
-    # Close any remaining open marks
-    if open_mark_ann_ids:
-        parts.append("</mark>" * len(open_mark_ann_ids))
 
     return "".join(parts)
 
 
-def _get_sentence_annotations(
-    unit: dict, annotations: list[dict], codes_by_id: dict,
-) -> list[dict]:
-    """Find ALL annotations that overlap this sentence, with colour info."""
-    start = unit["start_offset"]
-    end = unit["end_offset"]
-    result = []
-
+def _has_overlap(start: int, end: int, annotations: list[dict]) -> bool:
+    """Check if any annotation overlaps [start, end)."""
     for ann in annotations:
         if ann["start_offset"] < end and ann["end_offset"] > start:
-            code = codes_by_id.get(ann["code_id"])
-            if code:
-                result.append({
-                    "annotation_id": ann["id"],
-                    "code_id": ann["code_id"],
-                    "colour": code["colour"],
-                    "start_offset": ann["start_offset"],
-                    "end_offset": ann["end_offset"],
-                })
-    return result
-
-
-_HIGHLIGHT_ALPHA = 0.15
-
-
-def _hex_to_rgba(colour: str, alpha: float) -> str:
-    r, g, b = int(colour[1:3], 16), int(colour[3:5], 16), int(colour[5:7], 16)
-    return f"rgba({r},{g},{b},{alpha})"
-
-
-def _render_inner_text(
-    text: str, unit_start: int, overlapping: list[dict],
-) -> str:
-    """Render partial annotations within a sentence as inner <mark> elements."""
-    if not overlapping:
-        return html.escape(text)
-
-    # Build segments with <mark> wrappers for each annotation range
-    events: list[tuple[int, int, str, dict]] = []
-    for ann in overlapping:
-        rel_start = max(0, ann["start_offset"] - unit_start)
-        rel_end = min(len(text), ann["end_offset"] - unit_start)
-        events.append((rel_start, 0, "open", ann))
-        events.append((rel_end, 1, "close", ann))
-    events.sort(key=lambda e: (e[0], e[1]))
-
-    pos = 0
-    result: list[str] = []
-    active: list[dict] = []
-
-    for offset, order, kind, ann in events:
-        if offset > pos:
-            segment = html.escape(text[pos:offset])
-            if active:
-                segment = _wrap_highlight(segment, active)
-            result.append(segment)
-            pos = offset
-
-        if kind == "open":
-            active.append(ann)
-        else:
-            active = [a for a in active if a["annotation_id"] != ann["annotation_id"]]
-
-    if pos < len(text):
-        segment = html.escape(text[pos:])
-        if active:
-            segment = _wrap_highlight(segment, active)
-        result.append(segment)
-
-    return "".join(result)
-
-
-def _wrap_highlight(text: str, annotations: list[dict]) -> str:
-    """Wrap text in nested <mark> elements with translucent backgrounds."""
-    result = text
-    for ann in reversed(annotations):
-        bg = _hex_to_rgba(ann["colour"], _HIGHLIGHT_ALPHA)
-        result = f'<mark style="background:{bg};">{result}</mark>'
-    return result
+            return True
+    return False
 
 
 def _is_para_break(idx: int, units: list[dict]) -> bool:

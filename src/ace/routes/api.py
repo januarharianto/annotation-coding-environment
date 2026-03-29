@@ -503,11 +503,26 @@ def _inject_oob(html: str, element_id: str) -> str:
 
 
 def _render_colour_style_oob(codes: list[dict]) -> str:
+    """Generate <style> block with per-code CSS classes and ::highlight() rules."""
     parts = []
     for code in codes:
         r, g, b = _hex_to_rgb(code["colour"])
-        parts.append(f".ace-code-{code['id']} {{ background-color: rgba({r}, {g}, {b}, var(--ace-annotation-alpha)); }}")
+        cid = code["id"]
+        parts.append(
+            f".ace-code-{cid} {{"
+            f" background-color: rgba({r},{g},{b},var(--ace-annotation-alpha)); }}"
+        )
+        parts.append(
+            f"::highlight(ace-hl-{cid}) {{"
+            f" background-color: rgba({r},{g},{b},0.3); }}"
+        )
     return f'<style id="code-colours" hx-swap-oob="outerHTML">{chr(10).join(parts)}</style>'
+
+
+def _render_ann_data_oob(ctx: dict) -> str:
+    """Generate OOB div with annotation data for CSS Highlight API."""
+    ann_json = ctx.get("annotation_highlights_json", "[]")
+    return f'<div id="ace-ann-data" class="ace-hidden" data-annotations="{ann_json}" hx-swap-oob="outerHTML"></div>'
 
 
 def _render_coding_oob(request: Request, conn, coder_id: str, current_index: int) -> str:
@@ -521,7 +536,8 @@ def _render_coding_oob(request: Request, conn, coder_id: str, current_index: int
 
     text_html = render_block(templates.env, "coding.html", "text_panel", ctx)
     margin_html = render_block(templates.env, "coding.html", "margin_panel", ctx)
-    return text_html + _inject_oob(margin_html, "margin-panel")
+
+    return text_html + _inject_oob(margin_html, "margin-panel") + _render_ann_data_oob(ctx)
 
 
 def _render_full_coding_oob(request: Request, conn, coder_id: str, target_index: int) -> str:
@@ -548,6 +564,7 @@ def _render_full_coding_oob(request: Request, conn, coder_id: str, target_index:
         parts.append(_inject_oob(block_html, element_id))
 
     parts.append(_render_colour_style_oob(ctx["codes"]))
+    parts.append(_render_ann_data_oob(ctx))
     return "".join(parts)
 
 
@@ -1013,6 +1030,7 @@ def _render_sidebar_and_text(request: Request, conn, coder_id: str, current_inde
         + _inject_oob(text_html, "text-panel")
         + _inject_oob(margin_html, "margin-panel")
         + _render_colour_style_oob(ctx["codes"])
+        + _render_ann_data_oob(ctx)
     )
 
 
