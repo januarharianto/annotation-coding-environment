@@ -358,7 +358,7 @@
   padding: 2px 2px 4px;
   display: inline;
   font-size: var(--ace-font-size-base);
-  line-height: var(--ace-leading-relaxed);
+  line-height: 2;
 }
 
 .ace-sentence--list {
@@ -370,6 +370,11 @@
   background: rgba(84, 110, 122, 0.10);
   outline: 2px solid #546e7a;
   outline-offset: 1px;
+}
+
+.ace-sentence--coded {
+  padding-right: 0.25em;
+  margin-right: -0.25em;
 }
 
 .ace-sentence--coded.ace-sentence--focused {
