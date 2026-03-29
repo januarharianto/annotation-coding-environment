@@ -929,16 +929,11 @@
       row.style.display = match ? "" : "none";
       if (match) visibleCount++;
     });
-    // Also hide group headers if all their children are hidden
-    var headers = view.querySelectorAll(".ace-code-group-header");
-    headers.forEach(function (header) {
-      var next = header.nextElementSibling;
-      var anyVisible = false;
-      while (next && next.classList.contains("ace-code-row")) {
-        if (next.style.display !== "none") anyVisible = true;
-        next = next.nextElementSibling;
-      }
-      header.style.display = anyVisible ? "" : "none";
+    // Hide group containers if all their code rows are hidden
+    var groups = view.querySelectorAll(".ace-code-group");
+    groups.forEach(function (group) {
+      var visibleInGroup = group.querySelectorAll('.ace-code-row:not([style*="display: none"])').length;
+      group.style.display = visibleInGroup > 0 ? "" : "none";
     });
     _updateKeycaps();
   });

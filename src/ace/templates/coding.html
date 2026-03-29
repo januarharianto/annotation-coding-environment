@@ -79,24 +79,28 @@
       <div class="ace-sidebar-view" id="view-recent"></div>
       <div class="ace-sidebar-view ace-sidebar-view--active" id="view-groups">
         {% for group_name, group_codes in grouped_codes %}
-        <div class="ace-code-group-header">&#9662; {{ group_name }} ({{ group_codes | length }})</div>
-        {% for code in group_codes %}
-        <div class="ace-code-row" data-code-id="{{ code['id'] }}">
-          <span class="ace-code-dot" style="background: {{ code['colour'] }};"></span>
-          <span class="ace-code-name">{{ code['name'] }}</span>
-          <span class="ace-keycap"></span>
+        <div class="ace-code-group" data-group="{{ group_name }}">
+          <div class="ace-code-group-header">&#9662; {{ group_name }} ({{ group_codes | length }})</div>
+          {% for code in group_codes %}
+          <div class="ace-code-row" data-code-id="{{ code['id'] }}">
+            <span class="ace-code-dot" style="background: {{ code['colour'] }};"></span>
+            <span class="ace-code-name">{{ code['name'] }}</span>
+            <span class="ace-keycap"></span>
+          </div>
+          {% endfor %}
         </div>
-        {% endfor %}
         {% endfor %}
         {% if ungrouped_codes %}
-        <div class="ace-code-group-header">&#9662; Ungrouped ({{ ungrouped_codes | length }})</div>
-        {% for code in ungrouped_codes %}
-        <div class="ace-code-row" data-code-id="{{ code['id'] }}">
-          <span class="ace-code-dot" style="background: {{ code['colour'] }};"></span>
-          <span class="ace-code-name">{{ code['name'] }}</span>
-          <span class="ace-keycap"></span>
+        <div class="ace-code-group" data-group="">
+          <div class="ace-code-group-header">&#9662; Ungrouped ({{ ungrouped_codes | length }})</div>
+          {% for code in ungrouped_codes %}
+          <div class="ace-code-row" data-code-id="{{ code['id'] }}">
+            <span class="ace-code-dot" style="background: {{ code['colour'] }};"></span>
+            <span class="ace-code-name">{{ code['name'] }}</span>
+            <span class="ace-keycap"></span>
+          </div>
+          {% endfor %}
         </div>
-        {% endfor %}
         {% endif %}
         {% if not codes %}
         <div class="ace-sidebar-empty">No codes yet. Use management mode to add codes.</div>
