@@ -96,25 +96,23 @@ def render_sentence_text(
     unit_annotations = [_get_sentence_annotations(u, annotations, codes_by_id) for u in units]
 
     parts: list[str] = []
-    open_mark_ann_ids: set[str] = set()  # annotation IDs with open <mark> wrappers
+    open_mark_ann_ids: set[str] = set()
 
     for i, unit in enumerate(units):
         if _is_para_break(i, units):
-            # Close any open marks before a paragraph break
             if open_mark_ann_ids:
                 parts.append("</mark>" * len(open_mark_ann_ids))
-                open_mark_ann_ids = set()
+                open_mark_ann_ids.clear()
             parts.append('<span class="ace-para-break"></span>')
 
         overlapping = unit_annotations[i]
         s = unit["start_offset"]
         e = unit["end_offset"]
-        unit_end = s + len(unit["text"])
 
         # Which full-sentence annotations cover this unit?
         full_anns = [
             ann for ann in overlapping
-            if ann["start_offset"] <= s and ann["end_offset"] >= unit_end
+            if ann["start_offset"] <= s and ann["end_offset"] >= e
         ]
         full_ann_ids = {ann["annotation_id"] for ann in full_anns}
 
@@ -125,12 +123,11 @@ def render_sentence_text(
             open_mark_ann_ids -= to_close
 
         # Open marks for new annotations
-        to_open = full_ann_ids - open_mark_ann_ids
-        for ann in full_anns:
-            if ann["annotation_id"] in to_open:
-                bg = _hex_to_rgba(ann["colour"], 0.15)
-                parts.append(f'<mark style="background:{bg};">')
-                open_mark_ann_ids.add(ann["annotation_id"])
+        for ann_id in full_ann_ids - open_mark_ann_ids:
+            ann = next(a for a in full_anns if a["annotation_id"] == ann_id)
+            bg = _hex_to_rgba(ann["colour"], _HIGHLIGHT_ALPHA)
+            parts.append(f'<mark style="background:{bg};">')
+            open_mark_ann_ids.add(ann_id)
 
         # Build sentence span (no background on the span itself)
         classes = ["ace-sentence"]
@@ -180,6 +177,9 @@ def _get_sentence_annotations(
     return result
 
 
+_HIGHLIGHT_ALPHA = 0.15
+
+
 def _hex_to_rgba(colour: str, alpha: float) -> str:
     r, g, b = int(colour[1:3], 16), int(colour[3:5], 16), int(colour[5:7], 16)
     return f"rgba({r},{g},{b},{alpha})"
@@ -188,28 +188,11 @@ def _hex_to_rgba(colour: str, alpha: float) -> str:
 def _render_inner_text(
     text: str, unit_start: int, overlapping: list[dict],
 ) -> str:
-    """Render sentence text with highlighter-style backgrounds.
-
-    Overlapping codes blend via nested <mark> elements with translucent backgrounds.
-    """
+    """Render partial annotations within a sentence as inner <mark> elements."""
     if not overlapping:
         return html.escape(text)
 
-    unit_end = unit_start + len(text)
-
-    all_full = all(
-        ann["start_offset"] <= unit_start and ann["end_offset"] >= unit_end
-        for ann in overlapping
-    )
-
-    if all_full:
-        escaped = html.escape(text)
-        for ann in reversed(overlapping):
-            bg = _hex_to_rgba(ann["colour"], 0.15)
-            escaped = f'<mark style="background:{bg};">{escaped}</mark>'
-        return escaped
-
-    # Partial annotations — build segments with <mark> wrappers
+    # Build segments with <mark> wrappers for each annotation range
     events: list[tuple[int, int, str, dict]] = []
     for ann in overlapping:
         rel_start = max(0, ann["start_offset"] - unit_start)
@@ -248,7 +231,7 @@ def _wrap_highlight(text: str, annotations: list[dict]) -> str:
     """Wrap text in nested <mark> elements with translucent backgrounds."""
     result = text
     for ann in reversed(annotations):
-        bg = _hex_to_rgba(ann["colour"], 0.15)
+        bg = _hex_to_rgba(ann["colour"], _HIGHLIGHT_ALPHA)
         result = f'<mark style="background:{bg};">{result}</mark>'
     return result
 

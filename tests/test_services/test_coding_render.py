@@ -1,4 +1,4 @@
-"""Tests for sentence-based text rendering with stacked underlines."""
+"""Tests for sentence-based text rendering with highlight backgrounds."""
 
 from ace.services.coding_render import render_sentence_text
 
