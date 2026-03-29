@@ -241,6 +241,31 @@
   line-height: var(--ace-leading-tight);
 }
 
+.ace-add-group {
+  padding: 5px 10px;
+  font-size: var(--ace-font-size-2xs);
+  color: var(--ace-text-muted);
+  cursor: pointer;
+  border-top: 1px solid var(--ace-border-light);
+  margin-top: 4px;
+}
+
+.ace-add-group:hover {
+  color: var(--ace-focus);
+  background: var(--ace-bg-muted);
+}
+
+.ace-add-group input {
+  width: 100%;
+  padding: 2px 4px;
+  font-size: var(--ace-font-size-2xs);
+  border: 1px solid var(--ace-focus);
+  border-radius: var(--ace-radius);
+  background: var(--ace-bg);
+  color: var(--ace-text);
+  outline: none;
+}
+
 .ace-sidebar-empty {
   padding: var(--ace-space-4);
   color: var(--ace-text-muted);

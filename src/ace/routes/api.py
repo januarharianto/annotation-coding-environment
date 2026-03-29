@@ -1026,6 +1026,7 @@ async def create_code(
     request: Request,
     name: str = Form(...),
     current_index: int = Form(default=0),
+    group_name: str | None = Form(default=None),
 ):
     """Create a new code and return updated sidebar."""
     from ace.models.codebook import add_code, list_codes, next_colour
@@ -1042,7 +1043,8 @@ async def create_code(
     try:
         existing = list_codes(conn)
         colour = next_colour(len(existing))
-        add_code(conn, name, colour)
+        gn = group_name.strip() if group_name else None
+        add_code(conn, name, colour, group_name=gn or None)
         content = _render_code_sidebar(request, conn, coder_id, current_index)
         return HTMLResponse(content)
     finally:
