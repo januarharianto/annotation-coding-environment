@@ -469,7 +469,7 @@
    * ================================================================ */
 
   window.aceNavigate = function (index) {
-    if (index < 0 || index >= window.__aceTotalSources) return;
+    if (!Number.isFinite(index) || index < 0 || index >= window.__aceTotalSources) return;
     window.__aceCurrentIndex = index;
     window.__aceFocusIndex = -1;
     window.location.href = "/code?index=" + index;
