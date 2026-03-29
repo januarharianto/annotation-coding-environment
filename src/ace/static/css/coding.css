@@ -555,14 +555,15 @@ dialog::backdrop {
   flex: 1;
   padding: 3px var(--ace-space-2);
   font-size: var(--ace-font-size-sm);
-  border: 1px solid var(--ace-border-light);
-  background: var(--ace-bg);
+  border: 1px solid transparent;
+  background: transparent;
   color: var(--ace-text);
   border-radius: var(--ace-radius);
 }
 
 .ace-sidebar-search:focus {
   border-color: var(--ace-focus);
+  background: var(--ace-bg);
   outline: none;
 }
 
