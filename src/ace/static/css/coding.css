@@ -372,11 +372,6 @@
   outline-offset: 1px;
 }
 
-.ace-sentence--coded {
-  padding-right: 3px;
-  margin-right: -3px;
-}
-
 .ace-sentence--coded.ace-sentence--focused {
   outline: 2px solid #212121;
 }
