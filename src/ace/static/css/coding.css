@@ -228,6 +228,14 @@
   white-space: nowrap;
 }
 
+.ace-code-name[contenteditable="true"] {
+  outline: 1px solid var(--ace-focus);
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  padding: 0 2px;
+}
+
 .ace-keycap {
   font-family: var(--ace-font-mono);
   font-size: var(--ace-font-size-2xs);
