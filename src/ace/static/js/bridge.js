@@ -869,26 +869,16 @@
     function submit() {
       var name = input.value.trim();
       if (!name) { cancel(); return; }
-      var body = "name=" + encodeURIComponent("New code (" + name + ")")
-        + "&group_name=" + encodeURIComponent(name)
-        + "&current_index=" + window.__aceCurrentIndex;
-      fetch("/api/codes", {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: body,
-      }).then(function (r) {
-        if (!r.ok) { cancel(); window.aceToast("Failed to create group"); return Promise.reject(); }
-        return r.text();
-      }).then(function (html) {
-        if (!html) return;
-        var sidebar = document.getElementById("code-sidebar");
-        if (sidebar) {
-          sidebar.outerHTML = html;
-          _buildTabContent("recent");
-          _buildTabContent("all");
-          _updateKeycaps();
-        }
-      }).catch(function () {});
+      // Insert an empty group header + placeholder before the "+ New group" row
+      var header = document.createElement("div");
+      header.className = "ace-code-group-header";
+      header.textContent = "▾ " + name + " (0)";
+      var placeholder = document.createElement("div");
+      placeholder.className = "ace-group-placeholder";
+      placeholder.textContent = "Create or drag a code here";
+      el.parentNode.insertBefore(header, el);
+      el.parentNode.insertBefore(placeholder, el);
+      cancel();
     }
 
     function cancel() {

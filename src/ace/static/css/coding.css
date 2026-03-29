@@ -266,6 +266,13 @@
   outline: none;
 }
 
+.ace-group-placeholder {
+  padding: 6px 10px;
+  font-size: var(--ace-font-size-xs);
+  color: var(--ace-text-muted);
+  font-style: italic;
+}
+
 .ace-sidebar-empty {
   padding: var(--ace-space-4);
   color: var(--ace-text-muted);
