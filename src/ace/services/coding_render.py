@@ -110,8 +110,19 @@ def render_sentence_text(
         cls = " ".join(classes)
         inner = _render_inner_text(unit["text"], s, overlapping)
 
+        # Check if next sentence shares an annotation (for seamless highlight)
+        sep = " "
+        if overlapping and i + 1 < len(units):
+            next_overlapping = _get_sentence_annotations(units[i + 1], annotations, codes_by_id)
+            shared = any(
+                a["annotation_id"] == b["annotation_id"]
+                for a in overlapping for b in next_overlapping
+            )
+            if shared:
+                sep = ""
+
         parts.append(
-            f'<span id="s-{i}" class="{cls}" data-idx="{i}" data-start="{s}" data-end="{e}">{inner}</span> '
+            f'<span id="s-{i}" class="{cls}" data-idx="{i}" data-start="{s}" data-end="{e}">{inner}</span>{sep}'
         )
 
     return "".join(parts)
