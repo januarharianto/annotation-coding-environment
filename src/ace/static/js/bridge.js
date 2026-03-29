@@ -875,7 +875,7 @@
       header.textContent = "▾ " + name + " (0)";
       var placeholder = document.createElement("div");
       placeholder.className = "ace-group-placeholder";
-      placeholder.textContent = "Create or drag a code here";
+      placeholder.textContent = "No codes assigned";
       el.parentNode.insertBefore(header, el);
       el.parentNode.insertBefore(placeholder, el);
       cancel();
