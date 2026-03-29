@@ -258,7 +258,7 @@
 .ace-add-group input {
   width: 100%;
   padding: 2px 4px;
-  font-size: var(--ace-font-size-2xs);
+  font-size: var(--ace-font-size-sm);
   border: 1px solid var(--ace-focus);
   border-radius: var(--ace-radius);
   background: var(--ace-bg);
