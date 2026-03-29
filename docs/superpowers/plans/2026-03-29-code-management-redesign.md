@@ -6,6 +6,14 @@
 
 **Architecture:** All code management moves client-side. The 4 dialog endpoints are eliminated. The existing PUT/DELETE/POST endpoints remain. The JS `aceCodeMenu` is rewritten to call inline handlers instead of fetching dialog HTML. SortableJS (already vendored) handles drag-and-drop with `delay: 200`.
 
+**Critical fixes from audit:**
+1. Use `htmx.ajax()` (not raw `fetch()`) for all sidebar-mutating operations — preserves OOB swap chain for text-panel/margin-panel/code-colours updates
+2. After sidebar refresh, update `window.__aceCodes` by re-reading from the server response or re-parsing the DOM
+3. Task order: define handler functions (rename/colour/delete/move) BEFORE the context menu that calls them
+4. Each popover opener (`_openCodeMenu`, `_openColourPopover`) must close ALL other popovers first
+
+**Task order (reordered from audit):** 1→2→4→5→6→3→7→8→9
+
 **Tech Stack:** Vanilla JS, SortableJS, CSS, FastAPI (endpoint removal only)
 
 ---
@@ -19,6 +27,70 @@
 - `src/ace/routes/api.py` — remove 4 dialog endpoints, add validation to update route
 
 **No new files.**
+
+---
+
+### Task 0: Add shared sidebar refresh helper
+
+All code management operations need to refresh the sidebar after mutating a code. The existing PUT/DELETE endpoints return sidebar HTML + OOB swaps for text-panel, margin-panel, and code-colours. Using raw `fetch()` + `sidebar.outerHTML` would lose the OOB swaps. Instead, use `htmx.ajax()` which processes OOB swaps correctly.
+
+**Files:**
+- Modify: `src/ace/static/js/bridge.js`
+
+- [ ] **Step 1: Add `_closeAllPopovers` and `_refreshSidebar` helpers**
+
+Add near the top of the code menu section in bridge.js:
+
+```javascript
+var _menuOpen = false;
+var _lastSelectedCodeId = null;
+
+function _closeAllPopovers() {
+  _closeCodeMenu();
+  _closeColourPopover();
+}
+
+function _refreshSidebar() {
+  // Trigger a no-op sidebar refresh via HTMX to pick up changes
+  // This re-renders the sidebar and processes OOB swaps for text/margin/colours
+  htmx.ajax("POST", "/api/codes/reorder", {
+    target: "#code-sidebar",
+    swap: "outerHTML",
+    values: { code_ids: "[]", current_index: window.__aceCurrentIndex },
+  }).then(function () {
+    _buildTabContent("recent");
+    _buildTabContent("all");
+    _updateKeycaps();
+    _initSortable();
+  });
+}
+
+function _codeAction(method, url, body) {
+  // Perform a code management action via fetch, then refresh sidebar via HTMX
+  return fetch(url, {
+    method: method,
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: body,
+  }).then(function (r) {
+    if (!r.ok) { window.aceToast("Action failed"); return; }
+    _refreshSidebar();
+  });
+}
+```
+
+Note: `_closeCodeMenu` and `_closeColourPopover` will be defined in later tasks. For now, define them as no-ops that will be overwritten:
+
+```javascript
+function _closeCodeMenu() {}
+function _closeColourPopover() {}
+```
+
+- [ ] **Step 2: Commit**
+
+```bash
+git add -u
+git commit -m "feat: add shared sidebar refresh helper using htmx.ajax for OOB swaps"
+```
 
 ---
 
@@ -191,7 +263,7 @@ function _closeCodeMenu() {
 }
 
 function _openCodeMenu(x, y, codeId) {
-  _closeCodeMenu();
+  _closeAllPopovers();
   _lastSelectedCodeId = codeId;
   _menuOpen = true;
 
@@ -364,22 +436,9 @@ function _startInlineRename(codeId) {
       document.getElementById("text-panel").focus();
       return;
     }
-    fetch("/api/codes/" + codeId, {
-      method: "PUT",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: "name=" + encodeURIComponent(newName) + "&current_index=" + window.__aceCurrentIndex,
-    }).then(function (r) {
-      if (!r.ok) { nameEl.textContent = original; window.aceToast("Rename failed"); }
-      else { return r.text(); }
-    }).then(function (html) {
-      if (html) {
-        var sidebar = document.getElementById("code-sidebar");
-        if (sidebar) sidebar.outerHTML = html;
-        _buildTabContent("recent");
-        _buildTabContent("all");
-        _updateKeycaps();
-      }
-    });
+    _codeAction("PUT", "/api/codes/" + codeId,
+      "name=" + encodeURIComponent(newName) + "&current_index=" + window.__aceCurrentIndex
+    ).catch(function () { nameEl.textContent = original; });
     document.getElementById("text-panel").focus();
   }
 
@@ -463,7 +522,7 @@ var _COLOUR_PALETTE = ["#A91818","#557FE6","#6DA918","#E655D4","#18A991","#E6A45
 var _activeColourPopover = null;
 
 function _openColourPopover(codeId) {
-  _closeColourPopover();
+  _closeAllPopovers();
   var row = document.querySelector('.ace-code-row[data-code-id="' + codeId + '"]');
   if (!row) return;
   var dot = row.querySelector(".ace-code-dot");
@@ -478,20 +537,9 @@ function _openColourPopover(codeId) {
     swatch.className = "ace-colour-swatch";
     swatch.style.background = hex;
     swatch.addEventListener("click", function () {
-      _closeColourPopover();
-      fetch("/api/codes/" + codeId, {
-        method: "PUT",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: "colour=" + encodeURIComponent(hex) + "&current_index=" + window.__aceCurrentIndex,
-      }).then(function (r) { return r.text(); })
-        .then(function (html) {
-          if (!html) return;
-          var sidebar = document.getElementById("code-sidebar");
-          if (sidebar) sidebar.outerHTML = html;
-          _buildTabContent("recent");
-          _buildTabContent("all");
-          _updateKeycaps();
-        });
+      _closeAllPopovers();
+      _codeAction("PUT", "/api/codes/" + codeId,
+        "colour=" + encodeURIComponent(hex) + "&current_index=" + window.__aceCurrentIndex);
     });
     popover.appendChild(swatch);
   });
@@ -619,17 +667,8 @@ function _clearDeleteConfirm() {
 
 function _executeDelete(codeId) {
   _clearDeleteConfirm();
-  fetch("/api/codes/" + codeId + "?current_index=" + window.__aceCurrentIndex, {
-    method: "DELETE",
-  }).then(function (r) { return r.text(); })
-    .then(function (html) {
-      if (!html) return;
-      var sidebar = document.getElementById("code-sidebar");
-      if (sidebar) sidebar.outerHTML = html;
-      _buildTabContent("recent");
-      _buildTabContent("all");
-      _updateKeycaps();
-    });
+  _lastSelectedCodeId = null;
+  _codeAction("DELETE", "/api/codes/" + codeId + "?current_index=" + window.__aceCurrentIndex, null);
 }
 
 function _moveCode(codeId, direction) {
@@ -639,38 +678,15 @@ function _moveCode(codeId, direction) {
   if (idx < 0) return;
   var newIdx = idx + direction;
   if (newIdx < 0 || newIdx >= ids.length) return;
-  // Swap
   ids[idx] = ids[newIdx];
   ids[newIdx] = codeId;
-  fetch("/api/codes/reorder", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: "code_ids=" + encodeURIComponent(JSON.stringify(ids)) + "&current_index=" + window.__aceCurrentIndex,
-  }).then(function (r) { return r.text(); })
-    .then(function (html) {
-      if (!html) return;
-      var sidebar = document.getElementById("code-sidebar");
-      if (sidebar) sidebar.outerHTML = html;
-      _buildTabContent("recent");
-      _buildTabContent("all");
-      _updateKeycaps();
-    });
+  _codeAction("POST", "/api/codes/reorder",
+    "code_ids=" + encodeURIComponent(JSON.stringify(ids)) + "&current_index=" + window.__aceCurrentIndex);
 }
 
 function _moveToGroup(codeId, groupName) {
-  fetch("/api/codes/" + codeId, {
-    method: "PUT",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: "group_name=" + encodeURIComponent(groupName) + "&current_index=" + window.__aceCurrentIndex,
-  }).then(function (r) { return r.text(); })
-    .then(function (html) {
-      if (!html) return;
-      var sidebar = document.getElementById("code-sidebar");
-      if (sidebar) sidebar.outerHTML = html;
-      _buildTabContent("recent");
-      _buildTabContent("all");
-      _updateKeycaps();
-    });
+  _codeAction("PUT", "/api/codes/" + codeId,
+    "group_name=" + encodeURIComponent(groupName) + "&current_index=" + window.__aceCurrentIndex);
 }
 ```
 
@@ -771,7 +787,7 @@ function _initSortable() {
           });
         }
 
-        // Collect new order across all groups
+        // Collect new order across all groups and post
         var allRows = document.querySelectorAll("#view-groups .ace-code-row");
         var ids = [];
         allRows.forEach(function (row) {
@@ -779,11 +795,9 @@ function _initSortable() {
           if (id) ids.push(id);
         });
 
-        fetch("/api/codes/reorder", {
-          method: "POST",
-          headers: { "Content-Type": "application/x-www-form-urlencoded" },
-          body: "code_ids=" + encodeURIComponent(JSON.stringify(ids)) + "&current_index=" + window.__aceCurrentIndex,
-        });
+        // Use _codeAction for the reorder to trigger sidebar refresh with OOB swaps
+        _codeAction("POST", "/api/codes/reorder",
+          "code_ids=" + encodeURIComponent(JSON.stringify(ids)) + "&current_index=" + window.__aceCurrentIndex);
       },
     });
     _sortableInstances.push(instance);
@@ -912,24 +926,27 @@ git commit -m "feat: update cheat sheet with code management shortcuts, final cl
 
 | Spec Requirement | Task |
 |-----------------|------|
+| Shared sidebar refresh helper | Task 0 |
 | Remove gear button | Task 1 |
 | Remove ⋯ buttons | Task 1 |
 | Remove manage-create input | Task 1 |
-| Right-click context menu | Task 3 |
-| Double-click rename | Task 4 |
-| F2 rename shortcut | Task 4 |
-| Click-dot colour popover | Task 5 |
-| Drag-and-drop reorder | Task 7 |
-| Move to Group submenu | Task 3 |
-| Move Up/Down | Task 6 |
-| Double-press Delete | Task 6 |
-| `_isTyping()` guard update | Task 3 |
 | Template group containers | Task 2 |
+| Double-click rename | Task 4 (before Task 3) |
+| F2 rename shortcut | Task 4 |
+| Paste sanitisation | Task 4 |
+| contenteditable CSS | Task 4 |
+| Click-dot colour popover | Task 5 (before Task 3) |
+| Double-press Delete | Task 6 (before Task 3) |
+| Move Up/Down | Task 6 |
+| Right-click context menu | Task 3 (after 4,5,6) |
+| `_isTyping()` guard update | Task 3 |
+| Move to Group submenu | Task 3 |
+| Drag-and-drop reorder | Task 7 |
 | Remove 4 dialog endpoints | Task 8 |
 | Server-side rename validation | Task 8 |
 | Cheat sheet update | Task 9 |
-| Paste sanitisation | Task 4 |
-| contenteditable CSS | Task 4 |
+
+**Execution order:** 0→1→2→4→5→6→3→7→8→9
 
 ### Placeholder Scan
 
