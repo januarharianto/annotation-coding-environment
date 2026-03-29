@@ -571,6 +571,8 @@
       _shortcutRow("Ctrl/⌘ + Z", "Undo") +
       _shortcutRow("Ctrl/⌘ + Shift + Z", "Redo") +
       _shortcutRow("Shift + F", "Flag/unflag source") +
+      _shortcutRow("F2", "Rename selected code") +
+      _shortcutRow("Delete", "Delete selected code (press twice)") +
       _shortcutRow("?", "Toggle this cheat sheet") +
       _shortcutRow("Esc", "Close overlay / clear") +
       "</table>";
