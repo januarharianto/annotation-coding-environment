@@ -3,6 +3,15 @@
 {% block title %}Code — {{ project_name }} — ACE{% endblock %}
 
 {% block head %}
+<script>
+  // Resume at last viewed source if returning without explicit index
+  if (!window.location.search.includes("index=")) {
+    var saved = localStorage.getItem("ace-last-index");
+    if (saved && parseInt(saved, 10) > 0) {
+      window.location.replace("/code?index=" + saved);
+    }
+  }
+</script>
 <link rel="stylesheet" href="/static/css/coding.css">
 <style id="code-colours">
 {% for code in codes %}
@@ -195,5 +204,7 @@
   window.__aceCodes = {{ codes | tojson }};
   window.__aceRecentCodeIds = {{ recent_code_ids | tojson }};
   window.__aceLastCodeId = null;
+  // Save current index for resume on return
+  localStorage.setItem("ace-last-index", {{ current_index }});
 </script>
 {% endblock %}
