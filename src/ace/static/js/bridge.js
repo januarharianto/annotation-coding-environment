@@ -742,6 +742,7 @@
       _buildTabContent("recent");
       _buildTabContent("all");
       _updateKeycaps();
+      if (!_isDragging) _initSortable();
     }
 
     // Auto-open dialogs
@@ -868,6 +869,7 @@
       _buildTabContent("recent");
       _buildTabContent("all");
       _updateKeycaps();
+      _initSortable();
     });
   }
 
@@ -986,82 +988,166 @@
       "group_name=" + encodeURIComponent(groupName) + "&current_index=" + window.__aceCurrentIndex);
   }
 
+  var _sortableInstances = [];
+  var _isDragging = false;
+
+  function _initSortable() {
+    _sortableInstances.forEach(function (s) { s.destroy(); });
+    _sortableInstances = [];
+
+    var containers = document.querySelectorAll(".ace-code-group");
+    containers.forEach(function (container) {
+      var instance = new Sortable(container, {
+        group: "codes",
+        animation: 150,
+        delay: 200,
+        delayOnTouchOnly: true,
+        draggable: ".ace-code-row",
+        ghostClass: "ace-code-row--ghost",
+        filter: ".ace-code-group-header",
+        onStart: function () { _isDragging = true; },
+        onEnd: function (evt) {
+          _isDragging = false;
+          var codeId = evt.item.getAttribute("data-code-id");
+          var newGroup = evt.to.getAttribute("data-group");
+          var oldGroup = evt.from.getAttribute("data-group");
+
+          if (newGroup !== oldGroup && codeId) {
+            fetch("/api/codes/" + codeId, {
+              method: "PUT",
+              headers: { "Content-Type": "application/x-www-form-urlencoded" },
+              body: "group_name=" + encodeURIComponent(newGroup || "") + "&current_index=" + window.__aceCurrentIndex,
+            });
+          }
+
+          var allRows = document.querySelectorAll("#view-groups .ace-code-row");
+          var ids = [];
+          allRows.forEach(function (row) {
+            var id = row.getAttribute("data-code-id");
+            if (id) ids.push(id);
+          });
+
+          _codeAction("POST", "/api/codes/reorder",
+            "code_ids=" + encodeURIComponent(JSON.stringify(ids)) + "&current_index=" + window.__aceCurrentIndex);
+        },
+      });
+      _sortableInstances.push(instance);
+    });
+  }
+
   /* ================================================================
-   * 14. Code menu dropdown (management mode)
+   * 14. Code menu dropdown (right-click context menu)
    * ================================================================ */
 
   var _activeCodeMenu = null;
 
-  function _closeCodeMenu() {
+  // Override the no-op stub from section 13
+  _closeCodeMenu = function () {
     if (_activeCodeMenu) {
       _activeCodeMenu.remove();
       _activeCodeMenu = null;
+      _menuOpen = false;
     }
-  }
+    document.removeEventListener("click", _onMenuOutsideClick);
+    document.removeEventListener("keydown", _onMenuEscape);
+  };
 
-  window.aceCodeMenu = function (event, codeId) {
-    _closeCodeMenu();
-    var btn = event.currentTarget;
-    var rect = btn.getBoundingClientRect();
+  function _openCodeMenu(x, y, codeId) {
+    _closeAllPopovers();
+    _lastSelectedCodeId = codeId;
+    _menuOpen = true;
 
     var menu = document.createElement("div");
     menu.className = "ace-code-menu";
 
     var items = [
-      { label: "Rename", endpoint: "rename-dialog" },
-      { label: "Colour", endpoint: "colour-dialog" },
-      { label: "Move to Group", endpoint: "move-dialog" },
-      { label: "Delete", endpoint: "delete-dialog", danger: true },
+      { label: "Rename", action: function () { _closeCodeMenu(); _startInlineRename(codeId); } },
+      { label: "Colour", action: function () { _closeCodeMenu(); _openColourPopover(codeId); } },
+      { label: "Move Up", action: function () { _closeCodeMenu(); _moveCode(codeId, -1); } },
+      { label: "Move Down", action: function () { _closeCodeMenu(); _moveCode(codeId, 1); } },
+      { label: "Delete", danger: true, action: function () { _closeCodeMenu(); _startDeleteConfirm(codeId); } },
     ];
 
+    // Add "Move to Group" submenu if groups exist
+    var groups = _getGroupNames();
+    if (groups.length > 0 || true) {  // always show (Ungrouped option is useful)
+      var moveItem = document.createElement("div");
+      moveItem.className = "ace-code-menu-item ace-code-menu-sub";
+      moveItem.textContent = "Move to Group \u25b8";
+      var sub = document.createElement("div");
+      sub.className = "ace-code-submenu";
+
+      var ungrouped = document.createElement("button");
+      ungrouped.className = "ace-code-menu-item";
+      ungrouped.textContent = "Ungrouped";
+      ungrouped.addEventListener("click", function () { _closeCodeMenu(); _moveToGroup(codeId, ""); });
+      sub.appendChild(ungrouped);
+
+      groups.forEach(function (gn) {
+        var btn = document.createElement("button");
+        btn.className = "ace-code-menu-item";
+        btn.textContent = gn;
+        btn.addEventListener("click", function () { _closeCodeMenu(); _moveToGroup(codeId, gn); });
+        sub.appendChild(btn);
+      });
+
+      moveItem.appendChild(sub);
+      // Insert after Colour, before Move Up
+      items.splice(2, 0, { element: moveItem });
+    }
+
     items.forEach(function (item) {
+      if (item.element) { menu.appendChild(item.element); return; }
       var el = document.createElement("button");
       el.className = "ace-code-menu-item";
       if (item.danger) el.classList.add("ace-code-menu-item--danger");
       el.textContent = item.label;
-      el.addEventListener("click", function () {
-        _closeCodeMenu();
-        htmx.ajax("GET", "/api/codes/" + codeId + "/" + item.endpoint, {
-          target: "#modal-container",
-          swap: "innerHTML",
-        });
-      });
+      el.addEventListener("click", item.action);
       menu.appendChild(el);
     });
 
     document.body.appendChild(menu);
     _activeCodeMenu = menu;
 
-    var menuHeight = menu.offsetHeight;
-    var spaceBelow = window.innerHeight - rect.bottom;
-    if (spaceBelow < menuHeight + 8) {
-      menu.style.top = (rect.top - menuHeight) + "px";
-    } else {
-      menu.style.top = rect.bottom + "px";
-    }
-    menu.style.left = Math.min(rect.left, window.innerWidth - menu.offsetWidth - 8) + "px";
+    var mw = menu.offsetWidth, mh = menu.offsetHeight;
+    menu.style.top = (y + mh > window.innerHeight ? Math.max(0, y - mh) : y) + "px";
+    menu.style.left = (x + mw > window.innerWidth ? Math.max(0, x - mw) : x) + "px";
 
     setTimeout(function () {
-      document.addEventListener("click", _onCodeMenuOutsideClick);
-      document.addEventListener("keydown", _onCodeMenuEscape);
+      document.addEventListener("click", _onMenuOutsideClick);
+      document.addEventListener("keydown", _onMenuEscape);
     }, 0);
-  };
-
-  function _onCodeMenuOutsideClick(e) {
-    if (_activeCodeMenu && !_activeCodeMenu.contains(e.target)) {
-      _closeCodeMenu();
-      document.removeEventListener("click", _onCodeMenuOutsideClick);
-      document.removeEventListener("keydown", _onCodeMenuEscape);
-    }
   }
 
-  function _onCodeMenuEscape(e) {
-    if (e.key === "Escape") {
-      _closeCodeMenu();
-      document.removeEventListener("click", _onCodeMenuOutsideClick);
-      document.removeEventListener("keydown", _onCodeMenuEscape);
-    }
+  function _onMenuOutsideClick(e) {
+    if (_activeCodeMenu && !_activeCodeMenu.contains(e.target)) _closeCodeMenu();
   }
+
+  function _onMenuEscape(e) {
+    if (e.key === "Escape") _closeCodeMenu();
+  }
+
+  function _getGroupNames() {
+    var codes = window.__aceCodes || [];
+    var seen = {};
+    var result = [];
+    codes.forEach(function (c) {
+      if (c.group_name && !seen[c.group_name]) {
+        seen[c.group_name] = true;
+        result.push(c.group_name);
+      }
+    });
+    return result;
+  }
+
+  // Right-click context menu delegation
+  document.addEventListener("contextmenu", function (e) {
+    var row = e.target.closest(".ace-code-row");
+    if (!row) return;
+    e.preventDefault();
+    var codeId = row.getAttribute("data-code-id");
+    if (codeId) _openCodeMenu(e.clientX, e.clientY, codeId);
+  });
 
   /* ================================================================
    * 15. Add group (inline)
@@ -1171,6 +1257,7 @@
     _buildTabContent("recent");
     _buildTabContent("all");
     _updateKeycaps();
+    _initSortable();
 
     // Auto-focus first sentence so keyboard works immediately
     var sentences = _getSentences();
