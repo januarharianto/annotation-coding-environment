@@ -869,23 +869,26 @@
     function submit() {
       var name = input.value.trim();
       if (!name) { cancel(); return; }
-      var body = "name=" + encodeURIComponent("New code")
+      var body = "name=" + encodeURIComponent("New code (" + name + ")")
         + "&group_name=" + encodeURIComponent(name)
         + "&current_index=" + window.__aceCurrentIndex;
       fetch("/api/codes", {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: body,
-      }).then(function (r) { return r.text(); })
-        .then(function (html) {
-          var sidebar = document.getElementById("code-sidebar");
-          if (sidebar) {
-            sidebar.outerHTML = html;
-            _buildTabContent("recent");
-            _buildTabContent("all");
-            _updateKeycaps();
-          }
-        });
+      }).then(function (r) {
+        if (!r.ok) { cancel(); window.aceToast("Failed to create group"); return Promise.reject(); }
+        return r.text();
+      }).then(function (html) {
+        if (!html) return;
+        var sidebar = document.getElementById("code-sidebar");
+        if (sidebar) {
+          sidebar.outerHTML = html;
+          _buildTabContent("recent");
+          _buildTabContent("all");
+          _updateKeycaps();
+        }
+      }).catch(function () {});
     }
 
     function cancel() {
