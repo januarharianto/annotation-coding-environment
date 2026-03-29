@@ -139,35 +139,33 @@ def _get_sentence_annotations(
     return result
 
 
-_UNDERLINE_OFFSETS = [3, 6, 9, 12, 15]  # 1px lines with 2px gaps between
+def _hex_to_rgba(colour: str, alpha: float) -> str:
+    r, g, b = int(colour[1:3], 16), int(colour[3:5], 16), int(colour[5:7], 16)
+    return f"rgba({r},{g},{b},{alpha})"
 
 
 def _render_inner_text(
     text: str, unit_start: int, overlapping: list[dict],
 ) -> str:
-    """Render sentence text with stacked underlines via nested text-decoration spans."""
+    """Render sentence text with highlighter-style backgrounds.
+
+    Overlapping codes blend via nested <mark> elements with translucent backgrounds.
+    """
     if not overlapping:
         return html.escape(text)
 
     unit_end = unit_start + len(text)
 
-    # Check if all annotations cover the full sentence
     all_full = all(
         ann["start_offset"] <= unit_start and ann["end_offset"] >= unit_end
         for ann in overlapping
     )
 
     if all_full:
-        # Nest spans inside-out: first annotation is outermost (lowest underline offset)
         escaped = html.escape(text)
-        for idx in range(len(overlapping) - 1, -1, -1):
-            ann = overlapping[idx]
-            offset_px = _UNDERLINE_OFFSETS[idx] if idx < len(_UNDERLINE_OFFSETS) else 11
-            escaped = (
-                f'<span style="text-decoration:underline;text-decoration-color:{ann["colour"]};'
-                f'text-underline-offset:{offset_px}px;text-decoration-thickness:1px;">'
-                f'{escaped}</span>'
-            )
+        for ann in reversed(overlapping):
+            bg = _hex_to_rgba(ann["colour"], 0.15)
+            escaped = f'<mark style="background:{bg};">{escaped}</mark>'
         return escaped
 
     # Partial annotations — build segments with <mark> wrappers
@@ -187,7 +185,7 @@ def _render_inner_text(
         if offset > pos:
             segment = html.escape(text[pos:offset])
             if active:
-                segment = _wrap_underlines(segment, active)
+                segment = _wrap_highlight(segment, active)
             result.append(segment)
             pos = offset
 
@@ -199,24 +197,18 @@ def _render_inner_text(
     if pos < len(text):
         segment = html.escape(text[pos:])
         if active:
-            segment = _wrap_underlines(segment, active)
+            segment = _wrap_highlight(segment, active)
         result.append(segment)
 
     return "".join(result)
 
 
-def _wrap_underlines(text: str, annotations: list[dict]) -> str:
-    """Wrap text in nested spans with stacked text-decoration underlines."""
+def _wrap_highlight(text: str, annotations: list[dict]) -> str:
+    """Wrap text in nested <mark> elements with translucent backgrounds."""
     result = text
-    for idx in range(len(annotations) - 1, -1, -1):
-        ann = annotations[idx]
-        offset_px = _UNDERLINE_OFFSETS[idx] if idx < len(_UNDERLINE_OFFSETS) else 11
-        result = (
-            f'<mark style="background:transparent;color:inherit;'
-            f'text-decoration:underline;text-decoration-color:{ann["colour"]};'
-            f'text-underline-offset:{offset_px}px;text-decoration-thickness:1px;">'
-            f'{result}</mark>'
-        )
+    for ann in reversed(annotations):
+        bg = _hex_to_rgba(ann["colour"], 0.15)
+        result = f'<mark style="background:{bg};">{result}</mark>'
     return result
 
 

@@ -359,7 +359,7 @@
   padding: 2px 2px 4px;
   display: inline;
   font-size: var(--ace-font-size-base);
-  line-height: 2.2;
+  line-height: var(--ace-leading-relaxed);
 }
 
 .ace-sentence--list {
@@ -373,17 +373,14 @@
   outline-offset: 1px;
 }
 
-.ace-sentence--coded {
-  padding-bottom: 6px;
-}
-
 .ace-sentence--coded.ace-sentence--focused {
   outline: 2px solid #212121;
 }
 
 .ace-sentence mark {
-  background: transparent;
   color: inherit;
+  border-radius: 2px;
+  padding: 1px 2px;
 }
 
 .ace-para-break {

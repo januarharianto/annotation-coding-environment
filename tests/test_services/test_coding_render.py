@@ -15,13 +15,13 @@ def test_single_uncoded_sentence():
     assert "Hello world." in html
 
 
-def test_coded_sentence_has_underline():
+def test_coded_sentence_has_highlight():
     units = [{"text": "Hello.", "type": "prose", "start_offset": 0, "end_offset": 6}]
     annotations = [{"id": "a1", "code_id": "c1", "start_offset": 0, "end_offset": 6, "selected_text": "Hello."}]
     codes_by_id = {"c1": {"id": "c1", "name": "Greeting", "colour": "#e53935"}}
     html = render_sentence_text(units, annotations, codes_by_id)
     assert "ace-sentence--coded" in html
-    assert "#e53935" in html  # colour appears in box-shadow
+    assert "rgba(229,57,53,0.15)" in html
 
 
 def test_uncoded_sentence_no_coded_class():
@@ -83,7 +83,7 @@ def test_data_start_end_attributes():
 
 
 def test_multiple_overlapping_codes():
-    """Two codes on the same sentence produce stacked underlines."""
+    """Two codes on the same sentence produce nested highlight marks."""
     units = [{"text": "Hello.", "type": "prose", "start_offset": 0, "end_offset": 6}]
     annotations = [
         {"id": "a1", "code_id": "c1", "start_offset": 0, "end_offset": 6, "selected_text": "Hello."},
@@ -94,8 +94,8 @@ def test_multiple_overlapping_codes():
         "c2": {"id": "c2", "name": "Blue", "colour": "#1e88e5"},
     }
     html = render_sentence_text(units, annotations, codes_by_id)
-    assert "#e53935" in html
-    assert "#1e88e5" in html
+    assert "rgba(229,57,53,0.15)" in html
+    assert "rgba(30,136,229,0.15)" in html
     assert "ace-sentence--coded" in html
 
 
@@ -107,4 +107,4 @@ def test_partial_annotation_uses_mark():
     html = render_sentence_text(units, annotations, codes_by_id)
     assert "<mark" in html
     assert "Hello" in html  # uncoded prefix still present
-    assert "#43a047" in html
+    assert "rgba(67,160,71,0.15)" in html
