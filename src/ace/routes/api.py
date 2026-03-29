@@ -1218,21 +1218,26 @@ async def update_code_route(
     if coder_id is None:
         return HTMLResponse("", status_code=400)
 
-    # Validate colour if provided
-    if colour is not None and not re.fullmatch(r"#[0-9a-fA-F]{6}", colour):
-        return _oob_toast("Invalid colour format. Use #RRGGBB.")
-
     conn = _open_project_db(request)
     try:
         kwargs: dict = {}
         if name is not None:
-            kwargs["name"] = name.strip()
+            name = name.strip()
+            if not name:
+                return _oob_toast("Code name cannot be empty.")
+            kwargs["name"] = name
         if colour is not None:
+            if not re.fullmatch(r'#[0-9a-fA-F]{6}', colour):
+                return _oob_toast("Invalid colour format.")
             kwargs["colour"] = colour
         if group_name is not None:
             kwargs["group_name"] = group_name
 
-        update_code(conn, code_id, **kwargs)
+        try:
+            update_code(conn, code_id, **kwargs)
+        except Exception:
+            return _oob_toast("A code with that name already exists.")
+
         content = _render_sidebar_and_text(request, conn, coder_id, current_index)
         return HTMLResponse(content)
     finally:
@@ -1259,187 +1264,6 @@ async def delete_code_route(
         return HTMLResponse(content)
     finally:
         conn.close()
-
-
-# ---------------------------------------------------------------------------
-# Dialog endpoints
-# ---------------------------------------------------------------------------
-
-
-@router.get("/codes/{code_id}/rename-dialog")
-async def rename_dialog(request: Request, code_id: str):
-    """Return a rename dialog for the given code."""
-    conn = _open_project_db(request)
-    try:
-        row = conn.execute(
-            "SELECT name FROM codebook_code WHERE id = ?", (code_id,)
-        ).fetchone()
-        if row is None:
-            return HTMLResponse("", status_code=404)
-        current_name = html.escape(row["name"])
-    finally:
-        conn.close()
-
-    return HTMLResponse(
-        f'<dialog class="ace-dialog">'
-        f'<h3 style="font-size:15px;font-weight:500;margin:0 0 16px">Rename Code</h3>'
-        f'<form hx-put="/api/codes/{code_id}" hx-target="#code-sidebar" hx-swap="innerHTML">'
-        f'<input type="text" name="name" value="{current_name}" '
-        f'class="ace-input" style="width:100%" autocomplete="off">'
-        f'<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">'
-        f'<button type="button" class="ace-btn" onclick="this.closest(\'dialog\').close()">Cancel</button>'
-        f'<button type="submit" class="ace-btn ace-btn--primary" '
-        f'onclick="this.closest(\'dialog\').close()">Rename</button>'
-        f'</div>'
-        f'</form>'
-        f'</dialog>'
-    )
-
-
-@router.get("/codes/{code_id}/colour-dialog")
-async def colour_dialog(request: Request, code_id: str):
-    """Return a colour picker dialog with palette swatches."""
-    from ace.models.codebook import COLOUR_PALETTE
-
-    swatches = ""
-    for hex_val, _ in COLOUR_PALETTE:
-        swatches += (
-            f'<button type="button" class="ace-colour-swatch" '
-            f'style="background:{hex_val};width:28px;height:28px;border-radius:4px;border:1px solid #bdbdbd;cursor:pointer;padding:0" '
-            f'hx-put="/api/codes/{code_id}" '
-            f"""hx-vals='{{"colour":"{hex_val}"}}' """
-            f'hx-target="#code-sidebar" hx-swap="innerHTML" '
-            f'onclick="this.closest(\'dialog\').close()"></button>'
-        )
-
-    return HTMLResponse(
-        f'<dialog class="ace-dialog">'
-        f'<h3 style="font-size:15px;font-weight:500;margin:0 0 16px">Choose Colour</h3>'
-        f'<div style="display:grid;grid-template-columns:repeat(6,1fr);gap:6px">'
-        f'{swatches}'
-        f'</div>'
-        f'<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">'
-        f'<button type="button" class="ace-btn" onclick="this.closest(\'dialog\').close()">Cancel</button>'
-        f'</div>'
-        f'</dialog>'
-    )
-
-
-@router.get("/codes/{code_id}/delete-dialog")
-async def delete_dialog(request: Request, code_id: str):
-    """Return a confirmation dialog for deleting a code."""
-    conn = _open_project_db(request)
-    try:
-        row = conn.execute(
-            "SELECT name FROM codebook_code WHERE id = ?", (code_id,)
-        ).fetchone()
-        if row is None:
-            return HTMLResponse("", status_code=404)
-        code_name = html.escape(row["name"])
-
-        ann_count = conn.execute(
-            "SELECT COUNT(*) AS cnt FROM annotation WHERE code_id = ? AND deleted_at IS NULL",
-            (code_id,),
-        ).fetchone()["cnt"]
-
-        source_count = conn.execute(
-            "SELECT COUNT(DISTINCT source_id) AS cnt FROM annotation WHERE code_id = ? AND deleted_at IS NULL",
-            (code_id,),
-        ).fetchone()["cnt"]
-    finally:
-        conn.close()
-
-    if ann_count > 0:
-        warning = (
-            f"This will remove {ann_count} annotation{'s' if ann_count != 1 else ''} "
-            f"across {source_count} source{'s' if source_count != 1 else ''}."
-        )
-    else:
-        warning = "This code has no annotations."
-
-    return HTMLResponse(
-        f'<dialog class="ace-dialog">'
-        f'<h3 style="font-size:15px;font-weight:500;margin:0 0 16px">Delete {code_name}?</h3>'
-        f'<p style="margin:0 0 16px;color:var(--ace-text-muted)">{warning}</p>'
-        f'<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">'
-        f'<button type="button" class="ace-btn" onclick="this.closest(\'dialog\').close()">Cancel</button>'
-        f'<button type="button" class="ace-btn ace-btn--danger" '
-        f'hx-delete="/api/codes/{code_id}" '
-        f'hx-target="#code-sidebar" hx-swap="innerHTML" '
-        f'onclick="this.closest(\'dialog\').close()">Delete</button>'
-        f'</div>'
-        f'</dialog>'
-    )
-
-
-@router.get("/codes/{code_id}/move-dialog")
-async def move_dialog(request: Request, code_id: str):
-    """Return a dialog for moving a code to a group."""
-    conn = _open_project_db(request)
-    try:
-        row = conn.execute(
-            "SELECT name, group_name FROM codebook_code WHERE id = ?", (code_id,)
-        ).fetchone()
-        if row is None:
-            return HTMLResponse("", status_code=404)
-        code_name = html.escape(row["name"])
-        current_group = row["group_name"]
-
-        groups = conn.execute(
-            "SELECT DISTINCT group_name FROM codebook_code "
-            "WHERE group_name IS NOT NULL ORDER BY group_name"
-        ).fetchall()
-        group_names = [g["group_name"] for g in groups]
-    finally:
-        conn.close()
-
-    options = ""
-
-    # Ungrouped option
-    active = ' style="font-weight:600"' if current_group is None else ""
-    options += (
-        f'<button type="button" class="ace-btn" style="width:100%;text-align:left;margin-bottom:4px"'
-        f' hx-put="/api/codes/{code_id}"'
-        f""" hx-vals='{{"group_name":""}}'"""
-        f' hx-target="#code-sidebar" hx-swap="innerHTML"'
-        f' onclick="this.closest(\'dialog\').close()"'
-        f'{active}>Ungrouped</button>'
-    )
-
-    # Existing groups
-    for gn in group_names:
-        esc_gn = html.escape(gn)
-        active = ' style="font-weight:600"' if gn == current_group else ""
-        options += (
-            f'<button type="button" class="ace-btn" style="width:100%;text-align:left;margin-bottom:4px"'
-            f' hx-put="/api/codes/{code_id}"'
-            f""" hx-vals='{{"group_name":"{esc_gn}"}}'"""
-            f' hx-target="#code-sidebar" hx-swap="innerHTML"'
-            f' onclick="this.closest(\'dialog\').close()"'
-            f'{active}>{esc_gn}</button>'
-        )
-
-    return HTMLResponse(
-        f'<dialog class="ace-dialog">'
-        f'<h3 style="font-size:15px;font-weight:500;margin:0 0 16px">Move {code_name} to Group</h3>'
-        f'<div style="display:flex;flex-direction:column">'
-        f'{options}'
-        f'</div>'
-        f'<details style="margin-top:8px">'
-        f'<summary style="cursor:pointer;font-size:13px;color:var(--ace-text-muted)">New Group\u2026</summary>'
-        f'<form hx-put="/api/codes/{code_id}" hx-target="#code-sidebar" hx-swap="innerHTML" '
-        f'style="display:flex;gap:8px;margin-top:8px">'
-        f'<input type="text" name="group_name" placeholder="Group name" '
-        f'class="ace-input" style="flex:1" autocomplete="off">'
-        f'<button type="submit" class="ace-btn ace-btn--primary" '
-        f'onclick="this.closest(\'dialog\').close()">Move</button>'
-        f'</form>'
-        f'</details>'
-        f'<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">'
-        f'<button type="button" class="ace-btn" onclick="this.closest(\'dialog\').close()">Cancel</button>'
-        f'</div>'
-        f'</dialog>'
-    )
 
 
 # ---------------------------------------------------------------------------
