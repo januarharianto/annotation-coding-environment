@@ -861,39 +861,42 @@
    * ================================================================ */
 
   window.aceStartAddGroup = function (el) {
-    // Replace the "+ New group" text with an input
     var original = el.textContent;
     el.innerHTML = '<input type="text" placeholder="Group name…" autocomplete="off">';
     var input = el.querySelector("input");
     input.focus();
 
-    function finish(create) {
+    function submit() {
       var name = input.value.trim();
-      if (create && name) {
-        // Move all ungrouped codes to this group? No — just create the group header.
-        // Actually, groups are created by assigning a group_name to a code.
-        // For now, create a placeholder code in the new group via the API.
-        // Simpler: just add the group name to the sidebar and let the user
-        // drag codes into it via management mode.
-        // Simplest approach: the group appears when any code has that group_name.
-        // So "add group" should prompt to also create a code in it, or we store
-        // group names separately. For now, let's create a code named "New code"
-        // in the group.
-        htmx.ajax("POST", "/api/codes", {
-          values: { name: "New code", group_name: name, current_index: window.__aceCurrentIndex },
-          target: "#code-sidebar",
-          swap: "outerHTML",
+      if (!name) { cancel(); return; }
+      var body = "name=" + encodeURIComponent("New code")
+        + "&group_name=" + encodeURIComponent(name)
+        + "&current_index=" + window.__aceCurrentIndex;
+      fetch("/api/codes", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: body,
+      }).then(function (r) { return r.text(); })
+        .then(function (html) {
+          var sidebar = document.getElementById("code-sidebar");
+          if (sidebar) {
+            sidebar.outerHTML = html;
+            _buildTabContent("recent");
+            _buildTabContent("all");
+            _updateKeycaps();
+          }
         });
-      } else {
-        el.textContent = original;
-      }
+    }
+
+    function cancel() {
+      el.innerHTML = "";
+      el.textContent = original;
     }
 
     input.addEventListener("keydown", function (e) {
-      if (e.key === "Enter") { e.preventDefault(); finish(true); }
-      if (e.key === "Escape") { finish(false); }
+      if (e.key === "Enter") { e.preventDefault(); submit(); }
+      if (e.key === "Escape") { e.preventDefault(); cancel(); }
     });
-    input.addEventListener("blur", function () { finish(false); });
   };
 
   /* ================================================================
