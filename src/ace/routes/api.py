@@ -526,7 +526,7 @@ def _render_ann_data_oob(ctx: dict) -> str:
 
 
 def _render_coding_oob(request: Request, conn, coder_id: str, current_index: int) -> str:
-    """Render text_panel (primary) + margin_panel (OOB)."""
+    """Render text_panel (primary) + annotation data (OOB)."""
     from ace.routes.pages import _coding_context
     from jinja2_fragments import render_block
 
@@ -535,9 +535,8 @@ def _render_coding_oob(request: Request, conn, coder_id: str, current_index: int
     ctx["request"] = request
 
     text_html = render_block(templates.env, "coding.html", "text_panel", ctx)
-    margin_html = render_block(templates.env, "coding.html", "margin_panel", ctx)
 
-    return text_html + _inject_oob(margin_html, "margin-panel") + _render_ann_data_oob(ctx)
+    return text_html + _render_ann_data_oob(ctx)
 
 
 def _render_full_coding_oob(request: Request, conn, coder_id: str, target_index: int) -> str:
@@ -553,7 +552,6 @@ def _render_full_coding_oob(request: Request, conn, coder_id: str, target_index:
 
     oob_blocks = [
         ("coding_header", "coding-header"),
-        ("margin_panel", "margin-panel"),
         ("source_grid", "source-grid-overlay"),
         ("code_sidebar", "code-sidebar"),
     ]
@@ -1013,7 +1011,7 @@ def _render_code_sidebar(request: Request, conn, coder_id: str, current_index: i
 
 
 def _render_sidebar_and_text(request: Request, conn, coder_id: str, current_index: int) -> str:
-    """Render code sidebar (primary) + OOB text panel + OOB margin panel + OOB code-colours."""
+    """Render code sidebar (primary) + OOB text panel + OOB code-colours + annotation data."""
     from ace.routes.pages import _coding_context
     from jinja2_fragments import render_block
 
@@ -1023,12 +1021,10 @@ def _render_sidebar_and_text(request: Request, conn, coder_id: str, current_inde
 
     sidebar_html = render_block(templates.env, "coding.html", "code_sidebar", ctx)
     text_html = render_block(templates.env, "coding.html", "text_panel", ctx)
-    margin_html = render_block(templates.env, "coding.html", "margin_panel", ctx)
 
     return (
         sidebar_html
         + _inject_oob(text_html, "text-panel")
-        + _inject_oob(margin_html, "margin-panel")
         + _render_colour_style_oob(ctx["codes"])
         + _render_ann_data_oob(ctx)
     )

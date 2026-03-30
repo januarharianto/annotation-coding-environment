@@ -141,24 +141,16 @@
         {% else %}
         <p class="ace-text-empty">No source content.</p>
         {% endif %}
-      </div>
-      {% endblock %}
-
-      {# Right: margin annotations #}
-      {% block margin_panel %}
-      <div id="margin-panel" class="ace-margin-panel">
-        {% for group in margin_annotations %}
-        <div class="ace-margin-note" data-start-idx="{{ group['start_idx'] }}" data-end-idx="{{ group['end_idx'] }}">
-          {% for code in group['codes'] %}
-          <div class="ace-margin-note-row">
-            <span class="ace-margin-dot" style="background: {{ code['colour'] }};"></span>
-            <span class="ace-margin-note-code">{{ code['code_name'] }}</span>
-          </div>
+        {% if margin_codes %}
+        <div class="ace-code-bar">
+          <span class="ace-code-bar-label">Codes:</span>
+          {% for code in margin_codes %}
+          <span class="ace-code-chip" data-code-id="{{ code['code_id'] }}" data-colour="{{ code['colour'] }}">
+            <span class="ace-code-chip-dot" style="background: {{ code['colour'] }};"></span>
+            {{ code['code_name'] }}
+          </span>
           {% endfor %}
         </div>
-        {% endfor %}
-        {% if not margin_annotations %}
-        <div class="ace-margin-empty">No annotations yet</div>
         {% endif %}
       </div>
       {% endblock %}

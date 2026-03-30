@@ -54,10 +54,7 @@ async def import_page(request: Request):
 
 def _coding_context(conn: sqlite3.Connection, coder_id: str, current_index: int) -> dict:
     """Assemble all data needed to render the coding page."""
-    from ace.services.coding_render import (
-        build_margin_annotations,
-        render_sentence_text,
-    )
+    from ace.services.coding_render import render_sentence_text
     from ace.services.text_splitter import split_into_units
 
     project = get_project(conn)
@@ -130,10 +127,20 @@ def _coding_context(conn: sqlite3.Connection, coder_id: str, current_index: int)
         key=lambda x: min(c.get("sort_order", 0) for c in x[1]),
     )
 
-    # --- New: margin annotations (display-only merge) ---
-    margin_annotations = build_margin_annotations(
-        sentence_units, annotations_list, codes_by_id,
-    )
+    # Deduplicated codes applied to this source (for bottom code bar)
+    seen_codes: set[str] = set()
+    margin_codes: list[dict] = []
+    for ann in annotations_list:
+        cid = ann["code_id"]
+        if cid not in seen_codes:
+            code = codes_by_id.get(cid)
+            if code:
+                seen_codes.add(cid)
+                margin_codes.append({
+                    "code_id": cid,
+                    "code_name": code["name"],
+                    "colour": code["colour"],
+                })
 
     # Per-code frequency counts for current source
     code_counts: dict[str, int] = {}
@@ -179,7 +186,7 @@ def _coding_context(conn: sqlite3.Connection, coder_id: str, current_index: int)
         "sentence_html": sentence_html,
         "grouped_codes": grouped_codes,
         "ungrouped_codes": ungrouped_codes,
-        "margin_annotations": margin_annotations,
+        "margin_codes": margin_codes,
         "annotation_highlights_json": annotation_highlights_json,
     }
 
