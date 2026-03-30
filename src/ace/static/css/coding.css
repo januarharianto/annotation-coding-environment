@@ -402,34 +402,20 @@
   margin-right: auto;
 }
 
-.ace-code-bar-label {
-  font-size: var(--ace-font-size-2xs);
-  color: var(--ace-text-muted);
+.ace-code-sep {
+  color: var(--ace-border);
 }
 
 .ace-code-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 2px 8px;
-  border: 1px solid var(--ace-border-light);
-  border-radius: 10px;
+  padding: 1px 6px;
+  border-radius: 3px;
   font-size: var(--ace-font-size-xs);
   cursor: pointer;
-  background: var(--ace-bg);
-  color: var(--ace-text);
   transition: background 0.15s;
 }
 
 .ace-code-chip:hover {
-  background: var(--ace-bg-muted);
-}
-
-.ace-code-chip-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  flex-shrink: 0;
+  background: rgba(0, 0, 0, 0.06);
 }
 
 /* ---- Bottom hint bar ---- */
