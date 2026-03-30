@@ -368,6 +368,7 @@
   text-decoration-color: #546e7a;
   text-decoration-thickness: 2px;
   text-underline-offset: 3px;
+  text-decoration-skip-ink: none;
 }
 
 .ace-sentence--coded.ace-sentence--focused {
