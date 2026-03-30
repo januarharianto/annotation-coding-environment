@@ -74,7 +74,6 @@ def test_coding_page_renders(client_with_sources):
     assert "coding-workspace" in resp.text
     assert "code-sidebar" in resp.text
     assert "text-panel" in resp.text
-    assert "margin-panel" in resp.text
     assert "hint-bar" in resp.text
 
 
@@ -189,7 +188,6 @@ def test_annotate(client_with_codes):
     )
     assert resp.status_code == 200
     assert "text-panel" in resp.text
-    assert "margin-panel" in resp.text
     # The annotation text should appear in the response
     assert "First" in resp.text
 
@@ -339,7 +337,6 @@ def test_navigate_next(client_with_sources):
     assert "Second document with different text." in resp.text
     # Should contain all OOB swap zones
     assert "coding-header" in resp.text
-    assert "margin-panel" in resp.text
     assert "source-grid-overlay" in resp.text
     assert "code-sidebar" in resp.text
     # Should have HX-Trigger header with ace-navigate event

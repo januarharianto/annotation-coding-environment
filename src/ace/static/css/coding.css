@@ -382,75 +382,49 @@
   height: 12px;
 }
 
-/* ---- Right margin panel ---- */
+/* ---- Bottom code bar ---- */
 
-.ace-margin-panel {
-  width: 180px;
-  flex-shrink: 0;
-  position: relative;
-  border-left: 1px solid var(--ace-border);
+.ace-code-bar {
+  position: sticky;
+  bottom: 0;
+  padding: var(--ace-space-2) var(--ace-space-4);
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+  border-top: 1px solid var(--ace-border-light);
+  background: var(--ace-bg);
+  z-index: 1;
 }
 
-.ace-margin-note {
-  position: absolute;
-  left: 0;
-  right: 0;
-  padding: 4px 8px;
-  background: var(--ace-bg);
+.ace-code-bar-label {
+  font-size: var(--ace-font-size-2xs);
+  color: var(--ace-text-muted);
+}
+
+.ace-code-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
   border: 1px solid var(--ace-border-light);
-  border-radius: var(--ace-radius);
+  border-radius: 10px;
   font-size: var(--ace-font-size-xs);
   cursor: pointer;
-  box-shadow: 0 1px 2px rgba(0,0,0,0.04);
-  transition: box-shadow var(--ace-transition);
+  background: var(--ace-bg);
+  color: var(--ace-text);
+  transition: background 0.15s;
 }
 
-.ace-margin-note:hover {
-  box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+.ace-code-chip:hover {
+  background: var(--ace-bg-muted);
 }
 
-.ace-margin-note-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 1px 0;
-}
-
-.ace-margin-dot {
-  width: 8px;
-  height: 8px;
+.ace-code-chip-dot {
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   flex-shrink: 0;
-}
-
-.ace-margin-note-code {
-  font-weight: var(--ace-weight-medium);
-  color: var(--ace-text);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.ace-margin-empty {
-  padding: var(--ace-space-4);
-  color: var(--ace-text-muted);
-  font-size: var(--ace-font-size-sm);
-  text-align: center;
-  position: absolute;
-  top: var(--ace-space-4);
-  left: 0;
-  right: 0;
-}
-
-/* ---- Flash animation ---- */
-
-@keyframes ace-flash {
-  0% { background: rgba(255, 235, 59, 0.7); }
-  100% { background: transparent; }
-}
-
-.ace-flash {
-  animation: ace-flash 1.2s ease-out;
 }
 
 /* ---- Bottom hint bar ---- */

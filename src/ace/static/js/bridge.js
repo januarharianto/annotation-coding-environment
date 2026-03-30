@@ -590,7 +590,6 @@
       document.body.style.userSelect = "";
       var width = parseInt(getComputedStyle(document.documentElement).getPropertyValue("--ace-sidebar-width"), 10);
       if (width) localStorage.setItem("ace-sidebar-width", width);
-      _schedulePosition();
     });
   }
 
@@ -677,25 +676,46 @@
       }
     }
 
-    // Click on margin note to flash corresponding sentences
-    var note = e.target.closest(".ace-margin-note");
-    if (note) {
-      var flashStart = parseInt(note.dataset.startIdx, 10);
-      var flashEnd = parseInt(note.dataset.endIdx, 10);
-      if (!isNaN(flashStart)) {
-        for (var fi = flashStart; fi <= flashEnd; fi++) {
-          var fs = document.getElementById("s-" + fi);
-          if (fs) {
-            fs.classList.remove("ace-flash");
-            void fs.offsetWidth;
-            fs.classList.add("ace-flash");
-            fs.addEventListener("animationend", function () {
-              this.classList.remove("ace-flash");
-            }, { once: true });
+    // Click on code chip to flash corresponding sentences
+    var chip = e.target.closest(".ace-code-chip");
+    if (chip) {
+      var codeId = chip.dataset.codeId;
+      var colour = chip.dataset.colour || "#ffeb3b";
+      var r = parseInt(colour.slice(1, 3), 16);
+      var g = parseInt(colour.slice(3, 5), 16);
+      var b = parseInt(colour.slice(5, 7), 16);
+
+      // Read annotations from #ace-ann-data
+      var dataEl = document.getElementById("ace-ann-data");
+      if (!dataEl) return;
+      var anns = JSON.parse(dataEl.dataset.annotations || "[]");
+      var matching = anns.filter(function (a) { return a.code_id === codeId; });
+
+      // Find overlapping sentences and flash them
+      var sentences = document.querySelectorAll(".ace-sentence");
+      var flashed = [];
+      matching.forEach(function (ann) {
+        sentences.forEach(function (s) {
+          var ss = parseInt(s.dataset.start, 10);
+          var se = parseInt(s.dataset.end, 10);
+          if (ann.start < se && ann.end > ss && flashed.indexOf(s) < 0) {
+            flashed.push(s);
           }
-        }
-        var firstFlash = document.getElementById("s-" + flashStart);
-        if (firstFlash) firstFlash.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        });
+      });
+
+      // Flash each sentence with the code's colour
+      flashed.forEach(function (s) {
+        s.style.transition = "none";
+        s.style.background = "rgba(" + r + "," + g + "," + b + ",0.5)";
+        void s.offsetWidth;
+        s.style.transition = "background 1.2s ease-out";
+        s.style.background = "";
+      });
+
+      // Scroll first flashed sentence into view
+      if (flashed.length) {
+        flashed[0].scrollIntoView({ behavior: "smooth", block: "nearest" });
       }
     }
   });
@@ -709,7 +729,6 @@
     if (target.id === "text-panel" || target.id === "coding-workspace") {
       _restoreFocus();
       _paintHighlights();
-      _schedulePosition();
     }
 
     if (target.id === "code-sidebar" || target.id === "coding-workspace") {
@@ -1352,67 +1371,6 @@
   }
 
   /* ================================================================
-   * 19. Margin card positioning
-   * ================================================================ */
-
-  function _positionMarginCards() {
-    var wrapper = document.getElementById("content-scroll");
-    if (!wrapper) return;
-    var textPanel = document.getElementById("text-panel");
-    var marginPanel = document.getElementById("margin-panel");
-    if (!textPanel || !marginPanel) return;
-
-    // Sync margin panel height to text panel content height
-    // (absolute children don't contribute height in flex layout)
-    marginPanel.style.minHeight = textPanel.scrollHeight + "px";
-
-    var cards = Array.from(document.querySelectorAll(".ace-margin-note"));
-    if (!cards.length) return;
-
-    var wrapperRect = wrapper.getBoundingClientRect();
-    var scrollOffset = wrapper.scrollTop;
-
-    // Batch read: compute ideal positions
-    var positions = [];
-    for (var i = 0; i < cards.length; i++) {
-      var startIdx = cards[i].dataset.startIdx;
-      var endIdx = cards[i].dataset.endIdx;
-      var startEl = document.getElementById("s-" + startIdx);
-      var endEl = document.getElementById("s-" + endIdx);
-      if (!startEl) continue;
-      var startRect = startEl.getBoundingClientRect();
-      var endRect = endEl ? endEl.getBoundingClientRect() : startRect;
-      var midpoint = (startRect.top + endRect.bottom) / 2 - wrapperRect.top + scrollOffset;
-      positions.push({ card: cards[i], top: midpoint - cards[i].offsetHeight / 2 });
-    }
-
-    // Resolve overlaps: single downward pass
-    var minGap = 4;
-    for (var j = 1; j < positions.length; j++) {
-      var prevBottom = positions[j - 1].top + positions[j - 1].card.offsetHeight;
-      if (positions[j].top < prevBottom + minGap) {
-        positions[j].top = prevBottom + minGap;
-      }
-    }
-
-    // Batch write
-    for (var k = 0; k < positions.length; k++) {
-      positions[k].card.style.top = positions[k].top + "px";
-    }
-  }
-
-  // Schedule positioning via rAF to batch layout operations
-  var _positionRafPending = false;
-  function _schedulePosition() {
-    if (_positionRafPending) return;
-    _positionRafPending = true;
-    requestAnimationFrame(function () {
-      _positionRafPending = false;
-      _positionMarginCards();
-    });
-  }
-
-  /* ================================================================
    * 17. DOMContentLoaded init
    * ================================================================ */
 
@@ -1422,7 +1380,6 @@
     _updateKeycaps();
     _initSortable();
     _paintHighlights();
-    _positionMarginCards();
 
     // Auto-focus first sentence so keyboard works immediately
     var sentences = _getSentences();
@@ -1431,11 +1388,5 @@
     }
     var tp = document.getElementById("text-panel");
     if (tp) tp.focus();
-
-    // Re-position margin cards on container resize
-    var scrollWrapper = document.getElementById("content-scroll");
-    if (scrollWrapper && typeof ResizeObserver !== "undefined") {
-      new ResizeObserver(_schedulePosition).observe(scrollWrapper);
-    }
   });
 })();
