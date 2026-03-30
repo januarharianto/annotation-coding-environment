@@ -131,7 +131,7 @@
 
 .ace-three-col {
   display: grid;
-  grid-template-columns: var(--ace-sidebar-width) 1px 1fr 200px;
+  grid-template-columns: var(--ace-sidebar-width) 1px 1fr;
   flex: 1;
   min-height: 0;
   overflow: hidden;
@@ -344,7 +344,7 @@
 /* ---- Text panel ---- */
 
 .ace-text-panel {
-  overflow-y: auto;
+  flex: 1;
   padding: var(--ace-space-6) var(--ace-space-8);
   outline: none;
   line-height: 2;
@@ -359,6 +359,14 @@
 
 .ace-text-empty {
   color: var(--ace-text-muted);
+}
+
+/* ---- Content scroll wrapper ---- */
+
+.ace-content-scroll {
+  display: flex;
+  overflow-y: auto;
+  min-height: 0;
 }
 
 /* ---- Sentences ---- */
@@ -395,56 +403,50 @@
 /* ---- Right margin panel ---- */
 
 .ace-margin-panel {
+  width: 180px;
+  flex-shrink: 0;
+  position: relative;
   border-left: 1px solid var(--ace-border);
-  overflow-y: auto;
-  background: var(--ace-bg-muted);
 }
 
 .ace-margin-note {
-  padding: var(--ace-space-2) var(--ace-space-3);
-  border-bottom: 1px solid var(--ace-border-light);
-  font-size: var(--ace-font-size-sm);
+  position: absolute;
+  left: 0;
+  right: 0;
+  padding: 4px 8px;
+  background: var(--ace-bg);
+  border: 1px solid var(--ace-border-light);
+  border-radius: var(--ace-radius);
+  font-size: var(--ace-font-size-xs);
   cursor: pointer;
-  transition: background var(--ace-transition);
-  position: relative;
-  animation: ace-fade-in 0.2s ease;
-}
-
-@keyframes ace-fade-in {
-  from { opacity: 0; transform: translateY(-4px); }
-  to { opacity: 1; transform: none; }
+  box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+  transition: box-shadow var(--ace-transition);
 }
 
 .ace-margin-note:hover {
-  background: var(--ace-bg);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.08);
 }
 
-.ace-margin-note-bar {
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 3px;
+.ace-margin-note-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 1px 0;
+}
+
+.ace-margin-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
 }
 
 .ace-margin-note-code {
   font-weight: var(--ace-weight-medium);
   color: var(--ace-text);
-  margin-bottom: 2px;
-}
-
-.ace-margin-note-text {
-  color: var(--ace-text-muted);
-  font-size: var(--ace-font-size-xs);
+  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.ace-margin-note-merged {
-  font-size: var(--ace-font-size-2xs);
-  color: var(--ace-text-muted);
-  margin-top: 2px;
 }
 
 .ace-margin-empty {
@@ -452,6 +454,21 @@
   color: var(--ace-text-muted);
   font-size: var(--ace-font-size-sm);
   text-align: center;
+  position: absolute;
+  top: var(--ace-space-4);
+  left: 0;
+  right: 0;
+}
+
+/* ---- Flash animation ---- */
+
+@keyframes ace-flash {
+  0% { background: rgba(255, 235, 59, 0.7); }
+  100% { background: transparent; }
+}
+
+.ace-flash {
+  animation: ace-flash 1.2s ease-out;
 }
 
 /* ---- Bottom hint bar ---- */
