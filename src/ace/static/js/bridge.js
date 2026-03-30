@@ -704,13 +704,20 @@
         });
       });
 
-      // Flash each sentence with the code's colour
+      // Flash each sentence with the code's colour (strong opacity, then fade)
       flashed.forEach(function (s) {
         s.style.transition = "none";
-        s.style.background = "rgba(" + r + "," + g + "," + b + ",0.5)";
+        s.style.background = "rgba(" + r + "," + g + "," + b + ",0.7)";
+        s.style.outline = "2px solid rgba(" + r + "," + g + "," + b + ",0.8)";
+        s.style.outlineOffset = "1px";
         void s.offsetWidth;
-        s.style.transition = "background 1.2s ease-out";
+        s.style.transition = "background 1.5s ease-out, outline-color 1.5s ease-out";
         s.style.background = "";
+        s.style.outlineColor = "transparent";
+        setTimeout(function () {
+          s.style.outline = "";
+          s.style.outlineOffset = "";
+        }, 1600);
       });
 
       // Scroll first flashed sentence into view
