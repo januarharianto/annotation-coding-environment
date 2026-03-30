@@ -1141,16 +1141,18 @@
     function submit() {
       var name = input.value.trim();
       if (!name) { cancel(); return; }
-      // Insert an empty group header + placeholder before the "+ New group" row
+      // Create a proper group container so SortableJS and _getGroupNames work
+      var group = document.createElement("div");
+      group.className = "ace-code-group";
+      group.setAttribute("data-group", name);
       var header = document.createElement("div");
       header.className = "ace-code-group-header";
-      header.textContent = "▾ " + name + " (0)";
-      var placeholder = document.createElement("div");
-      placeholder.className = "ace-group-placeholder";
-      placeholder.textContent = "No codes assigned";
-      el.parentNode.insertBefore(header, el);
-      el.parentNode.insertBefore(placeholder, el);
+      header.setAttribute("data-group", name);
+      header.textContent = "\u25be " + name;
+      group.appendChild(header);
+      el.parentNode.insertBefore(group, el);
       cancel();
+      _initSortable();
     }
 
     function cancel() {
