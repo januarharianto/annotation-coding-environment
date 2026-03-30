@@ -33,6 +33,7 @@ Remove `build_margin_annotations()`, its tests, OOB helpers, and replace with a 
 - Modify: `tests/test_services/test_coding_render.py`
 - Modify: `src/ace/routes/pages.py`
 - Modify: `src/ace/routes/api.py`
+- Modify: `tests/test_coding_routes.py` (remove 3 margin-panel assertions)
 
 - [ ] **Step 1: Delete `build_margin_annotations()` from coding_render.py**
 
@@ -130,12 +131,19 @@ def _render_sidebar_and_text(request: Request, conn, coder_id: str, current_inde
     )
 ```
 
-- [ ] **Step 5: Run full test suite**
+- [ ] **Step 5: Update route tests that assert `margin-panel`**
+
+In `tests/test_coding_routes.py`, find and delete these 3 assertions (they check for the now-removed margin panel):
+- Line 77: `assert "margin-panel" in resp.text`
+- Line 192: `assert "margin-panel" in resp.text`
+- Line 342: `assert "margin-panel" in resp.text`
+
+- [ ] **Step 6: Run full test suite**
 
 Run: `uv run pytest`
-Expected: Tests pass (count drops by 9 from deleted margin tests). The app will have a broken template until Task 2, but server-side tests don't render templates.
+Expected: Tests pass (count drops by 9 from deleted margin tests, 3 route test assertions removed).
 
-- [ ] **Step 6: Do NOT commit yet** — Task 2 updates the template. Commit all tasks together.
+- [ ] **Step 7: Do NOT commit yet** — Task 2 updates the template. Commit all tasks together.
 
 ---
 
@@ -190,9 +198,9 @@ In `src/ace/templates/coding.html`, replace lines 119–166 (from `{# Centre: te
       {% endblock %}
 
     </div>
-
-  </div>
 ```
+
+Note: Replace lines 119–166 only. The `</div>` closing `.ace-three-col` at line 168 is NOT included — it stays as-is.
 
 Key changes:
 - `{% block margin_panel %}` and `<div id="margin-panel">` completely removed
@@ -203,9 +211,9 @@ Key changes:
 
 In `src/ace/static/css/coding.css`:
 
-**2a.** Delete all `.ace-margin-*` rules (lines 387–443) — everything from `/* ---- Right margin panel ---- */` through `.ace-margin-empty`.
+**2a.** Delete all `.ace-margin-*` rules (lines 385–443) — everything from the `/* ---- Right margin panel ---- */` comment through `.ace-margin-empty`, including blank lines.
 
-**2b.** Delete `@keyframes ace-flash` and `.ace-flash` rules (lines 447–453).
+**2b.** Delete `@keyframes ace-flash` and `.ace-flash` rules (lines 445–453) — including the `/* ---- Flash animation ---- */` comment.
 
 **2c.** Add code bar styles where the margin rules were:
 
@@ -368,7 +376,7 @@ Expected: All pass
 - [ ] **Step 8: Commit all tasks together**
 
 ```bash
-git add src/ace/services/coding_render.py tests/test_services/test_coding_render.py src/ace/routes/pages.py src/ace/routes/api.py src/ace/templates/coding.html src/ace/static/css/coding.css src/ace/static/js/bridge.js
+git add src/ace/services/coding_render.py tests/test_services/test_coding_render.py tests/test_coding_routes.py src/ace/routes/pages.py src/ace/routes/api.py src/ace/templates/coding.html src/ace/static/css/coding.css src/ace/static/js/bridge.js
 git commit -m "feat: replace margin panel with sticky bottom code bar"
 ```
 
