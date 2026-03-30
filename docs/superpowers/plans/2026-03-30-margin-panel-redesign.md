@@ -240,18 +240,13 @@ Expected: All PASS
 Run: `uv run pytest`
 Expected: All 232 tests PASS
 
-- [ ] **Step 6: Commit**
-
-```bash
-git add src/ace/services/coding_render.py tests/test_services/test_coding_render.py
-git commit -m "refactor: build_margin_annotations with multi-sentence and overlap grouping"
-```
+- [ ] **Step 6: Do NOT commit yet** — Task 2 changes the template to match the new return type. Committing Task 1 alone would crash the app (template accesses old fields like `group['colour']`). Continue to Task 2 and commit both together.
 
 ---
 
 ### Task 2: Scroll wrapper + template + CSS
 
-Add the shared scroll container, rewrite the margin panel template, and update CSS.
+Add the shared scroll container, rewrite the margin panel template, and update CSS. **This task must be committed together with Task 1** — the data shape change and template change are atomic.
 
 **Files:**
 - Modify: `src/ace/templates/coding.html:128-163`
@@ -442,8 +437,8 @@ Expected: All PASS
 - [ ] **Step 4: Commit**
 
 ```bash
-git add src/ace/templates/coding.html src/ace/static/css/coding.css
-git commit -m "feat: scroll wrapper and positioned margin card template"
+git add src/ace/services/coding_render.py tests/test_services/test_coding_render.py src/ace/templates/coding.html src/ace/static/css/coding.css
+git commit -m "feat: margin panel redesign — positioned cards with overlap grouping"
 ```
 
 ---
@@ -467,6 +462,14 @@ Insert before the section 17 `DOMContentLoaded init` block (before line 1364). N
   function _positionMarginCards() {
     var wrapper = document.getElementById("content-scroll");
     if (!wrapper) return;
+    var textPanel = document.getElementById("text-panel");
+    var marginPanel = document.getElementById("margin-panel");
+    if (!textPanel || !marginPanel) return;
+
+    // Sync margin panel height to text panel content height
+    // (absolute children don't contribute height in flex layout)
+    marginPanel.style.minHeight = textPanel.scrollHeight + "px";
+
     var cards = Array.from(document.querySelectorAll(".ace-margin-note"));
     if (!cards.length) return;
 
@@ -620,12 +623,34 @@ After `dragging = false;` in the pointerup handler, add:
       _schedulePosition();
 ```
 
-- [ ] **Step 6: Run full test suite**
+- [ ] **Step 6: Reset scroll on source navigation**
+
+In the `ace-navigate` event handler (around line 770-781), add scroll reset so the shared scroll container doesn't retain the previous source's position:
+
+```javascript
+  document.addEventListener("ace-navigate", function (e) {
+    var detail = e.detail || {};
+    if (detail.index !== undefined) {
+      window.__aceCurrentIndex = parseInt(detail.index, 10);
+    }
+    if (detail.total !== undefined) {
+      window.__aceTotalSources = parseInt(detail.total, 10);
+    }
+    window.__aceFocusIndex = -1;
+    var input = document.getElementById("current-index");
+    if (input) input.value = window.__aceCurrentIndex;
+    // Reset scroll position for new source
+    var cs = document.getElementById("content-scroll");
+    if (cs) cs.scrollTop = 0;
+  });
+```
+
+- [ ] **Step 7: Run full test suite**
 
 Run: `uv run pytest`
 Expected: All PASS
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
 git add src/ace/static/js/bridge.js
