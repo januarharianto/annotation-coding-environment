@@ -4,8 +4,8 @@
  * Sections:
  *  1. Toast notifications
  *  2. Sentence navigation (↑/↓ focus)
- *  3. Tab management (Recent / Groups / All)
- *  4. Keymap (dynamic per-tab keycap assignment)
+ *  3. Group collapse / expand
+ *  4. Keymap (dynamic keycap assignment)
  *  5. Apply code (sentence-based + custom selection)
  *  6. Keyboard shortcuts
  *  7. Navigation (prev/next source)
@@ -79,81 +79,56 @@
   }
 
   /* ================================================================
-   * 3. Tab management
+   * 3. Group collapse / expand
    * ================================================================ */
 
-  window.aceSwitchTab = function (btn, tabId) {
-    // Update tab buttons
-    var tabs = btn.parentElement.querySelectorAll(".ace-sidebar-tab");
-    tabs.forEach(function (t) { t.classList.remove("ace-sidebar-tab--active"); });
-    btn.classList.add("ace-sidebar-tab--active");
+  var _collapsedGroups = {};
 
-    // Update views
-    document.querySelectorAll(".ace-sidebar-view").forEach(function (v) {
-      v.classList.remove("ace-sidebar-view--active");
-    });
-    document.getElementById("view-" + tabId).classList.add("ace-sidebar-view--active");
+  function _setGroupCollapsed(group, header, collapsed) {
+    var groupName = header.getAttribute("data-group");
+    if (collapsed) {
+      group.classList.add("ace-code-group--collapsed");
+      group.querySelectorAll(".ace-code-row").forEach(function (r) {
+        r.classList.add("ace-code-row--hidden");
+      });
+      header.textContent = "\u25b8 " + (groupName || "Ungrouped");
+    } else {
+      group.classList.remove("ace-code-group--collapsed");
+      group.querySelectorAll(".ace-code-row").forEach(function (r) {
+        r.classList.remove("ace-code-row--hidden");
+      });
+      header.textContent = "\u25be " + (groupName || "Ungrouped");
+    }
+    _collapsedGroups[groupName] = collapsed;
+  }
 
-    _buildTabContent(tabId);
+  function _toggleGroupCollapse(header) {
+    var group = header.closest(".ace-code-group");
+    if (!group) return;
+    var isCollapsed = !group.classList.contains("ace-code-group--collapsed");
+    _setGroupCollapsed(group, header, isCollapsed);
     _updateKeycaps();
-
-    // Return focus to text panel
-    var tp = document.getElementById("text-panel");
-    if (tp) tp.focus();
-  };
-
-  function _buildTabContent(tabId) {
-    var codes = window.__aceCodes || [];
-    if (tabId === "recent") {
-      _buildRecentTab(codes);
-    } else if (tabId === "all") {
-      _buildAllTab(codes);
-    }
-    // "groups" tab is server-rendered — no client rebuild needed
   }
 
-  function _buildRecentTab(codes) {
-    var view = document.getElementById("view-recent");
-    if (!view) return;
-    var recentIds = window.__aceRecentCodeIds || [];
-    if (!recentIds.length) {
-      view.innerHTML = '<div class="ace-sidebar-empty">No recent codes</div>';
-      return;
-    }
-    var codeMap = {};
-    codes.forEach(function (c) { codeMap[c.id] = c; });
-    var html = "";
-    recentIds.forEach(function (id) {
-      var c = codeMap[id];
-      if (!c) return;
-      html += _buildCodeRowHtml(c);
+  function _restoreCollapseState() {
+    var groups = document.querySelectorAll(".ace-code-group");
+    groups.forEach(function (group) {
+      var header = group.querySelector(".ace-code-group-header");
+      if (!header) return;
+      var groupName = header.getAttribute("data-group");
+      if (_collapsedGroups[groupName]) {
+        _setGroupCollapsed(group, header, true);
+      }
     });
-    view.innerHTML = html;
   }
 
-  function _buildAllTab(codes) {
-    var view = document.getElementById("view-all");
-    if (!view) return;
-    var sorted = codes.slice().sort(function (a, b) {
-      return a.name.localeCompare(b.name);
-    });
-    var html = "";
-    sorted.forEach(function (c) { html += _buildCodeRowHtml(c); });
-    view.innerHTML = html;
-  }
-
-  function _buildCodeRowHtml(code) {
-    var esc = _escHtml(code.name);
-    return '<div class="ace-code-row" data-code-id="' + code.id + '">'
-      + '<span class="ace-code-dot" style="background:' + code.colour + ';"></span>'
-      + '<span class="ace-code-name">' + esc + '</span>'
-      + '<span class="ace-keycap"></span>'
-      + '</div>';
-  }
-
-  function _escHtml(s) {
-    return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-  }
+  // Click handler for group headers
+  document.addEventListener("click", function (e) {
+    var header = e.target.closest(".ace-code-group-header");
+    if (header && !e.target.closest(".ace-code-menu")) {
+      _toggleGroupCollapse(header);
+    }
+  });
 
   /* ================================================================
    * 4. Keymap — dynamic keycap assignment per tab
@@ -162,9 +137,9 @@
   var _currentKeyMap = []; // array of code IDs in keycap order
 
   function _updateKeycaps() {
-    var view = document.querySelector(".ace-sidebar-view--active");
+    var view = document.getElementById("view-groups");
     if (!view) return;
-    var rows = view.querySelectorAll(".ace-code-row");
+    var rows = view.querySelectorAll(".ace-code-row:not(.ace-code-row--hidden)");
     _currentKeyMap = [];
     rows.forEach(function (row, i) {
       _currentKeyMap.push(row.getAttribute("data-code-id"));
@@ -215,7 +190,6 @@
     }).then(_restoreFocus);
 
     window.__aceLastCodeId = codeId;
-    _trackRecent(codeId);
     _flashCodeRow(codeId);
   }
 
@@ -238,7 +212,6 @@
     window.__aceLastCodeId = codeId;
     window.__aceLastSelection = null;
     window.getSelection().removeAllRanges();
-    _trackRecent(codeId);
     _flashCodeRow(codeId);
   }
 
@@ -260,15 +233,6 @@
       r.classList.add("ace-code-row--flash");
       setTimeout(function () { r.classList.remove("ace-code-row--flash"); }, 300);
     });
-  }
-
-  function _trackRecent(codeId) {
-    var recent = window.__aceRecentCodeIds || [];
-    var idx = recent.indexOf(codeId);
-    if (idx >= 0) recent.splice(idx, 1);
-    recent.unshift(codeId);
-    if (recent.length > 20) recent.length = 20;
-    window.__aceRecentCodeIds = recent;
   }
 
   /* ================================================================
@@ -757,10 +721,9 @@
     }
 
     if (target.id === "code-sidebar" || target.id === "coding-workspace") {
-      _buildTabContent("recent");
-      _buildTabContent("all");
-      _updateKeycaps();
       if (!_isDragging) _initSortable();
+      _restoreCollapseState();
+      _updateKeycaps();
     }
 
     // Auto-open dialogs
@@ -887,10 +850,9 @@
       swap: "outerHTML",
       values: { code_ids: "[]", current_index: window.__aceCurrentIndex },
     }).then(function () {
-      _buildTabContent("recent");
-      _buildTabContent("all");
-      _updateKeycaps();
       _initSortable();
+      _restoreCollapseState();
+      _updateKeycaps();
     });
   }
 
@@ -1210,28 +1172,46 @@
    * 16. Code search / filter / create
    * ================================================================ */
 
-  // Filter code rows across all tabs as user types
+  // Filter code rows as user types
   document.addEventListener("input", function (e) {
     if (e.target.id !== "code-search-input") return;
     var query = e.target.value.toLowerCase();
-    // Filter the active tab's rows
-    var view = document.querySelector(".ace-sidebar-view--active");
+    var view = document.getElementById("view-groups");
     if (!view) return;
-    var rows = view.querySelectorAll(".ace-code-row");
-    var visibleCount = 0;
-    rows.forEach(function (row) {
-      var name = row.querySelector(".ace-code-name");
-      if (!name) return;
-      var match = name.textContent.toLowerCase().indexOf(query) >= 0;
-      row.style.display = match ? "" : "none";
-      if (match) visibleCount++;
-    });
-    // Hide group containers if all their code rows are hidden
-    var groups = view.querySelectorAll(".ace-code-group");
-    groups.forEach(function (group) {
-      var visibleInGroup = group.querySelectorAll('.ace-code-row:not([style*="display: none"])').length;
-      group.style.display = visibleInGroup > 0 ? "" : "none";
-    });
+
+    if (query) {
+      // Filter: show matching rows, auto-expand groups with matches
+      var rows = view.querySelectorAll(".ace-code-row");
+      rows.forEach(function (row) {
+        var name = row.querySelector(".ace-code-name");
+        if (!name) return;
+        var match = name.textContent.toLowerCase().indexOf(query) >= 0;
+        if (match) {
+          row.classList.remove("ace-code-row--hidden");
+        } else {
+          row.classList.add("ace-code-row--hidden");
+        }
+      });
+      // Auto-expand groups with matches, hide empty groups
+      var groups = view.querySelectorAll(".ace-code-group");
+      groups.forEach(function (group) {
+        var visibleInGroup = group.querySelectorAll(".ace-code-row:not(.ace-code-row--hidden)").length;
+        group.style.display = visibleInGroup > 0 ? "" : "none";
+        if (visibleInGroup > 0) {
+          group.classList.remove("ace-code-group--collapsed");
+        }
+      });
+    } else {
+      // Clear: restore all rows and collapse state
+      view.querySelectorAll(".ace-code-row").forEach(function (row) {
+        row.classList.remove("ace-code-row--hidden");
+      });
+      view.querySelectorAll(".ace-code-group").forEach(function (group) {
+        group.style.display = "";
+      });
+      _restoreCollapseState();
+    }
+
     _updateKeycaps();
   });
 
@@ -1249,8 +1229,8 @@
     if (!name) return;
 
     // Check if any visible rows match exactly
-    var view = document.querySelector(".ace-sidebar-view--active");
-    var rows = view ? view.querySelectorAll('.ace-code-row:not([style*="display: none"])') : [];
+    var view = document.getElementById("view-groups");
+    var rows = view ? view.querySelectorAll(".ace-code-row:not(.ace-code-row--hidden)") : [];
     if (rows.length > 0) {
       // Has matches — don't create, just clear and refocus
       e.target.value = "";
@@ -1448,8 +1428,7 @@
 
   document.addEventListener("DOMContentLoaded", function () {
     _initResize();
-    _buildTabContent("recent");
-    _buildTabContent("all");
+    _restoreCollapseState();
     _updateKeycaps();
     _initSortable();
     _paintHighlights();

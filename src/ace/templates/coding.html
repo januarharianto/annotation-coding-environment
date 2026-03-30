@@ -78,23 +78,17 @@
   {# Three-column layout #}
   <div class="ace-three-col" id="three-col">
 
-    {# Left: tabbed code sidebar #}
+    {# Left: code sidebar #}
     {% block code_sidebar %}
     <div id="code-sidebar" class="ace-sidebar">
-      <div class="ace-sidebar-tabs">
-        <button class="ace-sidebar-tab" data-tab="recent" onclick="aceSwitchTab(this, 'recent')">Recent</button>
-        <button class="ace-sidebar-tab ace-sidebar-tab--active" data-tab="groups" onclick="aceSwitchTab(this, 'groups')">Groups</button>
-        <button class="ace-sidebar-tab" data-tab="all" onclick="aceSwitchTab(this, 'all')">All</button>
-      </div>
       <div class="ace-sidebar-toolbar">
         <input type="text" class="ace-sidebar-search" placeholder="Search or create code…"
                id="code-search-input" autocomplete="off">
       </div>
-      <div class="ace-sidebar-view" id="view-recent"></div>
-      <div class="ace-sidebar-view ace-sidebar-view--active" id="view-groups">
+      <div id="view-groups" class="ace-sidebar-codes">
         {% for group_name, group_codes in grouped_codes %}
         <div class="ace-code-group" data-group="{{ group_name }}">
-          <div class="ace-code-group-header">&#9662; {{ group_name }} ({{ group_codes | length }})</div>
+          <div class="ace-code-group-header" data-group="{{ group_name }}">&#9662; {{ group_name }}</div>
           {% for code in group_codes %}
           <div class="ace-code-row" data-code-id="{{ code['id'] }}">
             <span class="ace-code-dot" style="background: {{ code['colour'] }};"></span>
@@ -106,7 +100,7 @@
         {% endfor %}
         {% if ungrouped_codes %}
         <div class="ace-code-group" data-group="">
-          <div class="ace-code-group-header">&#9662; Ungrouped ({{ ungrouped_codes | length }})</div>
+          <div class="ace-code-group-header" data-group="">&#9662; Ungrouped</div>
           {% for code in ungrouped_codes %}
           <div class="ace-code-row" data-code-id="{{ code['id'] }}">
             <span class="ace-code-dot" style="background: {{ code['colour'] }};"></span>
@@ -121,7 +115,6 @@
         {% endif %}
         <div class="ace-add-group" id="add-group-row" onclick="aceStartAddGroup(this)">+ New group</div>
       </div>
-      <div class="ace-sidebar-view" id="view-all"></div>
     </div>
     {% endblock %}
 
@@ -216,7 +209,6 @@
   window.__aceTotalSources = {{ total_sources }};
   window.__aceFocusIndex = -1;
   window.__aceCodes = {{ codes | tojson }};
-  window.__aceRecentCodeIds = {{ recent_code_ids | tojson }};
   window.__aceLastCodeId = null;
   // Save current index for resume on return
   localStorage.setItem("ace-last-index", {{ current_index }});

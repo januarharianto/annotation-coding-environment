@@ -130,18 +130,6 @@ def _coding_context(conn: sqlite3.Connection, coder_id: str, current_index: int)
         key=lambda x: min(c.get("sort_order", 0) for c in x[1]),
     )
 
-    # --- New: recent codes (most recently used by this coder) ---
-    recent_rows = conn.execute(
-        "SELECT code_id, MAX(created_at) AS last_used "
-        "FROM annotation "
-        "WHERE coder_id = ? AND deleted_at IS NULL "
-        "GROUP BY code_id "
-        "ORDER BY last_used DESC "
-        "LIMIT 20",
-        (coder_id,),
-    ).fetchall()
-    recent_code_ids = [r["code_id"] for r in recent_rows]
-
     # --- New: margin annotations (display-only merge) ---
     margin_annotations = build_margin_annotations(
         sentence_units, annotations_list, codes_by_id,
@@ -193,7 +181,6 @@ def _coding_context(conn: sqlite3.Connection, coder_id: str, current_index: int)
         "ungrouped_codes": ungrouped_codes,
         "margin_annotations": margin_annotations,
         "annotation_highlights_json": annotation_highlights_json,
-        "recent_code_ids": recent_code_ids,
     }
 
 
