@@ -387,14 +387,18 @@
 .ace-code-bar {
   position: sticky;
   bottom: 0;
-  padding: var(--ace-space-2) var(--ace-space-4);
+  padding: var(--ace-space-2) var(--ace-space-8);
   display: flex;
-  gap: 6px;
+  gap: 8px;
   flex-wrap: wrap;
   align-items: center;
+  justify-content: center;
   border-top: 1px solid var(--ace-border-light);
   background: var(--ace-bg);
   z-index: 1;
+  max-width: 72ch;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .ace-code-bar-label {
