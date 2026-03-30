@@ -104,8 +104,7 @@ In `src/ace/static/css/coding.css`:
   font-size: var(--ace-font-size-2xs);
   color: var(--ace-text-muted);
   cursor: pointer;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.3px;
   user-select: none;
 }
 
@@ -128,15 +127,15 @@ In `src/ace/static/css/coding.css`:
 }
 ```
 
-**3d. Add indent to code rows** — find the `.ace-code-row` rule (around line 205) and add `padding-left: 20px`:
+**3d. Add indent to code rows** — find the `.ace-code-row` rule (around line 210) and change the padding to add left indent:
 
 Change:
 ```css
-padding: 5px 10px;
+padding: 3px 10px;
 ```
 To:
 ```css
-padding: 5px 10px 5px 20px;
+padding: 3px 10px 3px 20px;
 ```
 
 - [ ] **Step 4: Remove recent_code_ids from pages.py**
@@ -163,12 +162,7 @@ And remove `"recent_code_ids": recent_code_ids,` from the return dict (line 196)
 Run: `uv run pytest`
 Expected: All 242 tests PASS (template changes don't break server-side tests; the SQL query removal is safe since it's only consumed by the template)
 
-- [ ] **Step 6: Commit**
-
-```bash
-git add src/ace/templates/coding.html src/ace/static/css/coding.css src/ace/routes/pages.py
-git commit -m "refactor: remove sidebar tabs, single compact tree view"
-```
+- [ ] **Step 6: Do NOT commit yet** — JS still queries `.ace-sidebar-view--active` which was removed. Task 2 updates the selectors. All 3 tasks must be committed together.
 
 ---
 
@@ -441,11 +435,11 @@ Replace the entire input handler with:
 Run: `uv run pytest`
 Expected: All 242 tests PASS
 
-- [ ] **Step 4: Commit Tasks 2 + 3 together**
+- [ ] **Step 4: Commit all 3 tasks together**
 
 ```bash
-git add src/ace/static/js/bridge.js
-git commit -m "feat: collapsible groups, remove tab JS, update selectors"
+git add src/ace/templates/coding.html src/ace/static/css/coding.css src/ace/routes/pages.py src/ace/static/js/bridge.js
+git commit -m "feat: simplify sidebar — single collapsible tree view, remove tabs"
 ```
 
 ---
