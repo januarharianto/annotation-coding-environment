@@ -1111,14 +1111,10 @@
   }
 
   function _getGroupNames() {
-    var codes = window.__aceCodes || [];
-    var seen = {};
     var result = [];
-    codes.forEach(function (c) {
-      if (c.group_name && !seen[c.group_name]) {
-        seen[c.group_name] = true;
-        result.push(c.group_name);
-      }
+    document.querySelectorAll("#view-groups .ace-code-group[data-group]").forEach(function (g) {
+      var name = g.getAttribute("data-group");
+      if (name) result.push(name);
     });
     return result;
   }
