@@ -68,48 +68,65 @@ def build_margin_annotations(
     annotations: list[dict],
     codes_by_id: dict,
 ) -> list[dict]:
-    """Build merged annotation groups for the right margin panel.
+    """Build annotation groups for the right margin panel.
 
-    Adjacent sentences coded with the same code are visually merged
-    into a single margin note. Returns list of dicts with keys:
-        code_id, code_name, colour, start_idx, end_idx, texts
+    Maps each annotation to ALL overlapping sentence indices, merges
+    adjacent same-code annotations, then groups annotations that cover
+    the exact same sentence range into a single entry with multiple codes.
+
+    Returns list of dicts with keys: codes (list), start_idx, end_idx.
     """
     if not units or not annotations:
         return []
 
-    # Map each annotation to the sentence index it overlaps
-    ann_sentences: list[tuple[int, dict]] = []
+    # Map each annotation to all overlapping sentence indices
+    ann_sentences: list[tuple[int, int, dict]] = []
     for ann in annotations:
-        for i, unit in enumerate(units):
-            if ann["start_offset"] < unit["end_offset"] and ann["end_offset"] > unit["start_offset"]:
-                ann_sentences.append((i, ann))
-                break
-
-    # Sort by sentence index
-    ann_sentences.sort(key=lambda x: x[0])
-
-    # Group adjacent same-code annotations
-    groups: list[dict] = []
-    for sent_idx, ann in ann_sentences:
         code = codes_by_id.get(ann["code_id"])
         if not code:
             continue
+        first_idx = None
+        last_idx = None
+        for i, unit in enumerate(units):
+            if ann["start_offset"] < unit["end_offset"] and ann["end_offset"] > unit["start_offset"]:
+                if first_idx is None:
+                    first_idx = i
+                last_idx = i
+        if first_idx is not None:
+            ann_sentences.append((first_idx, last_idx, ann))
 
+    # Sort by start index, then end index
+    ann_sentences.sort(key=lambda x: (x[0], x[1]))
+
+    # Group adjacent same-code annotations
+    groups: list[dict] = []
+    for first_idx, last_idx, ann in ann_sentences:
+        code = codes_by_id[ann["code_id"]]
         if (
             groups
-            and groups[-1]["code_id"] == ann["code_id"]
-            and groups[-1]["end_idx"] == sent_idx - 1
+            and len(groups[-1]["codes"]) == 1
+            and groups[-1]["codes"][0]["code_id"] == ann["code_id"]
+            and groups[-1]["end_idx"] >= first_idx - 1
         ):
-            groups[-1]["end_idx"] = sent_idx
-            groups[-1]["texts"].append(ann.get("selected_text") or units[sent_idx]["text"])
+            groups[-1]["end_idx"] = max(groups[-1]["end_idx"], last_idx)
         else:
             groups.append({
-                "code_id": ann["code_id"],
-                "code_name": code["name"],
-                "colour": code["colour"],
-                "start_idx": sent_idx,
-                "end_idx": sent_idx,
-                "texts": [ann.get("selected_text") or units[sent_idx]["text"]],
+                "codes": [{"code_id": ann["code_id"], "code_name": code["name"], "colour": code["colour"]}],
+                "start_idx": first_idx,
+                "end_idx": last_idx,
             })
 
-    return groups
+    # Merge groups with identical (start_idx, end_idx) ranges
+    merged: list[dict] = []
+    for group in groups:
+        key = (group["start_idx"], group["end_idx"])
+        if merged and (merged[-1]["start_idx"], merged[-1]["end_idx"]) == key:
+            existing_ids = {c["code_id"] for c in merged[-1]["codes"]}
+            for c in group["codes"]:
+                if c["code_id"] not in existing_ids:
+                    merged[-1]["codes"].append(c)
+                    existing_ids.add(c["code_id"])
+        else:
+            merged.append(group)
+
+    return merged

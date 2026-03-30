@@ -128,37 +128,42 @@
     {# Resize handle #}
     <div class="ace-resize-handle" id="resize-handle"></div>
 
-    {# Centre: text panel #}
-    {% block text_panel %}
-    <div id="text-panel" class="ace-text-panel" tabindex="0">
-      {% if sentence_html %}
-      {{ sentence_html | safe }}
-      {% elif source_text %}
-      <p>{{ source_text }}</p>
-      {% else %}
-      <p class="ace-text-empty">No source content.</p>
-      {% endif %}
-    </div>
-    {% endblock %}
+    {# Shared scroll container for text + margin #}
+    <div id="content-scroll" class="ace-content-scroll">
 
-    {# Right: margin annotations #}
-    {% block margin_panel %}
-    <div id="margin-panel" class="ace-margin-panel">
-      {% for group in margin_annotations %}
-      <div class="ace-margin-note" data-start-idx="{{ group['start_idx'] }}" data-end-idx="{{ group['end_idx'] }}">
-        <div class="ace-margin-note-bar" style="background: {{ group['colour'] }};"></div>
-        <div class="ace-margin-note-code">{{ group['code_name'] }}</div>
-        <div class="ace-margin-note-text">&ldquo;{{ group['texts'][0][:40] }}&hellip;&rdquo;</div>
-        {% if group['texts'] | length > 1 %}
-        <div class="ace-margin-note-merged">{{ group['texts'] | length }} sentences merged</div>
+      {# Centre: text panel #}
+      {% block text_panel %}
+      <div id="text-panel" class="ace-text-panel" tabindex="0">
+        {% if sentence_html %}
+        {{ sentence_html | safe }}
+        {% elif source_text %}
+        <p>{{ source_text }}</p>
+        {% else %}
+        <p class="ace-text-empty">No source content.</p>
         {% endif %}
       </div>
-      {% endfor %}
-      {% if not margin_annotations %}
-      <div class="ace-margin-empty">No annotations yet</div>
-      {% endif %}
+      {% endblock %}
+
+      {# Right: margin annotations #}
+      {% block margin_panel %}
+      <div id="margin-panel" class="ace-margin-panel">
+        {% for group in margin_annotations %}
+        <div class="ace-margin-note" data-start-idx="{{ group['start_idx'] }}" data-end-idx="{{ group['end_idx'] }}">
+          {% for code in group['codes'] %}
+          <div class="ace-margin-note-row">
+            <span class="ace-margin-dot" style="background: {{ code['colour'] }};"></span>
+            <span class="ace-margin-note-code">{{ code['code_name'] }}</span>
+          </div>
+          {% endfor %}
+        </div>
+        {% endfor %}
+        {% if not margin_annotations %}
+        <div class="ace-margin-empty">No annotations yet</div>
+        {% endif %}
+      </div>
+      {% endblock %}
+
     </div>
-    {% endblock %}
 
   </div>
 
