@@ -277,9 +277,9 @@ In the `htmx:afterSettle` handler (around line 759–764), remove the `_buildTab
 To:
 ```javascript
     if (target.id === "code-sidebar" || target.id === "coding-workspace") {
-      _updateKeycaps();
       if (!_isDragging) _initSortable();
       _restoreCollapseState();
+      _updateKeycaps();
     }
 ```
 
@@ -299,9 +299,9 @@ In `_refreshSidebar()` (around line 884), change the `.then()` callback:
 To:
 ```javascript
     }).then(function () {
-      _updateKeycaps();
       _initSortable();
       _restoreCollapseState();
+      _updateKeycaps();
     });
 ```
 
@@ -340,17 +340,29 @@ Insert a new section before the DOMContentLoaded init block. Use the next availa
 
   var _collapsedGroups = {};
 
+  function _setGroupCollapsed(group, header, collapsed) {
+    var groupName = header.getAttribute("data-group");
+    if (collapsed) {
+      group.classList.add("ace-code-group--collapsed");
+      group.querySelectorAll(".ace-code-row").forEach(function (r) {
+        r.classList.add("ace-code-row--hidden");
+      });
+      header.textContent = "\u25b8 " + (groupName || "Ungrouped");
+    } else {
+      group.classList.remove("ace-code-group--collapsed");
+      group.querySelectorAll(".ace-code-row").forEach(function (r) {
+        r.classList.remove("ace-code-row--hidden");
+      });
+      header.textContent = "\u25be " + (groupName || "Ungrouped");
+    }
+    _collapsedGroups[groupName] = collapsed;
+  }
+
   function _toggleGroupCollapse(header) {
     var group = header.closest(".ace-code-group");
     if (!group) return;
-    var groupName = header.getAttribute("data-group");
-    var isCollapsed = group.classList.toggle("ace-code-group--collapsed");
-    _collapsedGroups[groupName] = isCollapsed;
-
-    // Update triangle
-    var triangle = isCollapsed ? "\u25b8 " : "\u25be ";
-    header.textContent = triangle + (groupName || "Ungrouped");
-
+    var isCollapsed = !group.classList.contains("ace-code-group--collapsed");
+    _setGroupCollapsed(group, header, isCollapsed);
     _updateKeycaps();
   }
 
@@ -361,8 +373,7 @@ Insert a new section before the DOMContentLoaded init block. Use the next availa
       if (!header) return;
       var groupName = header.getAttribute("data-group");
       if (_collapsedGroups[groupName]) {
-        group.classList.add("ace-code-group--collapsed");
-        header.textContent = "\u25b8 " + (groupName || "Ungrouped");
+        _setGroupCollapsed(group, header, true);
       }
     });
   }
