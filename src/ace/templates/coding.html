@@ -47,25 +47,12 @@
             hx-swap="outerHTML">Flag</button>
   </div>
 
-  {# Header with merged nav #}
+  {# Header (project info only) #}
   {% block coding_header %}
   <div id="coding-header" class="ace-coding-header">
     <div class="ace-coding-header-left">
       <a href="/" class="ace-coding-header-back">&larr; Home</a>
       <span class="ace-coding-header-title">{{ project_name }}</span>
-    </div>
-    <div class="ace-nav-cluster">
-      <button class="ace-nav-btn" id="btn-prev"
-              {% if current_index <= 0 %}disabled{% endif %}
-              onclick="aceNavigatePrev()">&laquo;</button>
-      <span class="ace-nav-counter" id="nav-counter"
-            onclick="aceToggleGrid()" title="Open source grid">
-        <span class="ace-status-badge ace-status-badge--{{ current_status }}"></span>
-        {{ current_index + 1 }} / {{ total_sources }} &#9783;
-      </span>
-      <button class="ace-nav-btn" id="btn-next"
-              {% if current_index >= total_sources - 1 %}disabled{% endif %}
-              onclick="aceNavigateNext()">&raquo;</button>
     </div>
     <div class="ace-coding-header-right">
       <span class="ace-completion">{{ complete_pct }}%</span>
@@ -127,6 +114,21 @@
       {# Centre: text panel #}
       {% block text_panel %}
       <div id="text-panel" class="ace-text-panel" tabindex="0">
+        <div class="ace-text-nav">
+          <div class="ace-nav-cluster">
+            <button class="ace-nav-btn" id="btn-prev"
+                    {% if current_index <= 0 %}disabled{% endif %}
+                    onclick="aceNavigatePrev()">&#8249;</button>
+            <span class="ace-nav-counter" id="nav-counter"
+                  onclick="aceToggleGrid()" title="Open source grid">
+              <span class="ace-status-badge ace-status-badge--{{ current_status }}"></span>
+              {{ current_index + 1 }} / {{ total_sources }} &#9783;
+            </span>
+            <button class="ace-nav-btn" id="btn-next"
+                    {% if current_index >= total_sources - 1 %}disabled{% endif %}
+                    onclick="aceNavigateNext()">&#8250;</button>
+          </div>
+        </div>
         {% if sentence_html %}
         {{ sentence_html | safe }}
         {% elif source_text %}

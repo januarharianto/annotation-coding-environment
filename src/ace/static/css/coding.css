@@ -87,6 +87,21 @@
   background: var(--ace-bg-muted);
 }
 
+.ace-text-nav {
+  text-align: center;
+  padding: var(--ace-space-2) 0 0;
+  margin: 0 var(--ace-space-8) var(--ace-space-4);
+  border-bottom: 1px solid var(--ace-border-light);
+}
+
+.ace-text-nav .ace-nav-cluster {
+  display: inline-flex;
+  position: relative;
+  top: 1px;
+  background: var(--ace-bg);
+  padding: 0 var(--ace-space-3) var(--ace-space-1);
+}
+
 .ace-coding-header-right {
   display: flex;
   align-items: center;
