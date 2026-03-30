@@ -364,13 +364,14 @@
 }
 
 .ace-sentence--focused {
-  background: rgba(84, 110, 122, 0.10);
-  outline: 2px solid #546e7a;
-  outline-offset: 1px;
+  text-decoration: underline;
+  text-decoration-color: #546e7a;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
 }
 
 .ace-sentence--coded.ace-sentence--focused {
-  outline: 2px solid #212121;
+  text-decoration-color: #212121;
 }
 
 
