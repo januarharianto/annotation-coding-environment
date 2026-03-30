@@ -327,16 +327,13 @@
 
 .ace-text-panel {
   flex: 1;
+  max-width: 72ch;
+  margin-left: auto;
+  margin-right: auto;
   padding: var(--ace-space-6) var(--ace-space-8);
   outline: none;
   line-height: 2;
   font-size: var(--ace-font-size-base);
-}
-
-.ace-text-panel > * {
-  max-width: 72ch;
-  margin-left: auto;
-  margin-right: auto;
 }
 
 .ace-text-empty {
@@ -397,9 +394,6 @@
   border-top: 1px solid var(--ace-border-light);
   background: var(--ace-bg);
   z-index: 1;
-  max-width: 72ch;
-  margin-left: auto;
-  margin-right: auto;
 }
 
 .ace-code-sep {
