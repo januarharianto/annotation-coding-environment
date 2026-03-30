@@ -143,13 +143,7 @@
         {% endif %}
         {% if margin_codes %}
         <div class="ace-code-bar">
-          <span class="ace-code-bar-label">Codes:</span>
-          {% for code in margin_codes %}
-          <span class="ace-code-chip" data-code-id="{{ code['code_id'] }}" data-colour="{{ code['colour'] }}">
-            <span class="ace-code-chip-dot" style="background: {{ code['colour'] }};"></span>
-            {{ code['code_name'] }}
-          </span>
-          {% endfor %}
+          {% for code in margin_codes %}{% if not loop.first %}<span class="ace-code-sep"> · </span>{% endif %}<span class="ace-code-chip" data-code-id="{{ code['code_id'] }}" data-colour="{{ code['colour'] }}" style="color: {{ code['colour'] }};">{{ code['code_name'] }}</span>{% endfor %}
         </div>
         {% endif %}
       </div>
