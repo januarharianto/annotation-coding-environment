@@ -12,6 +12,11 @@
     }
   }
 </script>
+<script>
+  // Apply saved sidebar width before CSS loads to prevent layout glitch
+  var _sw = localStorage.getItem("ace-sidebar-width");
+  if (_sw) document.documentElement.style.setProperty("--ace-sidebar-width", _sw + "px");
+</script>
 <link rel="stylesheet" href="/static/css/coding.css">
 <style id="code-colours">
 {% for code in codes %}

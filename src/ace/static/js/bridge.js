@@ -563,11 +563,6 @@
     var split = handle.closest(".ace-three-col");
     if (!split) return;
 
-    var saved = localStorage.getItem("ace-sidebar-width");
-    if (saved) {
-      split.style.gridTemplateColumns = saved + "px 1px 1fr";
-    }
-
     var dragging = false;
 
     handle.addEventListener("pointerdown", function (e) {
@@ -585,7 +580,7 @@
       var min = 150;
       var max = rect.width * 0.4;
       x = Math.max(min, Math.min(max, x));
-      split.style.gridTemplateColumns = x + "px 1px 1fr";
+      document.documentElement.style.setProperty("--ace-sidebar-width", x + "px");
     });
 
     document.addEventListener("pointerup", function () {
@@ -593,11 +588,8 @@
       dragging = false;
       document.body.style.cursor = "";
       document.body.style.userSelect = "";
-      var cols = split.style.gridTemplateColumns;
-      if (cols) {
-        var width = parseInt(cols, 10);
-        if (width) localStorage.setItem("ace-sidebar-width", width);
-      }
+      var width = parseInt(getComputedStyle(document.documentElement).getPropertyValue("--ace-sidebar-width"), 10);
+      if (width) localStorage.setItem("ace-sidebar-width", width);
       _schedulePosition();
     });
   }
