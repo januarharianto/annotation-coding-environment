@@ -18,7 +18,9 @@
  * 14. Code menu dropdown (management mode)
  * 15. Add group (inline)
  * 16. Code search / filter / create
- * 17. DOMContentLoaded init
+ * 17. CSS Custom Highlight API — annotation rendering
+ * 18. Sidebar keyboard navigation (ARIA treeview)
+ * 19. DOMContentLoaded init
  */
 
 (function () {
@@ -85,39 +87,29 @@
   var _collapsedGroups = {};
 
   function _setGroupCollapsed(group, header, collapsed) {
-    var groupName = header.getAttribute("data-group");
     if (collapsed) {
-      group.classList.add("ace-code-group--collapsed");
-      group.querySelectorAll(".ace-code-row").forEach(function (r) {
-        r.classList.add("ace-code-row--hidden");
-      });
-      header.textContent = "\u25b8 " + (groupName || "Ungrouped");
+      _collapseGroup(header);
     } else {
-      group.classList.remove("ace-code-group--collapsed");
-      group.querySelectorAll(".ace-code-row").forEach(function (r) {
-        r.classList.remove("ace-code-row--hidden");
-      });
-      header.textContent = "\u25be " + (groupName || "Ungrouped");
+      _expandGroup(header);
     }
-    _collapsedGroups[groupName] = collapsed;
   }
 
   function _toggleGroupCollapse(header) {
-    var group = header.closest(".ace-code-group");
-    if (!group) return;
-    var isCollapsed = !group.classList.contains("ace-code-group--collapsed");
-    _setGroupCollapsed(group, header, isCollapsed);
-    _updateKeycaps();
+    if (!header) return;
+    var expanded = header.getAttribute("aria-expanded") === "true";
+    if (expanded) {
+      _collapseGroup(header);
+    } else {
+      _expandGroup(header);
+    }
   }
 
   function _restoreCollapseState() {
-    var groups = document.querySelectorAll(".ace-code-group");
-    groups.forEach(function (group) {
-      var header = group.querySelector(".ace-code-group-header");
-      if (!header) return;
+    var headers = document.querySelectorAll(".ace-code-group-header");
+    headers.forEach(function (header) {
       var groupName = header.getAttribute("data-group");
       if (_collapsedGroups[groupName]) {
-        _setGroupCollapsed(group, header, true);
+        _collapseGroup(header);
       }
     });
   }
@@ -137,14 +129,21 @@
   var _currentKeyMap = []; // array of code IDs in keycap order
 
   function _updateKeycaps() {
-    var view = document.getElementById("view-groups");
-    if (!view) return;
-    var rows = view.querySelectorAll(".ace-code-row:not(.ace-code-row--hidden)");
+    var tree = document.getElementById("code-tree");
+    if (!tree) return;
+    var rows = tree.querySelectorAll('.ace-code-row');
     _currentKeyMap = [];
-    rows.forEach(function (row, i) {
+    rows.forEach(function (row) {
+      var groupDiv = row.closest('[role="group"]');
+      if (groupDiv) {
+        var header = groupDiv.previousElementSibling;
+        if (header && header.getAttribute("aria-expanded") === "false") return;
+      }
+      // Also skip rows hidden by search filter
+      if (row.style.display === "none") return;
       _currentKeyMap.push(row.getAttribute("data-code-id"));
       var keycap = row.querySelector(".ace-keycap");
-      if (keycap) keycap.textContent = _keylabel(i);
+      if (keycap) keycap.textContent = _keylabel(_currentKeyMap.length - 1);
     });
   }
 
@@ -1004,7 +1003,7 @@
     _sortableInstances.forEach(function (s) { s.destroy(); });
     _sortableInstances = [];
 
-    var containers = document.querySelectorAll(".ace-code-group");
+    var containers = document.querySelectorAll('#code-tree [role="group"]');
     containers.forEach(function (container) {
       var instance = new Sortable(container, {
         group: "codes",
@@ -1013,23 +1012,24 @@
         delayOnTouchOnly: true,
         draggable: ".ace-code-row",
         ghostClass: "ace-code-row--ghost",
-        filter: ".ace-code-group-header",
         onStart: function () { _isDragging = true; },
         onEnd: function (evt) {
           _isDragging = false;
           var codeId = evt.item.getAttribute("data-code-id");
-          var newGroup = evt.to.getAttribute("data-group");
-          var oldGroup = evt.from.getAttribute("data-group");
+          var newHeader = evt.to.previousElementSibling;
+          var newGroup = newHeader ? (newHeader.getAttribute("data-group") || "") : "";
+          var oldHeader = evt.from.previousElementSibling;
+          var oldGroup = oldHeader ? (oldHeader.getAttribute("data-group") || "") : "";
 
           if (newGroup !== oldGroup && codeId) {
             fetch("/api/codes/" + codeId, {
               method: "PUT",
               headers: { "Content-Type": "application/x-www-form-urlencoded" },
-              body: "group_name=" + encodeURIComponent(newGroup || "") + "&current_index=" + window.__aceCurrentIndex,
+              body: "group_name=" + encodeURIComponent(newGroup) + "&current_index=" + window.__aceCurrentIndex,
             });
           }
 
-          var allRows = document.querySelectorAll("#view-groups .ace-code-row");
+          var allRows = document.querySelectorAll("#code-tree .ace-code-row");
           var ids = [];
           allRows.forEach(function (row) {
             var id = row.getAttribute("data-code-id");
@@ -1138,8 +1138,8 @@
 
   function _getGroupNames() {
     var result = [];
-    document.querySelectorAll("#view-groups .ace-code-group[data-group]").forEach(function (g) {
-      var name = g.getAttribute("data-group");
+    document.querySelectorAll("#code-tree .ace-code-group-header[data-group]").forEach(function (h) {
+      var name = h.getAttribute("data-group");
       if (name) result.push(name);
     });
     return result;
@@ -1167,16 +1167,19 @@
     function submit() {
       var name = input.value.trim();
       if (!name) { cancel(); return; }
-      // Create a proper group container so SortableJS and _getGroupNames work
-      var group = document.createElement("div");
-      group.className = "ace-code-group";
-      group.setAttribute("data-group", name);
+      // Create header + group container matching the ARIA treeview DOM
       var header = document.createElement("div");
+      header.setAttribute("role", "treeitem");
+      header.setAttribute("aria-expanded", "true");
+      header.setAttribute("aria-level", "1");
       header.className = "ace-code-group-header";
       header.setAttribute("data-group", name);
+      header.setAttribute("tabindex", "-1");
       header.textContent = "\u25be " + name;
-      group.appendChild(header);
-      el.parentNode.insertBefore(group, el);
+      var groupDiv = document.createElement("div");
+      groupDiv.setAttribute("role", "group");
+      el.parentNode.insertBefore(header, el);
+      el.parentNode.insertBefore(groupDiv, el);
       cancel();
       _initSortable();
     }
@@ -1200,38 +1203,39 @@
   document.addEventListener("input", function (e) {
     if (e.target.id !== "code-search-input") return;
     var query = e.target.value.toLowerCase();
-    var view = document.getElementById("view-groups");
-    if (!view) return;
+    var tree = document.getElementById("code-tree");
+    if (!tree) return;
 
     if (query) {
-      // Filter: show matching rows, auto-expand groups with matches
-      var rows = view.querySelectorAll(".ace-code-row");
+      // Filter: show/hide rows by display, auto-expand groups with matches
+      var rows = tree.querySelectorAll(".ace-code-row");
       rows.forEach(function (row) {
         var name = row.querySelector(".ace-code-name");
         if (!name) return;
         var match = name.textContent.toLowerCase().indexOf(query) >= 0;
-        if (match) {
-          row.classList.remove("ace-code-row--hidden");
-        } else {
-          row.classList.add("ace-code-row--hidden");
-        }
+        row.style.display = match ? "" : "none";
       });
-      // Auto-expand groups with matches, hide empty groups
-      var groups = view.querySelectorAll(".ace-code-group");
-      groups.forEach(function (group) {
-        var visibleInGroup = group.querySelectorAll(".ace-code-row:not(.ace-code-row--hidden)").length;
-        group.style.display = visibleInGroup > 0 ? "" : "none";
-        if (visibleInGroup > 0) {
-          group.classList.remove("ace-code-group--collapsed");
+      // Auto-expand groups with matches, hide empty group containers
+      var groupDivs = tree.querySelectorAll('[role="group"]');
+      groupDivs.forEach(function (groupDiv) {
+        var visibleInGroup = groupDiv.querySelectorAll(".ace-code-row").length -
+          groupDiv.querySelectorAll('.ace-code-row[style*="display: none"], .ace-code-row[style*="display:none"]').length;
+        var header = groupDiv.previousElementSibling;
+        groupDiv.style.display = visibleInGroup > 0 ? "" : "none";
+        if (header) header.style.display = visibleInGroup > 0 ? "" : "none";
+        if (visibleInGroup > 0 && header) {
+          header.setAttribute("aria-expanded", "true");
         }
       });
     } else {
       // Clear: restore all rows and collapse state
-      view.querySelectorAll(".ace-code-row").forEach(function (row) {
-        row.classList.remove("ace-code-row--hidden");
+      tree.querySelectorAll(".ace-code-row").forEach(function (row) {
+        row.style.display = "";
       });
-      view.querySelectorAll(".ace-code-group").forEach(function (group) {
-        group.style.display = "";
+      tree.querySelectorAll('[role="group"]').forEach(function (groupDiv) {
+        groupDiv.style.display = "";
+        var header = groupDiv.previousElementSibling;
+        if (header) header.style.display = "";
       });
       _restoreCollapseState();
     }
@@ -1253,8 +1257,8 @@
     if (!name) return;
 
     // Check if any visible rows match exactly
-    var view = document.getElementById("view-groups");
-    var rows = view ? view.querySelectorAll(".ace-code-row:not(.ace-code-row--hidden)") : [];
+    var tree = document.getElementById("code-tree");
+    var rows = tree ? tree.querySelectorAll('.ace-code-row:not([style*="display: none"]):not([style*="display:none"])') : [];
     if (rows.length > 0) {
       // Has matches — don't create, just clear and refocus
       e.target.value = "";
@@ -1274,7 +1278,7 @@
   });
 
   /* ================================================================
-   * 18. CSS Custom Highlight API — annotation rendering
+   * 17. CSS Custom Highlight API — annotation rendering
    * ================================================================ */
 
   /**
@@ -1386,7 +1390,152 @@
   }
 
   /* ================================================================
-   * 17. DOMContentLoaded init
+   * 18. Sidebar keyboard navigation (ARIA treeview)
+   * ================================================================ */
+
+  // --- Roving tabindex ---
+
+  /** Return all visible treeitems (group headers + code rows) in DOM order. */
+  function _getTreeItems() {
+    var tree = document.getElementById("code-tree");
+    if (!tree) return [];
+    var items = tree.querySelectorAll('[role="treeitem"]');
+    var result = [];
+    items.forEach(function (item) {
+      if (item.classList.contains("ace-code-row")) {
+        var header = item.closest('[role="group"]');
+        if (header) {
+          var prev = header.previousElementSibling;
+          if (prev && prev.getAttribute("aria-expanded") === "false") return;
+        }
+      }
+      result.push(item);
+    });
+    return result;
+  }
+
+  /** Move roving tabindex to the given treeitem. */
+  function _focusTreeItem(item) {
+    if (!item) return;
+    var tree = document.getElementById("code-tree");
+    if (tree) {
+      tree.querySelectorAll('[tabindex="0"]').forEach(function (el) {
+        el.setAttribute("tabindex", "-1");
+      });
+    }
+    item.setAttribute("tabindex", "0");
+    item.focus();
+  }
+
+  /** Get the currently focused treeitem (tabindex="0"). */
+  function _getActiveTreeItem() {
+    var tree = document.getElementById("code-tree");
+    return tree ? tree.querySelector('[role="treeitem"][tabindex="0"]') : null;
+  }
+
+  /** Check if a treeitem is a group header. */
+  function _isGroupHeader(item) {
+    return item && item.classList.contains("ace-code-group-header");
+  }
+
+  // --- Tree keydown handler ---
+
+  document.addEventListener("keydown", function (e) {
+    var tree = document.getElementById("code-tree");
+    if (!tree || !tree.contains(document.activeElement)) return;
+    var active = document.activeElement;
+    if (!active || active.getAttribute("role") !== "treeitem") return;
+    if (active.querySelector('[contenteditable="true"]')) return;
+
+    var key = e.key;
+    var alt = e.altKey;
+    var shift = e.shiftKey;
+    var items = _getTreeItems();
+    var idx = items.indexOf(active);
+
+    // ↓ — Next visible treeitem
+    if (key === "ArrowDown" && !alt && !shift) {
+      e.preventDefault();
+      if (idx < items.length - 1) _focusTreeItem(items[idx + 1]);
+      return;
+    }
+
+    // ↑ — Previous visible treeitem
+    if (key === "ArrowUp" && !alt && !shift) {
+      e.preventDefault();
+      if (idx > 0) _focusTreeItem(items[idx - 1]);
+      return;
+    }
+
+    // → — Expand group or move to first child
+    if (key === "ArrowRight" && !alt && !shift) {
+      e.preventDefault();
+      if (_isGroupHeader(active)) {
+        if (active.getAttribute("aria-expanded") === "false") {
+          _expandGroup(active);
+        } else {
+          var groupDiv = active.nextElementSibling;
+          if (groupDiv && groupDiv.getAttribute("role") === "group") {
+            var firstChild = groupDiv.querySelector('[role="treeitem"]');
+            if (firstChild) _focusTreeItem(firstChild);
+          }
+        }
+      }
+      return;
+    }
+
+    // ← — Collapse group or move to parent header
+    if (key === "ArrowLeft" && !alt && !shift) {
+      e.preventDefault();
+      if (_isGroupHeader(active)) {
+        if (active.getAttribute("aria-expanded") === "true") {
+          _collapseGroup(active);
+        }
+      } else {
+        var groupEl = active.closest('[role="group"]');
+        if (groupEl) {
+          var header = groupEl.previousElementSibling;
+          if (header && _isGroupHeader(header)) _focusTreeItem(header);
+        }
+      }
+      return;
+    }
+
+    // Home — First treeitem
+    if (key === "Home") {
+      e.preventDefault();
+      if (items.length > 0) _focusTreeItem(items[0]);
+      return;
+    }
+
+    // End — Last treeitem
+    if (key === "End") {
+      e.preventDefault();
+      if (items.length > 0) _focusTreeItem(items[items.length - 1]);
+      return;
+    }
+  });
+
+  // --- Group expand / collapse ---
+
+  function _expandGroup(header) {
+    header.setAttribute("aria-expanded", "true");
+    var groupName = header.getAttribute("data-group");
+    header.textContent = "\u25be " + (groupName || "Ungrouped");
+    _collapsedGroups[groupName] = false;
+    _updateKeycaps();
+  }
+
+  function _collapseGroup(header) {
+    header.setAttribute("aria-expanded", "false");
+    var groupName = header.getAttribute("data-group");
+    header.textContent = "\u25b8 " + (groupName || "Ungrouped");
+    _collapsedGroups[groupName] = true;
+    _updateKeycaps();
+  }
+
+  /* ================================================================
+   * 19. DOMContentLoaded init
    * ================================================================ */
 
   document.addEventListener("DOMContentLoaded", function () {
