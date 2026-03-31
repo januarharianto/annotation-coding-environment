@@ -168,6 +168,18 @@ def test_coding_page_includes_idiomorph(client_with_sources):
     assert "idiomorph-ext.min.js" in resp.text
 
 
+def test_sidebar_has_aria_tree_roles(client_with_sources):
+    """Sidebar renders with ARIA treeview roles."""
+    client, _ = client_with_sources
+    resp = client.get("/code")
+    assert resp.status_code == 200
+    html = resp.text
+    assert 'role="tree"' in html
+    assert 'aria-label="Code list"' in html
+    assert 'role="treeitem"' in html
+    assert 'role="group"' in html
+
+
 # ---------------------------------------------------------------------------
 # Annotation CRUD routes
 # ---------------------------------------------------------------------------

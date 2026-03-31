@@ -15,10 +15,11 @@
  * 11. Dialog close cleanup
  * 12. HTMX integration (configRequest, afterSwap, afterRequest)
  * 13. Code management helpers
- * 14. Code menu dropdown (management mode)
- * 15. Add group (inline)
- * 16. Code search / filter / create
- * 17. DOMContentLoaded init
+ * 14. Code menu dropdown (with shortcut hints)
+ * 15. Code search / filter / create / group
+ * 16. CSS Custom Highlight API — annotation rendering
+ * 17. Sidebar keyboard navigation (ARIA treeview)
+ * 18. DOMContentLoaded init
  */
 
 (function () {
@@ -46,6 +47,12 @@
     var msg = e.detail.xhr && e.detail.xhr.getResponseHeader("X-ACE-Toast");
     if (msg) window.aceToast(msg);
   });
+
+  function _escapeHtml(str) {
+    var div = document.createElement("div");
+    div.textContent = str;
+    return div.innerHTML;
+  }
 
   /* ================================================================
    * 2. Sentence navigation
@@ -84,40 +91,22 @@
 
   var _collapsedGroups = {};
 
-  function _setGroupCollapsed(group, header, collapsed) {
-    var groupName = header.getAttribute("data-group");
-    if (collapsed) {
-      group.classList.add("ace-code-group--collapsed");
-      group.querySelectorAll(".ace-code-row").forEach(function (r) {
-        r.classList.add("ace-code-row--hidden");
-      });
-      header.textContent = "\u25b8 " + (groupName || "Ungrouped");
-    } else {
-      group.classList.remove("ace-code-group--collapsed");
-      group.querySelectorAll(".ace-code-row").forEach(function (r) {
-        r.classList.remove("ace-code-row--hidden");
-      });
-      header.textContent = "\u25be " + (groupName || "Ungrouped");
-    }
-    _collapsedGroups[groupName] = collapsed;
-  }
-
   function _toggleGroupCollapse(header) {
-    var group = header.closest(".ace-code-group");
-    if (!group) return;
-    var isCollapsed = !group.classList.contains("ace-code-group--collapsed");
-    _setGroupCollapsed(group, header, isCollapsed);
-    _updateKeycaps();
+    if (!header) return;
+    var expanded = header.getAttribute("aria-expanded") === "true";
+    if (expanded) {
+      _collapseGroup(header);
+    } else {
+      _expandGroup(header);
+    }
   }
 
   function _restoreCollapseState() {
-    var groups = document.querySelectorAll(".ace-code-group");
-    groups.forEach(function (group) {
-      var header = group.querySelector(".ace-code-group-header");
-      if (!header) return;
+    var headers = document.querySelectorAll(".ace-code-group-header");
+    headers.forEach(function (header) {
       var groupName = header.getAttribute("data-group");
       if (_collapsedGroups[groupName]) {
-        _setGroupCollapsed(group, header, true);
+        _collapseGroup(header);
       }
     });
   }
@@ -126,7 +115,13 @@
   document.addEventListener("click", function (e) {
     var header = e.target.closest(".ace-code-group-header");
     if (header && !e.target.closest(".ace-code-menu")) {
-      _toggleGroupCollapse(header);
+      if (header.getAttribute("tabindex") === "0") {
+        // Already focused — toggle collapse
+        _toggleGroupCollapse(header);
+      } else {
+        // Not focused yet — just select it
+        _focusTreeItem(header);
+      }
     }
   });
 
@@ -137,14 +132,22 @@
   var _currentKeyMap = []; // array of code IDs in keycap order
 
   function _updateKeycaps() {
-    var view = document.getElementById("view-groups");
-    if (!view) return;
-    var rows = view.querySelectorAll(".ace-code-row:not(.ace-code-row--hidden)");
+    var tree = document.getElementById("code-tree");
+    if (!tree) return;
+    var rows = tree.querySelectorAll('.ace-code-row');
     _currentKeyMap = [];
-    rows.forEach(function (row, i) {
+    rows.forEach(function (row) {
+      var groupDiv = row.closest('[role="group"]');
+      if (groupDiv) {
+        var header = groupDiv.previousElementSibling;
+        if (header && header.getAttribute("aria-expanded") === "false") return;
+      }
+      // Also skip rows hidden by search filter
+      if (row.style.display === "none") return;
       _currentKeyMap.push(row.getAttribute("data-code-id"));
       var keycap = row.querySelector(".ace-keycap");
-      if (keycap) keycap.textContent = _keylabel(i);
+      if (keycap) keycap.textContent = _keylabel(_currentKeyMap.length - 1);
+      row.setAttribute("aria-keyshortcuts", _keylabel(_currentKeyMap.length - 1));
     });
   }
 
@@ -252,6 +255,10 @@
   document.addEventListener("keydown", function (e) {
     if (_isTyping()) return;
     if (_menuOpen) return;
+
+    // Only handle keys when text panel (or nothing specific) is focused
+    var zone = _activeZone();
+    if (zone === "search" || zone === "tree") return;
 
     var key = e.key;
     var ctrl = e.ctrlKey || e.metaKey;
@@ -398,6 +405,13 @@
         window.__aceLastSelection = null;
         window.getSelection().removeAllRanges();
       }
+      return;
+    }
+
+    // / — Jump to sidebar search bar
+    if (key === "/" && !shift) {
+      e.preventDefault();
+      _focusSearchBar();
       return;
     }
 
@@ -735,6 +749,37 @@
     }
   });
 
+  // --- Focus restoration across HTMX swaps ---
+
+  var _sidebarFocusState = {
+    codeId: null,
+    groupName: null,
+    searchText: "",
+    scrollTop: 0,
+    zone: null,
+  };
+
+  document.addEventListener("htmx:beforeSwap", function (e) {
+    var target = e.detail.target;
+    if (!target) return;
+    if (target.id !== "code-sidebar" && target.id !== "coding-workspace") return;
+
+    var zone = _activeZone();
+    _sidebarFocusState.zone = zone;
+
+    if (zone === "tree") {
+      var active = _getActiveTreeItem();
+      _sidebarFocusState.codeId = active ? active.getAttribute("data-code-id") : null;
+      _sidebarFocusState.groupName = active ? active.getAttribute("data-group") : null;
+    }
+
+    var search = document.getElementById("code-search-input");
+    _sidebarFocusState.searchText = search ? search.value : "";
+
+    var tree = document.getElementById("code-tree");
+    _sidebarFocusState.scrollTop = tree ? tree.scrollTop : 0;
+  });
+
   // After HTMX swap: restore focus, rebuild tabs, update keycaps
   // Use afterSettle (not afterSwap) — fires after HTMX finishes all DOM changes
   document.addEventListener("htmx:afterSettle", function (evt) {
@@ -750,6 +795,41 @@
       if (!_isDragging) _initSortable();
       _restoreCollapseState();
       _updateKeycaps();
+
+      // Restore focus state
+      var search = document.getElementById("code-search-input");
+      if (_sidebarFocusState.searchText && search) {
+        search.value = _sidebarFocusState.searchText;
+        search.dispatchEvent(new Event("input", { bubbles: true }));
+      }
+
+      var tree = document.getElementById("code-tree");
+      if (tree && _sidebarFocusState.scrollTop) {
+        tree.scrollTop = _sidebarFocusState.scrollTop;
+      }
+
+      if (_sidebarFocusState.zone === "tree") {
+        var item = null;
+        if (_sidebarFocusState.codeId && tree) {
+          item = tree.querySelector('[data-code-id="' + _sidebarFocusState.codeId + '"]');
+        } else if (_sidebarFocusState.groupName !== null && tree) {
+          item = tree.querySelector('.ace-code-group-header[data-group="' + _sidebarFocusState.groupName + '"]');
+        }
+        if (item) {
+          _focusTreeItem(item);
+        } else {
+          var items = _getTreeItems();
+          if (items.length > 0) _focusTreeItem(items[0]);
+        }
+      } else if (_sidebarFocusState.zone === "search" && search) {
+        search.focus();
+      }
+
+      // Reset
+      _sidebarFocusState.codeId = null;
+      _sidebarFocusState.groupName = null;
+      _sidebarFocusState.zone = null;
+      _sidebarFocusState.searchText = "";
     }
 
     // Auto-open dialogs
@@ -917,18 +997,18 @@
       nameEl.contentEditable = "false";
       if (!newName || newName === original) {
         nameEl.textContent = original;
-        document.getElementById("text-panel").focus();
+        _focusTreeItem(row);
         return;
       }
       _codeAction("PUT", "/api/codes/" + codeId,
         "name=" + encodeURIComponent(newName) + "&current_index=" + window.__aceCurrentIndex
       ).catch(function () { nameEl.textContent = original; });
-      document.getElementById("text-panel").focus();
+      _focusTreeItem(row);
     }
 
     nameEl.addEventListener("keydown", function handler(e) {
       if (e.key === "Enter") { e.preventDefault(); nameEl.removeEventListener("keydown", handler); save(); }
-      if (e.key === "Escape") { e.preventDefault(); nameEl.removeEventListener("keydown", handler); done = true; nameEl.textContent = original; nameEl.contentEditable = "false"; document.getElementById("text-panel").focus(); }
+      if (e.key === "Escape") { e.preventDefault(); nameEl.removeEventListener("keydown", handler); done = true; nameEl.textContent = original; nameEl.contentEditable = "false"; _focusTreeItem(row); }
     });
 
     nameEl.addEventListener("blur", function blurHandler() {
@@ -1004,7 +1084,7 @@
     _sortableInstances.forEach(function (s) { s.destroy(); });
     _sortableInstances = [];
 
-    var containers = document.querySelectorAll(".ace-code-group");
+    var containers = document.querySelectorAll('#code-tree [role="group"]');
     containers.forEach(function (container) {
       var instance = new Sortable(container, {
         group: "codes",
@@ -1013,35 +1093,68 @@
         delayOnTouchOnly: true,
         draggable: ".ace-code-row",
         ghostClass: "ace-code-row--ghost",
-        filter: ".ace-code-group-header",
         onStart: function () { _isDragging = true; },
         onEnd: function (evt) {
           _isDragging = false;
           var codeId = evt.item.getAttribute("data-code-id");
-          var newGroup = evt.to.getAttribute("data-group");
-          var oldGroup = evt.from.getAttribute("data-group");
+          var newHeader = evt.to.previousElementSibling;
+          var newGroup = newHeader ? (newHeader.getAttribute("data-group") || "") : "";
+          var oldHeader = evt.from.previousElementSibling;
+          var oldGroup = oldHeader ? (oldHeader.getAttribute("data-group") || "") : "";
 
           if (newGroup !== oldGroup && codeId) {
             fetch("/api/codes/" + codeId, {
               method: "PUT",
               headers: { "Content-Type": "application/x-www-form-urlencoded" },
-              body: "group_name=" + encodeURIComponent(newGroup || "") + "&current_index=" + window.__aceCurrentIndex,
+              body: "group_name=" + encodeURIComponent(newGroup) + "&current_index=" + window.__aceCurrentIndex,
             });
           }
 
-          var allRows = document.querySelectorAll("#view-groups .ace-code-row");
-          var ids = [];
-          allRows.forEach(function (row) {
-            var id = row.getAttribute("data-code-id");
-            if (id) ids.push(id);
-          });
-
-          _codeAction("POST", "/api/codes/reorder",
-            "code_ids=" + encodeURIComponent(JSON.stringify(ids)) + "&current_index=" + window.__aceCurrentIndex);
+          _persistCodeOrder();
         },
       });
       _sortableInstances.push(instance);
     });
+
+    // Group-level Sortable: drag group headers to reorder entire groups
+    var tree = document.getElementById("code-tree");
+    if (tree) {
+      var groupSortable = new Sortable(tree, {
+        animation: 150,
+        delay: 200,
+        delayOnTouchOnly: true,
+        draggable: ".ace-code-group-header",
+        ghostClass: "ace-code-row--ghost",
+        filter: '[role="group"], .ace-code-row, .ace-sidebar-empty, .ace-create-prompt',
+        onStart: function (evt) {
+          _isDragging = true;
+          // Stash the associated group div so we can move it in onEnd
+          var groupDiv = evt.item.nextElementSibling;
+          if (groupDiv && groupDiv.getAttribute("role") === "group") {
+            evt.item._groupDiv = groupDiv;
+            groupDiv.style.display = "none"; // hide during drag to avoid visual clutter
+          }
+        },
+        onEnd: function (evt) {
+          _isDragging = false;
+          var header = evt.item;
+          var groupDiv = header._groupDiv;
+          delete header._groupDiv;
+
+          // Move the group div to follow the header in its new position
+          if (groupDiv) {
+            groupDiv.style.display = "";
+            header.parentNode.insertBefore(groupDiv, header.nextSibling);
+          }
+
+          // Persist the new code order (group positions changed)
+          _persistCodeOrder();
+
+          _updateKeycaps();
+        },
+      });
+      _sortableInstances.push(groupSortable);
+    }
   }
 
   /* ================================================================
@@ -1070,40 +1183,42 @@
     menu.className = "ace-code-menu";
 
     var items = [
-      { label: "Rename", action: function () { _closeCodeMenu(); _startInlineRename(codeId); } },
-      { label: "Colour", action: function () { _closeCodeMenu(); _openColourPopover(codeId); } },
-      { label: "Move Up", action: function () { _closeCodeMenu(); _moveCode(codeId, -1); } },
-      { label: "Move Down", action: function () { _closeCodeMenu(); _moveCode(codeId, 1); } },
-      { label: "Delete", danger: true, action: function () { _closeCodeMenu(); _startDeleteConfirm(codeId); } },
+      { label: "Rename", hint: "F2", action: function () { _closeCodeMenu(); _startInlineRename(codeId); } },
+      { label: "Colour", hint: "", action: function () { _closeCodeMenu(); _openColourPopover(codeId); } },
+      { label: "Move Up", hint: "Alt+Shift+\u2191", action: function () { _closeCodeMenu(); _moveCode(codeId, -1); } },
+      { label: "Move Down", hint: "Alt+Shift+\u2193", action: function () { _closeCodeMenu(); _moveCode(codeId, 1); } },
+      { label: "Delete", hint: "\u232b", danger: true, action: function () { _closeCodeMenu(); _startDeleteConfirm(codeId); } },
     ];
 
-    // Add "Move to Group" submenu if groups exist
+    // Add "Move to Group" submenu
     var groups = _getGroupNames();
-    if (groups.length > 0 || true) {  // always show (Ungrouped option is useful)
-      var moveItem = document.createElement("div");
-      moveItem.className = "ace-code-menu-item ace-code-menu-sub";
-      moveItem.textContent = "Move to Group \u25b8";
-      var sub = document.createElement("div");
-      sub.className = "ace-code-submenu";
+    var moveItem = document.createElement("div");
+    moveItem.className = "ace-code-menu-item ace-code-menu-sub";
+    moveItem.textContent = "Move to Group \u25b8";
+    var moveHint = document.createElement("span");
+    moveHint.className = "ace-code-menu-hint";
+    moveHint.textContent = "Alt+\u2192";
+    moveItem.appendChild(moveHint);
+    var sub = document.createElement("div");
+    sub.className = "ace-code-submenu";
 
-      var ungrouped = document.createElement("button");
-      ungrouped.className = "ace-code-menu-item";
-      ungrouped.textContent = "Ungrouped";
-      ungrouped.addEventListener("click", function () { _closeCodeMenu(); _moveToGroup(codeId, ""); });
-      sub.appendChild(ungrouped);
+    var ungrouped = document.createElement("button");
+    ungrouped.className = "ace-code-menu-item";
+    ungrouped.textContent = "Ungrouped";
+    ungrouped.addEventListener("click", function () { _closeCodeMenu(); _moveToGroup(codeId, ""); });
+    sub.appendChild(ungrouped);
 
-      groups.forEach(function (gn) {
-        var btn = document.createElement("button");
-        btn.className = "ace-code-menu-item";
-        btn.textContent = gn;
-        btn.addEventListener("click", function () { _closeCodeMenu(); _moveToGroup(codeId, gn); });
-        sub.appendChild(btn);
-      });
+    groups.forEach(function (gn) {
+      var btn = document.createElement("button");
+      btn.className = "ace-code-menu-item";
+      btn.textContent = gn;
+      btn.addEventListener("click", function () { _closeCodeMenu(); _moveToGroup(codeId, gn); });
+      sub.appendChild(btn);
+    });
 
-      moveItem.appendChild(sub);
-      // Insert after Colour, before Move Up
-      items.splice(2, 0, { element: moveItem });
-    }
+    moveItem.appendChild(sub);
+    // Insert after Colour, before Move Up
+    items.splice(2, 0, { element: moveItem });
 
     items.forEach(function (item) {
       if (item.element) { menu.appendChild(item.element); return; }
@@ -1111,6 +1226,12 @@
       el.className = "ace-code-menu-item";
       if (item.danger) el.classList.add("ace-code-menu-item--danger");
       el.textContent = item.label;
+      if (item.hint) {
+        var hintEl = document.createElement("span");
+        hintEl.className = "ace-code-menu-hint";
+        hintEl.textContent = item.hint;
+        el.appendChild(hintEl);
+      }
       el.addEventListener("click", item.action);
       menu.appendChild(el);
     });
@@ -1138,8 +1259,8 @@
 
   function _getGroupNames() {
     var result = [];
-    document.querySelectorAll("#view-groups .ace-code-group[data-group]").forEach(function (g) {
-      var name = g.getAttribute("data-group");
+    document.querySelectorAll("#code-tree .ace-code-group-header[data-group]").forEach(function (h) {
+      var name = h.getAttribute("data-group");
       if (name) result.push(name);
     });
     return result;
@@ -1155,126 +1276,238 @@
   });
 
   /* ================================================================
-   * 15. Add group (inline)
+   * 15. Code search / filter / create
    * ================================================================ */
 
-  window.aceStartAddGroup = function (el) {
-    var original = el.textContent;
-    el.innerHTML = '<input type="text" placeholder="Group name…" autocomplete="off">';
-    var input = el.querySelector("input");
-    input.focus();
-
-    function submit() {
-      var name = input.value.trim();
-      if (!name) { cancel(); return; }
-      // Create a proper group container so SortableJS and _getGroupNames work
-      var group = document.createElement("div");
-      group.className = "ace-code-group";
-      group.setAttribute("data-group", name);
-      var header = document.createElement("div");
-      header.className = "ace-code-group-header";
-      header.setAttribute("data-group", name);
-      header.textContent = "\u25be " + name;
-      group.appendChild(header);
-      el.parentNode.insertBefore(group, el);
-      cancel();
-      _initSortable();
-    }
-
-    function cancel() {
-      el.innerHTML = "";
-      el.textContent = original;
-    }
-
-    input.addEventListener("keydown", function (e) {
-      if (e.key === "Enter") { e.preventDefault(); submit(); }
-      if (e.key === "Escape") { e.preventDefault(); cancel(); }
-    });
-  };
-
-  /* ================================================================
-   * 16. Code search / filter / create
-   * ================================================================ */
-
-  // Filter code rows as user types
   document.addEventListener("input", function (e) {
     if (e.target.id !== "code-search-input") return;
     var query = e.target.value.toLowerCase();
-    var view = document.getElementById("view-groups");
-    if (!view) return;
+    var tree = document.getElementById("code-tree");
+    if (!tree) return;
 
-    if (query) {
-      // Filter: show matching rows, auto-expand groups with matches
-      var rows = view.querySelectorAll(".ace-code-row");
+    // Remove any existing "create" prompt
+    var oldPrompt = tree.querySelector(".ace-create-prompt");
+    if (oldPrompt) oldPrompt.remove();
+
+    if (query && !query.startsWith("/")) {
+      // Filter mode
+      var rows = tree.querySelectorAll(".ace-code-row");
+      var anyMatch = false;
       rows.forEach(function (row) {
-        var name = row.querySelector(".ace-code-name");
-        if (!name) return;
-        var match = name.textContent.toLowerCase().indexOf(query) >= 0;
+        var nameEl = row.querySelector(".ace-code-name");
+        if (!nameEl) return;
+        var text = nameEl.textContent;
+        var match = text.toLowerCase().indexOf(query) >= 0;
         if (match) {
-          row.classList.remove("ace-code-row--hidden");
+          row.style.display = "";
+          anyMatch = true;
+          // Highlight match
+          var idx = text.toLowerCase().indexOf(query);
+          var before = text.substring(0, idx);
+          var matched = text.substring(idx, idx + query.length);
+          var after = text.substring(idx + query.length);
+          nameEl.innerHTML = _escapeHtml(before) + '<mark>' + _escapeHtml(matched) + '</mark>' + _escapeHtml(after);
         } else {
-          row.classList.add("ace-code-row--hidden");
+          row.style.display = "none";
+          nameEl.textContent = text; // Strip any existing highlight
         }
       });
-      // Auto-expand groups with matches, hide empty groups
-      var groups = view.querySelectorAll(".ace-code-group");
-      groups.forEach(function (group) {
-        var visibleInGroup = group.querySelectorAll(".ace-code-row:not(.ace-code-row--hidden)").length;
-        group.style.display = visibleInGroup > 0 ? "" : "none";
-        if (visibleInGroup > 0) {
-          group.classList.remove("ace-code-group--collapsed");
-        }
+
+      // Show/hide group headers based on visible children
+      tree.querySelectorAll(".ace-code-group-header").forEach(function (header) {
+        var groupDiv = header.nextElementSibling;
+        if (!groupDiv || groupDiv.getAttribute("role") !== "group") return;
+        var hasVisible = false;
+        groupDiv.querySelectorAll(".ace-code-row").forEach(function (r) {
+          if (r.style.display !== "none") hasVisible = true;
+        });
+        header.style.display = hasVisible ? "" : "none";
+        groupDiv.style.display = hasVisible ? "" : "none";
       });
+
+      // Show "Create" prompt if no matches
+      if (!anyMatch) {
+        var prompt = document.createElement("div");
+        prompt.className = "ace-create-prompt ace-create-prompt--code";
+        prompt.innerHTML = '<span>+</span> Create "<strong>' + _escapeHtml(e.target.value.trim()) + '</strong>"';
+        prompt.setAttribute("data-action", "create-code");
+        prompt.addEventListener("click", function () {
+          _createCodeFromSearch();
+        });
+        tree.appendChild(prompt);
+      }
+    } else if (query && query.startsWith("/")) {
+      // Group creation mode
+      var groupName = query.substring(1).trim();
+      // Hide all codes, show group creation prompt
+      tree.querySelectorAll(".ace-code-row").forEach(function (r) { r.style.display = "none"; });
+      tree.querySelectorAll(".ace-code-group-header").forEach(function (h) { h.style.display = "none"; });
+      tree.querySelectorAll('[role="group"]').forEach(function (g) { g.style.display = "none"; });
+
+      if (groupName) {
+        var exists = false;
+        tree.querySelectorAll(".ace-code-group-header").forEach(function (h) {
+          if (h.getAttribute("data-group") === groupName) exists = true;
+        });
+
+        var prompt = document.createElement("div");
+        if (exists) {
+          prompt.className = "ace-create-prompt";
+          prompt.innerHTML = 'Group "<strong>' + _escapeHtml(groupName) + '</strong>" already exists';
+        } else {
+          prompt.className = "ace-create-prompt ace-create-prompt--group";
+          prompt.innerHTML = '<span>\u25b8</span> Create group "<strong>' + _escapeHtml(groupName) + '</strong>"';
+          prompt.setAttribute("data-action", "create-group");
+          prompt.addEventListener("click", function () {
+            _createGroupFromSearch();
+          });
+        }
+        tree.appendChild(prompt);
+      }
     } else {
-      // Clear: restore all rows and collapse state
-      view.querySelectorAll(".ace-code-row").forEach(function (row) {
-        row.classList.remove("ace-code-row--hidden");
+      // Empty: restore all rows, clear highlights
+      tree.querySelectorAll(".ace-code-row").forEach(function (row) {
+        row.style.display = "";
+        var nameEl = row.querySelector(".ace-code-name");
+        if (nameEl && nameEl.querySelector("mark")) {
+          nameEl.textContent = nameEl.textContent; // Strip HTML
+        }
       });
-      view.querySelectorAll(".ace-code-group").forEach(function (group) {
-        group.style.display = "";
-      });
+      tree.querySelectorAll(".ace-code-group-header").forEach(function (h) { h.style.display = ""; });
+      tree.querySelectorAll('[role="group"]').forEach(function (g) { g.style.display = ""; });
       _restoreCollapseState();
     }
 
     _updateKeycaps();
   });
 
-  // Enter in search: create new code if no visible matches
-  document.addEventListener("keydown", function (e) {
-    if (e.target.id !== "code-search-input") return;
-    if (e.key === "Escape") {
-      e.target.value = "";
-      e.target.dispatchEvent(new Event("input"));
-      document.getElementById("text-panel").focus();
-      return;
-    }
-    if (e.key !== "Enter") return;
-    var name = e.target.value.trim();
-    if (!name) return;
+  function _createCodeFromSearch() {
+    var input = document.getElementById("code-search-input");
+    if (!input) return;
+    var name = input.value.trim();
+    if (!name || name.startsWith("/")) return;
 
-    // Check if any visible rows match exactly
-    var view = document.getElementById("view-groups");
-    var rows = view ? view.querySelectorAll(".ace-code-row:not(.ace-code-row--hidden)") : [];
-    if (rows.length > 0) {
-      // Has matches — don't create, just clear and refocus
-      e.target.value = "";
-      e.target.dispatchEvent(new Event("input"));
-      document.getElementById("text-panel").focus();
-      return;
-    }
-
-    // No matches — create new code
-    e.preventDefault();
     htmx.ajax("POST", "/api/codes", {
       values: { name: name, current_index: window.__aceCurrentIndex },
       target: "#code-sidebar",
       swap: "outerHTML",
     });
-    e.target.value = "";
+    input.value = "";
+    _announce("Code '" + name + "' created");
+  }
+
+  function _createGroupFromSearch() {
+    var input = document.getElementById("code-search-input");
+    if (!input) return;
+    var groupName = input.value.trim().substring(1).trim(); // remove / prefix
+    if (!groupName) return;
+
+    var tree = document.getElementById("code-tree");
+    if (!tree) return;
+
+    // Remove create prompt if present
+    var ref = tree.querySelector(".ace-create-prompt");
+    if (ref) ref.remove();
+
+    var els = _makeGroupElements(groupName);
+    var header = els.header;
+    var groupDiv = els.groupDiv;
+
+    var emptyMsg = tree.querySelector(".ace-sidebar-empty");
+    if (emptyMsg) {
+      tree.insertBefore(header, emptyMsg);
+      tree.insertBefore(groupDiv, emptyMsg);
+      emptyMsg.remove();
+    } else {
+      tree.appendChild(header);
+      tree.appendChild(groupDiv);
+    }
+
+    input.value = "";
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    _initSortable();
+    _announce("Group '" + groupName + "' created");
+  }
+
+  document.addEventListener("keydown", function (e) {
+    if (e.target.id !== "code-search-input") return;
+
+    if (e.key === "Escape") {
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.target.value) {
+        e.target.value = "";
+        e.target.dispatchEvent(new Event("input", { bubbles: true }));
+      } else {
+        _focusTextPanel();
+      }
+      return;
+    }
+
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      _focusCodeTree();
+      return;
+    }
+
+    if (e.key !== "Enter") return;
+    var val = e.target.value.trim();
+    if (!val) return;
+    e.preventDefault();
+
+    if (val.startsWith("/")) {
+      _createGroupFromSearch();
+    } else {
+      // Only create if no visible code rows
+      var tree = document.getElementById("code-tree");
+      var count = 0;
+      if (tree) {
+        tree.querySelectorAll(".ace-code-row").forEach(function (r) {
+          if (r.style.display !== "none") count++;
+        });
+      }
+      if (count === 0) {
+        _createCodeFromSearch();
+      } else {
+        // Has matches — clear and return
+        e.target.value = "";
+        e.target.dispatchEvent(new Event("input", { bubbles: true }));
+        _focusTextPanel();
+      }
+    }
   });
 
+  /** Collect all code row IDs from the tree and persist the order via API. */
+  function _persistCodeOrder() {
+    var allRows = document.querySelectorAll("#code-tree .ace-code-row");
+    var ids = [];
+    allRows.forEach(function (row) {
+      var id = row.getAttribute("data-code-id");
+      if (id) ids.push(id);
+    });
+    _codeAction("POST", "/api/codes/reorder",
+      "code_ids=" + encodeURIComponent(JSON.stringify(ids)) + "&current_index=" + window.__aceCurrentIndex);
+  }
+
+  /** Create a group header + group container pair for the ARIA tree. */
+  function _makeGroupElements(name) {
+    var header = document.createElement("div");
+    header.setAttribute("role", "treeitem");
+    header.setAttribute("aria-expanded", "true");
+    header.setAttribute("aria-level", "1");
+    header.className = "ace-code-group-header";
+    header.setAttribute("data-group", name);
+    header.setAttribute("tabindex", "-1");
+    header.textContent = "\u25be " + name;
+
+    var groupDiv = document.createElement("div");
+    groupDiv.setAttribute("role", "group");
+
+    return { header: header, groupDiv: groupDiv };
+  }
+
   /* ================================================================
-   * 18. CSS Custom Highlight API — annotation rendering
+   * 16. CSS Custom Highlight API — annotation rendering
    * ================================================================ */
 
   /**
@@ -1386,7 +1619,443 @@
   }
 
   /* ================================================================
-   * 17. DOMContentLoaded init
+   * 17. Sidebar keyboard navigation (ARIA treeview)
+   * ================================================================ */
+
+  /** Push a message to the aria-live region for screen readers. */
+  function _announce(message) {
+    var region = document.getElementById("ace-live-region");
+    if (!region) return;
+    region.textContent = message;
+    setTimeout(function () { region.textContent = ""; }, 3000);
+  }
+
+  // --- Zone cycling (Tab / Shift+Tab / Escape / /) ---
+
+  /** Move focus to text panel. */
+  function _focusTextPanel() {
+    var tp = document.getElementById("text-panel");
+    if (tp) tp.focus();
+  }
+
+  /** Move focus to search bar. */
+  function _focusSearchBar() {
+    var sb = document.getElementById("code-search-input");
+    if (sb) sb.focus();
+  }
+
+  /** Move focus into the code tree (last-focused item or first item). */
+  function _focusCodeTree() {
+    var active = _getActiveTreeItem();
+    if (active) {
+      active.focus();
+    } else {
+      var items = _getTreeItems();
+      if (items.length > 0) _focusTreeItem(items[0]);
+    }
+  }
+
+  /** Determine which zone currently has focus: "text", "search", "tree", or null. */
+  function _activeZone() {
+    var el = document.activeElement;
+    if (!el) return null;
+    if (el.id === "text-panel" || el.closest("#text-panel")) return "text";
+    if (el.id === "code-search-input") return "search";
+    var tree = document.getElementById("code-tree");
+    if (tree && tree.contains(el)) return "tree";
+    return null;
+  }
+
+  // Zone-level Tab cycling — captures Tab before browser default
+  document.addEventListener("keydown", function (e) {
+    if (e.key !== "Tab") return;
+
+    var zone = _activeZone();
+    if (!zone) return;
+
+    if (!e.shiftKey) {
+      // Tab forward
+      if (zone === "text") { e.preventDefault(); _focusSearchBar(); return; }
+      if (zone === "search") { e.preventDefault(); _focusCodeTree(); return; }
+      if (zone === "tree") { e.preventDefault(); _focusTextPanel(); return; }
+    } else {
+      // Shift+Tab backward
+      if (zone === "text") { e.preventDefault(); _focusCodeTree(); return; }
+      if (zone === "search") { e.preventDefault(); _focusTextPanel(); return; }
+      if (zone === "tree") { e.preventDefault(); _focusSearchBar(); return; }
+    }
+  }, true);  // capture phase to intercept before default Tab behaviour
+
+  // --- Roving tabindex ---
+
+  /** Return all visible treeitems (group headers + code rows) in DOM order. */
+  function _getTreeItems() {
+    var tree = document.getElementById("code-tree");
+    if (!tree) return [];
+    var items = tree.querySelectorAll('[role="treeitem"]');
+    var result = [];
+    items.forEach(function (item) {
+      // Skip items hidden by search filter
+      if (item.style.display === "none") return;
+      if (item.classList.contains("ace-code-row")) {
+        var groupContainer = item.closest('[role="group"]');
+        if (groupContainer) {
+          var prev = groupContainer.previousElementSibling;
+          if (prev && prev.getAttribute("aria-expanded") === "false") return;
+        }
+      }
+      result.push(item);
+    });
+    return result;
+  }
+
+  /** Move roving tabindex to the given treeitem. */
+  function _focusTreeItem(item) {
+    if (!item) return;
+    var prev = _getActiveTreeItem();
+    if (prev) prev.setAttribute("tabindex", "-1");
+    item.setAttribute("tabindex", "0");
+    item.focus();
+  }
+
+  /** Get the currently focused treeitem (tabindex="0"). */
+  function _getActiveTreeItem() {
+    var tree = document.getElementById("code-tree");
+    return tree ? tree.querySelector('[role="treeitem"][tabindex="0"]') : null;
+  }
+
+  /** Check if a treeitem is a group header. */
+  function _isGroupHeader(item) {
+    return item && item.classList.contains("ace-code-group-header");
+  }
+
+  /** Move a group (header + group div) up or down by one position. */
+  function _moveGroupInDirection(header, direction) {
+    var groupDiv = header.nextElementSibling;
+    if (!groupDiv || groupDiv.getAttribute("role") !== "group") return;
+    var tree = document.getElementById("code-tree");
+    if (!tree) return;
+
+    if (direction === -1) {
+      // Move up: find the previous group's header.
+      // The element immediately before `header` is either a role="group" div
+      // (from the previous group) or directly a group header (empty group).
+      var prevSibling = header.previousElementSibling;
+      if (!prevSibling) return;
+      var prevHeader;
+      if (prevSibling.getAttribute("role") === "group") {
+        prevHeader = prevSibling.previousElementSibling;
+      } else if (_isGroupHeader(prevSibling)) {
+        prevHeader = prevSibling;
+      } else {
+        return;
+      }
+      if (!prevHeader || !_isGroupHeader(prevHeader)) return;
+      // Current order: prevHeader, prevGroupDiv, header, groupDiv
+      // Target order:  header, groupDiv, prevHeader, prevGroupDiv
+      tree.insertBefore(header, prevHeader);
+      tree.insertBefore(groupDiv, prevHeader);
+    } else {
+      // Move down: find the next group header + its group div.
+      var nextHeader = groupDiv.nextElementSibling;
+      if (!nextHeader || !_isGroupHeader(nextHeader)) return;
+      var nextGroupDiv = nextHeader.nextElementSibling;
+      if (!nextGroupDiv || nextGroupDiv.getAttribute("role") !== "group") return;
+      // Current order: header, groupDiv, nextHeader, nextGroupDiv
+      // Target order:  nextHeader, nextGroupDiv, header, groupDiv
+      var ref = nextGroupDiv.nextElementSibling; // null → append at end
+      tree.insertBefore(header, ref);
+      tree.insertBefore(groupDiv, ref);
+    }
+
+    // Persist the new code order via the reorder endpoint.
+    _persistCodeOrder();
+
+    _updateKeycaps();
+    _initSortable();
+  }
+
+  // --- Tree keydown handler ---
+
+  document.addEventListener("keydown", function (e) {
+    var tree = document.getElementById("code-tree");
+    if (!tree || !tree.contains(document.activeElement)) return;
+    var active = document.activeElement;
+    if (!active || active.getAttribute("role") !== "treeitem") return;
+    if (active.querySelector('[contenteditable="true"]')) return;
+
+    var key = e.key;
+    var alt = e.altKey;
+    var shift = e.shiftKey;
+
+    // Alt+Shift+↑ — Move code up (or group up if focused on group header)
+    if (key === "ArrowUp" && alt && shift) {
+      e.preventDefault();
+      if (!_isGroupHeader(active)) {
+        active.classList.add("ace-code-row--reordering");
+        _moveCode(active.getAttribute("data-code-id"), -1);
+        setTimeout(function () { active.classList.remove("ace-code-row--reordering"); }, 300);
+      } else {
+        _moveGroupInDirection(active, -1);
+        _announce("Group '" + (active.getAttribute("data-group") || "Ungrouped") + "' moved up");
+      }
+      return;
+    }
+
+    // Alt+Shift+↓ — Move code down (or group down if focused on group header)
+    if (key === "ArrowDown" && alt && shift) {
+      e.preventDefault();
+      if (!_isGroupHeader(active)) {
+        active.classList.add("ace-code-row--reordering");
+        _moveCode(active.getAttribute("data-code-id"), 1);
+        setTimeout(function () { active.classList.remove("ace-code-row--reordering"); }, 300);
+      } else {
+        _moveGroupInDirection(active, 1);
+        _announce("Group '" + (active.getAttribute("data-group") || "Ungrouped") + "' moved down");
+      }
+      return;
+    }
+
+    // Alt+→ — Indent: move code into nearest group above
+    if (key === "ArrowRight" && alt && !shift) {
+      e.preventDefault();
+      if (_isGroupHeader(active)) return;
+      var codeId = active.getAttribute("data-code-id");
+      if (!codeId) return;
+
+      // Check if already in a group
+      var groupDiv = active.closest('[role="group"]');
+      if (groupDiv) return; // Already in a group — one level only
+
+      // Find nearest group header above
+      var el = active;
+      var targetGroup = null;
+      while (el) {
+        el = el.previousElementSibling;
+        if (el && el.getAttribute("role") === "group") {
+          var hdr = el.previousElementSibling;
+          if (hdr && _isGroupHeader(hdr)) {
+            targetGroup = hdr.getAttribute("data-group");
+            break;
+          }
+        }
+        if (el && _isGroupHeader(el)) {
+          targetGroup = el.getAttribute("data-group");
+          break;
+        }
+      }
+
+      if (targetGroup !== null) {
+        _moveToGroup(codeId, targetGroup);
+        _announce("'" + (active.querySelector(".ace-code-name") || {}).textContent + "' moved into " + (targetGroup || "Ungrouped"));
+      } else {
+        // No group above — prompt for new group name
+        _promptNewGroupForCode(active);
+      }
+      return;
+    }
+
+    // Alt+← — Outdent: move code out of group (ungrouped)
+    if (key === "ArrowLeft" && alt && !shift) {
+      e.preventDefault();
+      if (_isGroupHeader(active)) return;
+      var codeId2 = active.getAttribute("data-code-id");
+      if (!codeId2) return;
+
+      var groupDiv2 = active.closest('[role="group"]');
+      if (!groupDiv2) return; // Already ungrouped
+
+      _moveToGroup(codeId2, "");
+      _announce("'" + (active.querySelector(".ace-code-name") || {}).textContent + "' moved to ungrouped");
+      return;
+    }
+
+    // Enter — Apply focused code to current sentence (stay in tree)
+    if (key === "Enter" && !alt && !shift) {
+      e.preventDefault();
+      if (!_isGroupHeader(active)) {
+        var codeId3 = active.getAttribute("data-code-id");
+        if (codeId3 && window.__aceFocusIndex >= 0) {
+          _applyCodeToSentence(codeId3);
+          // Flash the row briefly to confirm
+          active.classList.add("ace-code-row--flash");
+          setTimeout(function () { active.classList.remove("ace-code-row--flash"); }, 300);
+          var codeName = active.querySelector(".ace-code-name");
+          _announce("'" + (codeName ? codeName.textContent : "") + "' applied to sentence " + (window.__aceFocusIndex + 1));
+        }
+      } else {
+        // On group header: toggle expand/collapse
+        _toggleGroupCollapse(active);
+      }
+      return;
+    }
+
+    // F2 — Inline rename
+    if (key === "F2" && !alt && !shift) {
+      e.preventDefault();
+      if (!_isGroupHeader(active)) {
+        var codeId4 = active.getAttribute("data-code-id");
+        if (codeId4) _startInlineRename(codeId4);
+      }
+      return;
+    }
+
+    // Delete / Backspace — Delete code (double-press confirm)
+    if ((key === "Delete" || key === "Backspace") && !alt && !shift) {
+      e.preventDefault();
+      if (!_isGroupHeader(active)) {
+        var codeId5 = active.getAttribute("data-code-id");
+        if (!codeId5) return;
+        if (_deleteTarget === codeId5) {
+          _executeDelete(codeId5);
+        } else {
+          _startDeleteConfirm(codeId5);
+        }
+      }
+      return;
+    }
+
+    var items = _getTreeItems();
+    var idx = items.indexOf(active);
+
+    // ↓ — Next visible treeitem
+    if (key === "ArrowDown" && !alt && !shift) {
+      e.preventDefault();
+      if (idx < items.length - 1) _focusTreeItem(items[idx + 1]);
+      return;
+    }
+
+    // ↑ — Previous visible treeitem
+    if (key === "ArrowUp" && !alt && !shift) {
+      e.preventDefault();
+      if (idx > 0) _focusTreeItem(items[idx - 1]);
+      return;
+    }
+
+    // → — Expand group or move to first child
+    if (key === "ArrowRight" && !alt && !shift) {
+      e.preventDefault();
+      if (_isGroupHeader(active)) {
+        if (active.getAttribute("aria-expanded") === "false") {
+          _expandGroup(active);
+        } else {
+          var groupDiv3 = active.nextElementSibling;
+          if (groupDiv3 && groupDiv3.getAttribute("role") === "group") {
+            var firstChild = groupDiv3.querySelector('[role="treeitem"]');
+            if (firstChild) _focusTreeItem(firstChild);
+          }
+        }
+      }
+      return;
+    }
+
+    // ← — Collapse group or move to parent header
+    if (key === "ArrowLeft" && !alt && !shift) {
+      e.preventDefault();
+      if (_isGroupHeader(active)) {
+        if (active.getAttribute("aria-expanded") === "true") {
+          _collapseGroup(active);
+        }
+      } else {
+        var groupEl = active.closest('[role="group"]');
+        if (groupEl) {
+          var header2 = groupEl.previousElementSibling;
+          if (header2 && _isGroupHeader(header2)) _focusTreeItem(header2);
+        }
+      }
+      return;
+    }
+
+    // Home — First treeitem
+    if (key === "Home") {
+      e.preventDefault();
+      if (items.length > 0) _focusTreeItem(items[0]);
+      return;
+    }
+
+    // End — Last treeitem
+    if (key === "End") {
+      e.preventDefault();
+      if (items.length > 0) _focusTreeItem(items[items.length - 1]);
+      return;
+    }
+
+    // Escape — Return to text panel
+    if (key === "Escape" && !alt && !shift) {
+      e.preventDefault();
+      _focusTextPanel();
+      return;
+    }
+  });
+
+  // --- Group expand / collapse ---
+
+  function _promptNewGroupForCode(codeRow) {
+    var input = document.createElement("input");
+    input.type = "text";
+    input.placeholder = "Group name\u2026";
+    input.className = "ace-sidebar-search";
+    input.style.margin = "2px 10px";
+    input.style.padding = "3px 8px";
+    input.style.borderColor = "var(--ace-focus)";
+
+    codeRow.parentNode.insertBefore(input, codeRow);
+    input.focus();
+
+    function cleanup() {
+      if (input.parentNode) input.remove();
+      _focusTreeItem(codeRow);
+    }
+
+    input.addEventListener("keydown", function (ev) {
+      if (ev.key === "Enter") {
+        ev.preventDefault();
+        var name = input.value.trim();
+        if (name) {
+          var codeId = codeRow.getAttribute("data-code-id");
+          var els = _makeGroupElements(name);
+          var header = els.header;
+          var groupDiv = els.groupDiv;
+
+          input.remove();
+          codeRow.parentNode.insertBefore(header, codeRow);
+          codeRow.parentNode.insertBefore(groupDiv, codeRow);
+          groupDiv.appendChild(codeRow);
+
+          _moveToGroup(codeId, name);
+          _initSortable();
+          _announce("Group '" + name + "' created with code inside");
+        } else {
+          cleanup();
+        }
+      }
+      if (ev.key === "Escape") {
+        ev.preventDefault();
+        cleanup();
+      }
+    });
+
+    input.addEventListener("blur", function () {
+      setTimeout(cleanup, 100);
+    });
+  }
+
+  function _expandGroup(header) {
+    header.setAttribute("aria-expanded", "true");
+    var groupName = header.getAttribute("data-group");
+    header.textContent = "\u25be " + (groupName || "Ungrouped");
+    _collapsedGroups[groupName] = false;
+  }
+
+  function _collapseGroup(header) {
+    header.setAttribute("aria-expanded", "false");
+    var groupName = header.getAttribute("data-group");
+    header.textContent = "\u25b8 " + (groupName || "Ungrouped");
+    _collapsedGroups[groupName] = true;
+  }
+
+  /* ================================================================
+   * 18. DOMContentLoaded init
    * ================================================================ */
 
   document.addEventListener("DOMContentLoaded", function () {
@@ -1396,12 +2065,17 @@
     _initSortable();
     _paintHighlights();
 
+    // Set initial roving tabindex — first treeitem gets tabindex="0"
+    var items = _getTreeItems();
+    if (items.length > 0) {
+      items[0].setAttribute("tabindex", "0");
+    }
+
     // Auto-focus first sentence so keyboard works immediately
     var sentences = _getSentences();
     if (sentences.length > 0) {
       _focusSentence(0);
     }
-    var tp = document.getElementById("text-panel");
-    if (tp) tp.focus();
+    _focusTextPanel();
   });
 })();
