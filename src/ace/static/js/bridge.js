@@ -1123,6 +1123,54 @@
       });
       _sortableInstances.push(instance);
     });
+
+    // Group-level Sortable: drag group headers to reorder entire groups
+    var tree = document.getElementById("code-tree");
+    if (tree) {
+      var groupSortable = new Sortable(tree, {
+        animation: 150,
+        delay: 200,
+        delayOnTouchOnly: true,
+        draggable: ".ace-code-group-header",
+        ghostClass: "ace-code-row--ghost",
+        filter: '[role="group"], .ace-code-row, .ace-sidebar-empty, .ace-create-prompt',
+        onStart: function (evt) {
+          _isDragging = true;
+          // Stash the associated group div so we can move it in onEnd
+          var groupDiv = evt.item.nextElementSibling;
+          if (groupDiv && groupDiv.getAttribute("role") === "group") {
+            evt.item._groupDiv = groupDiv;
+            groupDiv.style.display = "none"; // hide during drag to avoid visual clutter
+          }
+        },
+        onEnd: function (evt) {
+          _isDragging = false;
+          var header = evt.item;
+          var groupDiv = header._groupDiv;
+          delete header._groupDiv;
+
+          // Move the group div to follow the header in its new position
+          if (groupDiv) {
+            groupDiv.style.display = "";
+            header.parentNode.insertBefore(groupDiv, header.nextSibling);
+          }
+
+          // Persist the new code order (group positions changed)
+          var allRows = tree.querySelectorAll(".ace-code-row");
+          var ids = [];
+          allRows.forEach(function (row) {
+            var id = row.getAttribute("data-code-id");
+            if (id) ids.push(id);
+          });
+
+          _codeAction("POST", "/api/codes/reorder",
+            "code_ids=" + encodeURIComponent(JSON.stringify(ids)) + "&current_index=" + window.__aceCurrentIndex);
+
+          _updateKeycaps();
+        },
+      });
+      _sortableInstances.push(groupSortable);
+    }
   }
 
   /* ================================================================
