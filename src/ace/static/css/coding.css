@@ -213,10 +213,7 @@
 
 /* Focused treeitem (roving tabindex) */
 .ace-code-row:focus {
-  background: var(--ace-bg-muted);
-  outline: 2px solid var(--ace-focus);
-  outline-offset: -2px;
-  border-radius: var(--ace-radius);
+  outline: none;
 }
 
 .ace-code-row:focus .ace-code-name {
@@ -225,10 +222,8 @@
 
 /* Focused group header */
 .ace-code-group-header:focus {
-  outline: 2px solid var(--ace-focus);
-  outline-offset: -2px;
-  border-radius: var(--ace-radius);
-  background: var(--ace-bg-muted);
+  outline: none;
+  font-weight: 600;
 }
 
 /* Reorder-in-progress (dashed outline) */
