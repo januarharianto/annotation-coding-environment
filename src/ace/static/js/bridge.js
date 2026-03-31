@@ -123,7 +123,13 @@
   document.addEventListener("click", function (e) {
     var header = e.target.closest(".ace-code-group-header");
     if (header && !e.target.closest(".ace-code-menu")) {
-      _toggleGroupCollapse(header);
+      if (header.getAttribute("tabindex") === "0") {
+        // Already focused — toggle collapse
+        _toggleGroupCollapse(header);
+      } else {
+        // Not focused yet — just select it
+        _focusTreeItem(header);
+      }
     }
   });
 
