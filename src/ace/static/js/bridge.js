@@ -252,6 +252,10 @@
     if (_isTyping()) return;
     if (_menuOpen) return;
 
+    // Only handle keys when text panel (or nothing specific) is focused
+    var zone = _activeZone();
+    if (zone === "search" || zone === "tree") return;
+
     var key = e.key;
     var ctrl = e.ctrlKey || e.metaKey;
     var shift = e.shiftKey;
@@ -397,6 +401,13 @@
         window.__aceLastSelection = null;
         window.getSelection().removeAllRanges();
       }
+      return;
+    }
+
+    // / — Jump to sidebar search bar
+    if (key === "/" && !shift) {
+      e.preventDefault();
+      _focusSearchBar();
       return;
     }
 
@@ -1247,9 +1258,21 @@
   document.addEventListener("keydown", function (e) {
     if (e.target.id !== "code-search-input") return;
     if (e.key === "Escape") {
-      e.target.value = "";
-      e.target.dispatchEvent(new Event("input"));
-      document.getElementById("text-panel").focus();
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.target.value) {
+        // First press: clear search text
+        e.target.value = "";
+        e.target.dispatchEvent(new Event("input"));
+      } else {
+        // Second press (or already empty): return to text panel
+        _focusTextPanel();
+      }
+      return;
+    }
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      _focusCodeTree();
       return;
     }
     if (e.key !== "Enter") return;
@@ -1393,6 +1416,62 @@
    * 18. Sidebar keyboard navigation (ARIA treeview)
    * ================================================================ */
 
+  // --- Zone cycling (Tab / Shift+Tab / Escape / /) ---
+
+  /** Move focus to text panel. */
+  function _focusTextPanel() {
+    var tp = document.getElementById("text-panel");
+    if (tp) tp.focus();
+  }
+
+  /** Move focus to search bar. */
+  function _focusSearchBar() {
+    var sb = document.getElementById("code-search-input");
+    if (sb) sb.focus();
+  }
+
+  /** Move focus into the code tree (last-focused item or first item). */
+  function _focusCodeTree() {
+    var active = _getActiveTreeItem();
+    if (active) {
+      active.focus();
+    } else {
+      var items = _getTreeItems();
+      if (items.length > 0) _focusTreeItem(items[0]);
+    }
+  }
+
+  /** Determine which zone currently has focus: "text", "search", "tree", or null. */
+  function _activeZone() {
+    var el = document.activeElement;
+    if (!el) return null;
+    if (el.id === "text-panel" || el.closest("#text-panel")) return "text";
+    if (el.id === "code-search-input") return "search";
+    var tree = document.getElementById("code-tree");
+    if (tree && tree.contains(el)) return "tree";
+    return null;
+  }
+
+  // Zone-level Tab cycling — captures Tab before browser default
+  document.addEventListener("keydown", function (e) {
+    if (e.key !== "Tab") return;
+
+    var zone = _activeZone();
+    if (!zone) return;
+
+    if (!e.shiftKey) {
+      // Tab forward
+      if (zone === "text") { e.preventDefault(); _focusSearchBar(); return; }
+      if (zone === "search") { e.preventDefault(); _focusCodeTree(); return; }
+      if (zone === "tree") { e.preventDefault(); _focusTextPanel(); return; }
+    } else {
+      // Shift+Tab backward
+      if (zone === "text") { e.preventDefault(); _focusCodeTree(); return; }
+      if (zone === "search") { e.preventDefault(); _focusTextPanel(); return; }
+      if (zone === "tree") { e.preventDefault(); _focusSearchBar(); return; }
+    }
+  }, true);  // capture phase to intercept before default Tab behaviour
+
   // --- Roving tabindex ---
 
   /** Return all visible treeitems (group headers + code rows) in DOM order. */
@@ -1512,6 +1591,13 @@
     if (key === "End") {
       e.preventDefault();
       if (items.length > 0) _focusTreeItem(items[items.length - 1]);
+      return;
+    }
+
+    // Escape — Return to text panel
+    if (key === "Escape" && !alt && !shift) {
+      e.preventDefault();
+      _focusTextPanel();
       return;
     }
   });
