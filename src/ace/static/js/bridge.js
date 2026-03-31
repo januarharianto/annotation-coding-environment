@@ -149,6 +149,7 @@
       _currentKeyMap.push(row.getAttribute("data-code-id"));
       var keycap = row.querySelector(".ace-keycap");
       if (keycap) keycap.textContent = _keylabel(_currentKeyMap.length - 1);
+      row.setAttribute("aria-keyshortcuts", _keylabel(_currentKeyMap.length - 1));
     });
   }
 
@@ -750,6 +751,35 @@
     }
   });
 
+  // --- Focus restoration across HTMX swaps ---
+
+  var _sidebarFocusState = {
+    codeId: null,
+    searchText: "",
+    scrollTop: 0,
+    zone: null,
+  };
+
+  document.addEventListener("htmx:beforeSwap", function (e) {
+    var target = e.detail.target;
+    if (!target) return;
+    if (target.id !== "code-sidebar" && target.id !== "coding-workspace") return;
+
+    var zone = _activeZone();
+    _sidebarFocusState.zone = zone;
+
+    if (zone === "tree") {
+      var active = _getActiveTreeItem();
+      _sidebarFocusState.codeId = active ? active.getAttribute("data-code-id") : null;
+    }
+
+    var search = document.getElementById("code-search-input");
+    _sidebarFocusState.searchText = search ? search.value : "";
+
+    var tree = document.getElementById("code-tree");
+    _sidebarFocusState.scrollTop = tree ? tree.scrollTop : 0;
+  });
+
   // After HTMX swap: restore focus, rebuild tabs, update keycaps
   // Use afterSettle (not afterSwap) — fires after HTMX finishes all DOM changes
   document.addEventListener("htmx:afterSettle", function (evt) {
@@ -765,6 +795,35 @@
       if (!_isDragging) _initSortable();
       _restoreCollapseState();
       _updateKeycaps();
+
+      // Restore focus state
+      var search = document.getElementById("code-search-input");
+      if (_sidebarFocusState.searchText && search) {
+        search.value = _sidebarFocusState.searchText;
+        search.dispatchEvent(new Event("input"));
+      }
+
+      var tree = document.getElementById("code-tree");
+      if (tree && _sidebarFocusState.scrollTop) {
+        tree.scrollTop = _sidebarFocusState.scrollTop;
+      }
+
+      if (_sidebarFocusState.zone === "tree" && _sidebarFocusState.codeId) {
+        var item = tree ? tree.querySelector('[data-code-id="' + _sidebarFocusState.codeId + '"]') : null;
+        if (item) {
+          _focusTreeItem(item);
+        } else {
+          // Deleted or gone — focus nearest item
+          var items = _getTreeItems();
+          if (items.length > 0) _focusTreeItem(items[0]);
+        }
+      } else if (_sidebarFocusState.zone === "search" && search) {
+        search.focus();
+      }
+
+      // Reset
+      _sidebarFocusState.codeId = null;
+      _sidebarFocusState.zone = null;
     }
 
     // Auto-open dialogs
