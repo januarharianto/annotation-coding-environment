@@ -91,14 +91,6 @@
 
   var _collapsedGroups = {};
 
-  function _setGroupCollapsed(group, header, collapsed) {
-    if (collapsed) {
-      _collapseGroup(header);
-    } else {
-      _expandGroup(header);
-    }
-  }
-
   function _toggleGroupCollapse(header) {
     if (!header) return;
     var expanded = header.getAttribute("aria-expanded") === "true";
@@ -830,6 +822,7 @@
       // Reset
       _sidebarFocusState.codeId = null;
       _sidebarFocusState.zone = null;
+      _sidebarFocusState.searchText = "";
     }
 
     // Auto-open dialogs
@@ -1110,15 +1103,7 @@
             });
           }
 
-          var allRows = document.querySelectorAll("#code-tree .ace-code-row");
-          var ids = [];
-          allRows.forEach(function (row) {
-            var id = row.getAttribute("data-code-id");
-            if (id) ids.push(id);
-          });
-
-          _codeAction("POST", "/api/codes/reorder",
-            "code_ids=" + encodeURIComponent(JSON.stringify(ids)) + "&current_index=" + window.__aceCurrentIndex);
+          _persistCodeOrder();
         },
       });
       _sortableInstances.push(instance);
@@ -1156,15 +1141,7 @@
           }
 
           // Persist the new code order (group positions changed)
-          var allRows = tree.querySelectorAll(".ace-code-row");
-          var ids = [];
-          allRows.forEach(function (row) {
-            var id = row.getAttribute("data-code-id");
-            if (id) ids.push(id);
-          });
-
-          _codeAction("POST", "/api/codes/reorder",
-            "code_ids=" + encodeURIComponent(JSON.stringify(ids)) + "&current_index=" + window.__aceCurrentIndex);
+          _persistCodeOrder();
 
           _updateKeycaps();
         },
@@ -1206,37 +1183,35 @@
       { label: "Delete", hint: "\u232b", danger: true, action: function () { _closeCodeMenu(); _startDeleteConfirm(codeId); } },
     ];
 
-    // Add "Move to Group" submenu if groups exist
+    // Add "Move to Group" submenu
     var groups = _getGroupNames();
-    if (groups.length > 0 || true) {  // always show (Ungrouped option is useful)
-      var moveItem = document.createElement("div");
-      moveItem.className = "ace-code-menu-item ace-code-menu-sub";
-      moveItem.textContent = "Move to Group \u25b8";
-      var moveHint = document.createElement("span");
-      moveHint.className = "ace-code-menu-hint";
-      moveHint.textContent = "Alt+\u2192";
-      moveItem.appendChild(moveHint);
-      var sub = document.createElement("div");
-      sub.className = "ace-code-submenu";
+    var moveItem = document.createElement("div");
+    moveItem.className = "ace-code-menu-item ace-code-menu-sub";
+    moveItem.textContent = "Move to Group \u25b8";
+    var moveHint = document.createElement("span");
+    moveHint.className = "ace-code-menu-hint";
+    moveHint.textContent = "Alt+\u2192";
+    moveItem.appendChild(moveHint);
+    var sub = document.createElement("div");
+    sub.className = "ace-code-submenu";
 
-      var ungrouped = document.createElement("button");
-      ungrouped.className = "ace-code-menu-item";
-      ungrouped.textContent = "Ungrouped";
-      ungrouped.addEventListener("click", function () { _closeCodeMenu(); _moveToGroup(codeId, ""); });
-      sub.appendChild(ungrouped);
+    var ungrouped = document.createElement("button");
+    ungrouped.className = "ace-code-menu-item";
+    ungrouped.textContent = "Ungrouped";
+    ungrouped.addEventListener("click", function () { _closeCodeMenu(); _moveToGroup(codeId, ""); });
+    sub.appendChild(ungrouped);
 
-      groups.forEach(function (gn) {
-        var btn = document.createElement("button");
-        btn.className = "ace-code-menu-item";
-        btn.textContent = gn;
-        btn.addEventListener("click", function () { _closeCodeMenu(); _moveToGroup(codeId, gn); });
-        sub.appendChild(btn);
-      });
+    groups.forEach(function (gn) {
+      var btn = document.createElement("button");
+      btn.className = "ace-code-menu-item";
+      btn.textContent = gn;
+      btn.addEventListener("click", function () { _closeCodeMenu(); _moveToGroup(codeId, gn); });
+      sub.appendChild(btn);
+    });
 
-      moveItem.appendChild(sub);
-      // Insert after Colour, before Move Up
-      items.splice(2, 0, { element: moveItem });
-    }
+    moveItem.appendChild(sub);
+    // Insert after Colour, before Move Up
+    items.splice(2, 0, { element: moveItem });
 
     items.forEach(function (item) {
       if (item.element) { menu.appendChild(item.element); return; }
@@ -1427,17 +1402,9 @@
     var ref = tree.querySelector(".ace-create-prompt");
     if (ref) ref.remove();
 
-    var header = document.createElement("div");
-    header.setAttribute("role", "treeitem");
-    header.setAttribute("aria-expanded", "true");
-    header.setAttribute("aria-level", "1");
-    header.className = "ace-code-group-header";
-    header.setAttribute("data-group", groupName);
-    header.setAttribute("tabindex", "-1");
-    header.textContent = "\u25be " + groupName;
-
-    var groupDiv = document.createElement("div");
-    groupDiv.setAttribute("role", "group");
+    var els = _makeGroupElements(groupName);
+    var header = els.header;
+    var groupDiv = els.groupDiv;
 
     var emptyMsg = tree.querySelector(".ace-sidebar-empty");
     if (emptyMsg) {
@@ -1502,6 +1469,35 @@
       }
     }
   });
+
+  /** Collect all code row IDs from the tree and persist the order via API. */
+  function _persistCodeOrder() {
+    var allRows = document.querySelectorAll("#code-tree .ace-code-row");
+    var ids = [];
+    allRows.forEach(function (row) {
+      var id = row.getAttribute("data-code-id");
+      if (id) ids.push(id);
+    });
+    _codeAction("POST", "/api/codes/reorder",
+      "code_ids=" + encodeURIComponent(JSON.stringify(ids)) + "&current_index=" + window.__aceCurrentIndex);
+  }
+
+  /** Create a group header + group container pair for the ARIA tree. */
+  function _makeGroupElements(name) {
+    var header = document.createElement("div");
+    header.setAttribute("role", "treeitem");
+    header.setAttribute("aria-expanded", "true");
+    header.setAttribute("aria-level", "1");
+    header.className = "ace-code-group-header";
+    header.setAttribute("data-group", name);
+    header.setAttribute("tabindex", "-1");
+    header.textContent = "\u25be " + name;
+
+    var groupDiv = document.createElement("div");
+    groupDiv.setAttribute("role", "group");
+
+    return { header: header, groupDiv: groupDiv };
+  }
 
   /* ================================================================
    * 16. CSS Custom Highlight API — annotation rendering
@@ -1693,9 +1689,9 @@
     var result = [];
     items.forEach(function (item) {
       if (item.classList.contains("ace-code-row")) {
-        var header = item.closest('[role="group"]');
-        if (header) {
-          var prev = header.previousElementSibling;
+        var groupContainer = item.closest('[role="group"]');
+        if (groupContainer) {
+          var prev = groupContainer.previousElementSibling;
           if (prev && prev.getAttribute("aria-expanded") === "false") return;
         }
       }
@@ -1707,12 +1703,8 @@
   /** Move roving tabindex to the given treeitem. */
   function _focusTreeItem(item) {
     if (!item) return;
-    var tree = document.getElementById("code-tree");
-    if (tree) {
-      tree.querySelectorAll('[tabindex="0"]').forEach(function (el) {
-        el.setAttribute("tabindex", "-1");
-      });
-    }
+    var prev = _getActiveTreeItem();
+    if (prev) prev.setAttribute("tabindex", "-1");
     item.setAttribute("tabindex", "0");
     item.focus();
   }
@@ -1768,14 +1760,7 @@
     }
 
     // Persist the new code order via the reorder endpoint.
-    var allRows = tree.querySelectorAll(".ace-code-row");
-    var ids = [];
-    allRows.forEach(function (row) {
-      var id = row.getAttribute("data-code-id");
-      if (id) ids.push(id);
-    });
-    _codeAction("POST", "/api/codes/reorder",
-      "code_ids=" + encodeURIComponent(JSON.stringify(ids)) + "&current_index=" + window.__aceCurrentIndex);
+    _persistCodeOrder();
 
     _updateKeycaps();
     _initSortable();
@@ -1793,8 +1778,6 @@
     var key = e.key;
     var alt = e.altKey;
     var shift = e.shiftKey;
-    var items = _getTreeItems();
-    var idx = items.indexOf(active);
 
     // Alt+Shift+↑ — Move code up (or group up if focused on group header)
     if (key === "ArrowUp" && alt && shift) {
@@ -1923,6 +1906,9 @@
       return;
     }
 
+    var items = _getTreeItems();
+    var idx = items.indexOf(active);
+
     // ↓ — Next visible treeitem
     if (key === "ArrowDown" && !alt && !shift) {
       e.preventDefault();
@@ -2018,17 +2004,9 @@
         var name = input.value.trim();
         if (name) {
           var codeId = codeRow.getAttribute("data-code-id");
-          var header = document.createElement("div");
-          header.setAttribute("role", "treeitem");
-          header.setAttribute("aria-expanded", "true");
-          header.setAttribute("aria-level", "1");
-          header.className = "ace-code-group-header";
-          header.setAttribute("data-group", name);
-          header.setAttribute("tabindex", "-1");
-          header.textContent = "\u25be " + name;
-
-          var groupDiv = document.createElement("div");
-          groupDiv.setAttribute("role", "group");
+          var els = _makeGroupElements(name);
+          var header = els.header;
+          var groupDiv = els.groupDiv;
 
           input.remove();
           codeRow.parentNode.insertBefore(header, codeRow);
@@ -2058,7 +2036,6 @@
     var groupName = header.getAttribute("data-group");
     header.textContent = "\u25be " + (groupName || "Ungrouped");
     _collapsedGroups[groupName] = false;
-    _updateKeycaps();
   }
 
   function _collapseGroup(header) {
@@ -2066,7 +2043,6 @@
     var groupName = header.getAttribute("data-group");
     header.textContent = "\u25b8 " + (groupName || "Ungrouped");
     _collapsedGroups[groupName] = true;
-    _updateKeycaps();
   }
 
   /* ================================================================
@@ -2091,7 +2067,6 @@
     if (sentences.length > 0) {
       _focusSentence(0);
     }
-    var tp = document.getElementById("text-panel");
-    if (tp) tp.focus();
+    _focusTextPanel();
   });
 })();

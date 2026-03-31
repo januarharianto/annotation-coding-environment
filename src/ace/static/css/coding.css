@@ -295,37 +295,6 @@
   line-height: var(--ace-leading-tight);
 }
 
-.ace-add-group {
-  padding: 5px 10px;
-  font-size: var(--ace-font-size-sm);
-  color: var(--ace-text-muted);
-  cursor: pointer;
-  border-top: 1px solid var(--ace-border-light);
-  margin-top: 4px;
-}
-
-.ace-add-group:hover {
-  color: var(--ace-focus);
-  background: var(--ace-bg-muted);
-}
-
-.ace-add-group input {
-  width: 100%;
-  padding: 2px 4px;
-  font-size: var(--ace-font-size-sm);
-  border: 1px solid var(--ace-focus);
-  border-radius: var(--ace-radius);
-  background: var(--ace-bg);
-  color: var(--ace-text);
-  outline: none;
-}
-
-.ace-group-placeholder {
-  padding: 3px 10px 3px 24px;
-  font-size: var(--ace-font-size-sm);
-  color: var(--ace-text-muted);
-}
-
 .ace-sidebar-empty {
   padding: var(--ace-space-4);
   color: var(--ace-text-muted);
@@ -348,13 +317,11 @@
 }
 
 .ace-create-prompt--code {
-  color: #166534;
-  background: rgba(34, 197, 94, 0.06);
+  color: var(--ace-text-muted);
 }
 
 .ace-create-prompt--group {
-  color: #6b21a8;
-  background: rgba(168, 85, 247, 0.06);
+  color: var(--ace-text-muted);
 }
 
 /* ---- Resize handle ---- */
