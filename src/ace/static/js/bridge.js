@@ -1674,6 +1674,59 @@
     return item && item.classList.contains("ace-code-group-header");
   }
 
+  /** Move a group (header + group div) up or down by one position. */
+  function _moveGroupInDirection(header, direction) {
+    var groupDiv = header.nextElementSibling;
+    if (!groupDiv || groupDiv.getAttribute("role") !== "group") return;
+    var tree = document.getElementById("code-tree");
+    if (!tree) return;
+
+    if (direction === -1) {
+      // Move up: find the previous group's header.
+      // The element immediately before `header` is either a role="group" div
+      // (from the previous group) or directly a group header (empty group).
+      var prevSibling = header.previousElementSibling;
+      if (!prevSibling) return;
+      var prevHeader;
+      if (prevSibling.getAttribute("role") === "group") {
+        prevHeader = prevSibling.previousElementSibling;
+      } else if (_isGroupHeader(prevSibling)) {
+        prevHeader = prevSibling;
+      } else {
+        return;
+      }
+      if (!prevHeader || !_isGroupHeader(prevHeader)) return;
+      // Current order: prevHeader, prevGroupDiv, header, groupDiv
+      // Target order:  header, groupDiv, prevHeader, prevGroupDiv
+      tree.insertBefore(header, prevHeader);
+      tree.insertBefore(groupDiv, prevHeader);
+    } else {
+      // Move down: find the next group header + its group div.
+      var nextHeader = groupDiv.nextElementSibling;
+      if (!nextHeader || !_isGroupHeader(nextHeader)) return;
+      var nextGroupDiv = nextHeader.nextElementSibling;
+      if (!nextGroupDiv || nextGroupDiv.getAttribute("role") !== "group") return;
+      // Current order: header, groupDiv, nextHeader, nextGroupDiv
+      // Target order:  nextHeader, nextGroupDiv, header, groupDiv
+      var ref = nextGroupDiv.nextElementSibling; // null → append at end
+      tree.insertBefore(header, ref);
+      tree.insertBefore(groupDiv, ref);
+    }
+
+    // Persist the new code order via the reorder endpoint.
+    var allRows = tree.querySelectorAll(".ace-code-row");
+    var ids = [];
+    allRows.forEach(function (row) {
+      var id = row.getAttribute("data-code-id");
+      if (id) ids.push(id);
+    });
+    _codeAction("POST", "/api/codes/reorder",
+      "code_ids=" + encodeURIComponent(JSON.stringify(ids)) + "&current_index=" + window.__aceCurrentIndex);
+
+    _updateKeycaps();
+    _initSortable();
+  }
+
   // --- Tree keydown handler ---
 
   document.addEventListener("keydown", function (e) {
@@ -1689,24 +1742,30 @@
     var items = _getTreeItems();
     var idx = items.indexOf(active);
 
-    // Alt+Shift+↑ — Move code up
+    // Alt+Shift+↑ — Move code up (or group up if focused on group header)
     if (key === "ArrowUp" && alt && shift) {
       e.preventDefault();
       if (!_isGroupHeader(active)) {
         active.classList.add("ace-code-row--reordering");
         _moveCode(active.getAttribute("data-code-id"), -1);
         setTimeout(function () { active.classList.remove("ace-code-row--reordering"); }, 300);
+      } else {
+        _moveGroupInDirection(active, -1);
+        _announce("Group '" + (active.getAttribute("data-group") || "Ungrouped") + "' moved up");
       }
       return;
     }
 
-    // Alt+Shift+↓ — Move code down
+    // Alt+Shift+↓ — Move code down (or group down if focused on group header)
     if (key === "ArrowDown" && alt && shift) {
       e.preventDefault();
       if (!_isGroupHeader(active)) {
         active.classList.add("ace-code-row--reordering");
         _moveCode(active.getAttribute("data-code-id"), 1);
         setTimeout(function () { active.classList.remove("ace-code-row--reordering"); }, 300);
+      } else {
+        _moveGroupInDirection(active, 1);
+        _announce("Group '" + (active.getAttribute("data-group") || "Ungrouped") + "' moved down");
       }
       return;
     }
