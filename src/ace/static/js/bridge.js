@@ -15,8 +15,8 @@
  * 11. Dialog close cleanup
  * 12. HTMX integration (configRequest, afterSwap, afterRequest)
  * 13. Code management helpers
- * 14. Code menu dropdown (management mode)
- * 15. Code search / filter / create
+ * 14. Code menu dropdown (with shortcut hints)
+ * 15. Code search / filter / create / group
  * 16. CSS Custom Highlight API — annotation rendering
  * 17. Sidebar keyboard navigation (ARIA treeview)
  * 18. DOMContentLoaded init
@@ -1966,6 +1966,12 @@
     _updateKeycaps();
     _initSortable();
     _paintHighlights();
+
+    // Set initial roving tabindex — first treeitem gets tabindex="0"
+    var items = _getTreeItems();
+    if (items.length > 0) {
+      items[0].setAttribute("tabindex", "0");
+    }
 
     // Auto-focus first sentence so keyboard works immediately
     var sentences = _getSentences();
