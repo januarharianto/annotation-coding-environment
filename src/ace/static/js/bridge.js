@@ -1086,11 +1086,11 @@
     menu.className = "ace-code-menu";
 
     var items = [
-      { label: "Rename", action: function () { _closeCodeMenu(); _startInlineRename(codeId); } },
-      { label: "Colour", action: function () { _closeCodeMenu(); _openColourPopover(codeId); } },
-      { label: "Move Up", action: function () { _closeCodeMenu(); _moveCode(codeId, -1); } },
-      { label: "Move Down", action: function () { _closeCodeMenu(); _moveCode(codeId, 1); } },
-      { label: "Delete", danger: true, action: function () { _closeCodeMenu(); _startDeleteConfirm(codeId); } },
+      { label: "Rename", hint: "F2", action: function () { _closeCodeMenu(); _startInlineRename(codeId); } },
+      { label: "Colour", hint: "", action: function () { _closeCodeMenu(); _openColourPopover(codeId); } },
+      { label: "Move Up", hint: "Alt+Shift+\u2191", action: function () { _closeCodeMenu(); _moveCode(codeId, -1); } },
+      { label: "Move Down", hint: "Alt+Shift+\u2193", action: function () { _closeCodeMenu(); _moveCode(codeId, 1); } },
+      { label: "Delete", hint: "\u232b", danger: true, action: function () { _closeCodeMenu(); _startDeleteConfirm(codeId); } },
     ];
 
     // Add "Move to Group" submenu if groups exist
@@ -1099,6 +1099,10 @@
       var moveItem = document.createElement("div");
       moveItem.className = "ace-code-menu-item ace-code-menu-sub";
       moveItem.textContent = "Move to Group \u25b8";
+      var moveHint = document.createElement("span");
+      moveHint.className = "ace-code-menu-hint";
+      moveHint.textContent = "Alt+\u2192";
+      moveItem.appendChild(moveHint);
       var sub = document.createElement("div");
       sub.className = "ace-code-submenu";
 
@@ -1127,6 +1131,12 @@
       el.className = "ace-code-menu-item";
       if (item.danger) el.classList.add("ace-code-menu-item--danger");
       el.textContent = item.label;
+      if (item.hint) {
+        var hintEl = document.createElement("span");
+        hintEl.className = "ace-code-menu-hint";
+        hintEl.textContent = item.hint;
+        el.appendChild(hintEl);
+      }
       el.addEventListener("click", item.action);
       menu.appendChild(el);
     });
