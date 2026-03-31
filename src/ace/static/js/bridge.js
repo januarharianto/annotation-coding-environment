@@ -753,6 +753,7 @@
 
   var _sidebarFocusState = {
     codeId: null,
+    groupName: null,
     searchText: "",
     scrollTop: 0,
     zone: null,
@@ -769,6 +770,7 @@
     if (zone === "tree") {
       var active = _getActiveTreeItem();
       _sidebarFocusState.codeId = active ? active.getAttribute("data-code-id") : null;
+      _sidebarFocusState.groupName = active ? active.getAttribute("data-group") : null;
     }
 
     var search = document.getElementById("code-search-input");
@@ -798,7 +800,7 @@
       var search = document.getElementById("code-search-input");
       if (_sidebarFocusState.searchText && search) {
         search.value = _sidebarFocusState.searchText;
-        search.dispatchEvent(new Event("input"));
+        search.dispatchEvent(new Event("input", { bubbles: true }));
       }
 
       var tree = document.getElementById("code-tree");
@@ -806,12 +808,16 @@
         tree.scrollTop = _sidebarFocusState.scrollTop;
       }
 
-      if (_sidebarFocusState.zone === "tree" && _sidebarFocusState.codeId) {
-        var item = tree ? tree.querySelector('[data-code-id="' + _sidebarFocusState.codeId + '"]') : null;
+      if (_sidebarFocusState.zone === "tree") {
+        var item = null;
+        if (_sidebarFocusState.codeId && tree) {
+          item = tree.querySelector('[data-code-id="' + _sidebarFocusState.codeId + '"]');
+        } else if (_sidebarFocusState.groupName !== null && tree) {
+          item = tree.querySelector('.ace-code-group-header[data-group="' + _sidebarFocusState.groupName + '"]');
+        }
         if (item) {
           _focusTreeItem(item);
         } else {
-          // Deleted or gone — focus nearest item
           var items = _getTreeItems();
           if (items.length > 0) _focusTreeItem(items[0]);
         }
@@ -821,6 +827,7 @@
 
       // Reset
       _sidebarFocusState.codeId = null;
+      _sidebarFocusState.groupName = null;
       _sidebarFocusState.zone = null;
       _sidebarFocusState.searchText = "";
     }
@@ -1417,7 +1424,7 @@
     }
 
     input.value = "";
-    input.dispatchEvent(new Event("input"));
+    input.dispatchEvent(new Event("input", { bubbles: true }));
     _initSortable();
     _announce("Group '" + groupName + "' created");
   }
@@ -1430,7 +1437,7 @@
       e.stopPropagation();
       if (e.target.value) {
         e.target.value = "";
-        e.target.dispatchEvent(new Event("input"));
+        e.target.dispatchEvent(new Event("input", { bubbles: true }));
       } else {
         _focusTextPanel();
       }
@@ -1464,7 +1471,7 @@
       } else {
         // Has matches — clear and return
         e.target.value = "";
-        e.target.dispatchEvent(new Event("input"));
+        e.target.dispatchEvent(new Event("input", { bubbles: true }));
         _focusTextPanel();
       }
     }
@@ -1688,6 +1695,8 @@
     var items = tree.querySelectorAll('[role="treeitem"]');
     var result = [];
     items.forEach(function (item) {
+      // Skip items hidden by search filter
+      if (item.style.display === "none") return;
       if (item.classList.contains("ace-code-row")) {
         var groupContainer = item.closest('[role="group"]');
         if (groupContainer) {
