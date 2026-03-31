@@ -16,11 +16,10 @@
  * 12. HTMX integration (configRequest, afterSwap, afterRequest)
  * 13. Code management helpers
  * 14. Code menu dropdown (management mode)
- * 15. Add group (inline)
- * 16. Code search / filter / create
- * 17. CSS Custom Highlight API — annotation rendering
- * 18. Sidebar keyboard navigation (ARIA treeview)
- * 19. DOMContentLoaded init
+ * 15. Code search / filter / create
+ * 16. CSS Custom Highlight API — annotation rendering
+ * 17. Sidebar keyboard navigation (ARIA treeview)
+ * 18. DOMContentLoaded init
  */
 
 (function () {
@@ -48,6 +47,12 @@
     var msg = e.detail.xhr && e.detail.xhr.getResponseHeader("X-ACE-Toast");
     if (msg) window.aceToast(msg);
   });
+
+  function _escapeHtml(str) {
+    var div = document.createElement("div");
+    div.textContent = str;
+    return div.innerHTML;
+  }
 
   /* ================================================================
    * 2. Sentence navigation
@@ -1166,142 +1171,217 @@
   });
 
   /* ================================================================
-   * 15. Add group (inline)
+   * 15. Code search / filter / create
    * ================================================================ */
 
-  window.aceStartAddGroup = function (el) {
-    var original = el.textContent;
-    el.innerHTML = '<input type="text" placeholder="Group name…" autocomplete="off">';
-    var input = el.querySelector("input");
-    input.focus();
-
-    function submit() {
-      var name = input.value.trim();
-      if (!name) { cancel(); return; }
-      // Create header + group container matching the ARIA treeview DOM
-      var header = document.createElement("div");
-      header.setAttribute("role", "treeitem");
-      header.setAttribute("aria-expanded", "true");
-      header.setAttribute("aria-level", "1");
-      header.className = "ace-code-group-header";
-      header.setAttribute("data-group", name);
-      header.setAttribute("tabindex", "-1");
-      header.textContent = "\u25be " + name;
-      var groupDiv = document.createElement("div");
-      groupDiv.setAttribute("role", "group");
-      el.parentNode.insertBefore(header, el);
-      el.parentNode.insertBefore(groupDiv, el);
-      cancel();
-      _initSortable();
-    }
-
-    function cancel() {
-      el.innerHTML = "";
-      el.textContent = original;
-    }
-
-    input.addEventListener("keydown", function (e) {
-      if (e.key === "Enter") { e.preventDefault(); submit(); }
-      if (e.key === "Escape") { e.preventDefault(); cancel(); }
-    });
-  };
-
-  /* ================================================================
-   * 16. Code search / filter / create
-   * ================================================================ */
-
-  // Filter code rows as user types
   document.addEventListener("input", function (e) {
     if (e.target.id !== "code-search-input") return;
     var query = e.target.value.toLowerCase();
     var tree = document.getElementById("code-tree");
     if (!tree) return;
 
-    if (query) {
-      // Filter: show/hide rows by display, auto-expand groups with matches
+    // Remove any existing "create" prompt
+    var oldPrompt = tree.querySelector(".ace-create-prompt");
+    if (oldPrompt) oldPrompt.remove();
+
+    if (query && !query.startsWith("/")) {
+      // Filter mode
       var rows = tree.querySelectorAll(".ace-code-row");
+      var anyMatch = false;
       rows.forEach(function (row) {
-        var name = row.querySelector(".ace-code-name");
-        if (!name) return;
-        var match = name.textContent.toLowerCase().indexOf(query) >= 0;
-        row.style.display = match ? "" : "none";
-      });
-      // Auto-expand groups with matches, hide empty group containers
-      var groupDivs = tree.querySelectorAll('[role="group"]');
-      groupDivs.forEach(function (groupDiv) {
-        var visibleInGroup = groupDiv.querySelectorAll(".ace-code-row").length -
-          groupDiv.querySelectorAll('.ace-code-row[style*="display: none"], .ace-code-row[style*="display:none"]').length;
-        var header = groupDiv.previousElementSibling;
-        groupDiv.style.display = visibleInGroup > 0 ? "" : "none";
-        if (header) header.style.display = visibleInGroup > 0 ? "" : "none";
-        if (visibleInGroup > 0 && header) {
-          header.setAttribute("aria-expanded", "true");
+        var nameEl = row.querySelector(".ace-code-name");
+        if (!nameEl) return;
+        var text = nameEl.textContent;
+        var match = text.toLowerCase().indexOf(query) >= 0;
+        if (match) {
+          row.style.display = "";
+          anyMatch = true;
+          // Highlight match
+          var idx = text.toLowerCase().indexOf(query);
+          var before = text.substring(0, idx);
+          var matched = text.substring(idx, idx + query.length);
+          var after = text.substring(idx + query.length);
+          nameEl.innerHTML = _escapeHtml(before) + '<mark>' + _escapeHtml(matched) + '</mark>' + _escapeHtml(after);
+        } else {
+          row.style.display = "none";
+          nameEl.textContent = text; // Strip any existing highlight
         }
       });
+
+      // Show/hide group headers based on visible children
+      tree.querySelectorAll(".ace-code-group-header").forEach(function (header) {
+        var groupDiv = header.nextElementSibling;
+        if (!groupDiv || groupDiv.getAttribute("role") !== "group") return;
+        var hasVisible = false;
+        groupDiv.querySelectorAll(".ace-code-row").forEach(function (r) {
+          if (r.style.display !== "none") hasVisible = true;
+        });
+        header.style.display = hasVisible ? "" : "none";
+        groupDiv.style.display = hasVisible ? "" : "none";
+      });
+
+      // Show "Create" prompt if no matches
+      if (!anyMatch) {
+        var prompt = document.createElement("div");
+        prompt.className = "ace-create-prompt ace-create-prompt--code";
+        prompt.innerHTML = '<span>+</span> Create "<strong>' + _escapeHtml(e.target.value.trim()) + '</strong>"';
+        prompt.setAttribute("data-action", "create-code");
+        prompt.addEventListener("click", function () {
+          _createCodeFromSearch();
+        });
+        tree.appendChild(prompt);
+      }
+    } else if (query && query.startsWith("/")) {
+      // Group creation mode
+      var groupName = query.substring(1).trim();
+      // Hide all codes, show group creation prompt
+      tree.querySelectorAll(".ace-code-row").forEach(function (r) { r.style.display = "none"; });
+      tree.querySelectorAll(".ace-code-group-header").forEach(function (h) { h.style.display = "none"; });
+      tree.querySelectorAll('[role="group"]').forEach(function (g) { g.style.display = "none"; });
+
+      if (groupName) {
+        var exists = false;
+        tree.querySelectorAll(".ace-code-group-header").forEach(function (h) {
+          if (h.getAttribute("data-group") === groupName) exists = true;
+        });
+
+        var prompt = document.createElement("div");
+        if (exists) {
+          prompt.className = "ace-create-prompt";
+          prompt.innerHTML = 'Group "<strong>' + _escapeHtml(groupName) + '</strong>" already exists';
+        } else {
+          prompt.className = "ace-create-prompt ace-create-prompt--group";
+          prompt.innerHTML = '<span>\u25b8</span> Create group "<strong>' + _escapeHtml(groupName) + '</strong>"';
+          prompt.setAttribute("data-action", "create-group");
+          prompt.addEventListener("click", function () {
+            _createGroupFromSearch();
+          });
+        }
+        tree.appendChild(prompt);
+      }
     } else {
-      // Clear: restore all rows and collapse state
+      // Empty: restore all rows, clear highlights
       tree.querySelectorAll(".ace-code-row").forEach(function (row) {
         row.style.display = "";
+        var nameEl = row.querySelector(".ace-code-name");
+        if (nameEl && nameEl.querySelector("mark")) {
+          nameEl.textContent = nameEl.textContent; // Strip HTML
+        }
       });
-      tree.querySelectorAll('[role="group"]').forEach(function (groupDiv) {
-        groupDiv.style.display = "";
-        var header = groupDiv.previousElementSibling;
-        if (header) header.style.display = "";
-      });
+      tree.querySelectorAll(".ace-code-group-header").forEach(function (h) { h.style.display = ""; });
+      tree.querySelectorAll('[role="group"]').forEach(function (g) { g.style.display = ""; });
       _restoreCollapseState();
     }
 
     _updateKeycaps();
   });
 
-  // Enter in search: create new code if no visible matches
-  document.addEventListener("keydown", function (e) {
-    if (e.target.id !== "code-search-input") return;
-    if (e.key === "Escape") {
-      e.preventDefault();
-      e.stopPropagation();
-      if (e.target.value) {
-        // First press: clear search text
-        e.target.value = "";
-        e.target.dispatchEvent(new Event("input"));
-      } else {
-        // Second press (or already empty): return to text panel
-        _focusTextPanel();
-      }
-      return;
-    }
-    if (e.key === "ArrowDown") {
-      e.preventDefault();
-      _focusCodeTree();
-      return;
-    }
-    if (e.key !== "Enter") return;
-    var name = e.target.value.trim();
-    if (!name) return;
+  function _createCodeFromSearch() {
+    var input = document.getElementById("code-search-input");
+    if (!input) return;
+    var name = input.value.trim();
+    if (!name || name.startsWith("/")) return;
 
-    // Check if any visible rows match exactly
-    var tree = document.getElementById("code-tree");
-    var rows = tree ? tree.querySelectorAll('.ace-code-row:not([style*="display: none"]):not([style*="display:none"])') : [];
-    if (rows.length > 0) {
-      // Has matches — don't create, just clear and refocus
-      e.target.value = "";
-      e.target.dispatchEvent(new Event("input"));
-      document.getElementById("text-panel").focus();
-      return;
-    }
-
-    // No matches — create new code
-    e.preventDefault();
     htmx.ajax("POST", "/api/codes", {
       values: { name: name, current_index: window.__aceCurrentIndex },
       target: "#code-sidebar",
       swap: "outerHTML",
     });
-    e.target.value = "";
+    input.value = "";
+    _announce("Code '" + name + "' created");
+  }
+
+  function _createGroupFromSearch() {
+    var input = document.getElementById("code-search-input");
+    if (!input) return;
+    var groupName = input.value.trim().substring(1).trim(); // remove / prefix
+    if (!groupName) return;
+
+    var tree = document.getElementById("code-tree");
+    if (!tree) return;
+
+    // Remove create prompt if present
+    var ref = tree.querySelector(".ace-create-prompt");
+    if (ref) ref.remove();
+
+    var header = document.createElement("div");
+    header.setAttribute("role", "treeitem");
+    header.setAttribute("aria-expanded", "true");
+    header.setAttribute("aria-level", "1");
+    header.className = "ace-code-group-header";
+    header.setAttribute("data-group", groupName);
+    header.setAttribute("tabindex", "-1");
+    header.textContent = "\u25be " + groupName;
+
+    var groupDiv = document.createElement("div");
+    groupDiv.setAttribute("role", "group");
+
+    var emptyMsg = tree.querySelector(".ace-sidebar-empty");
+    if (emptyMsg) {
+      tree.insertBefore(header, emptyMsg);
+      tree.insertBefore(groupDiv, emptyMsg);
+      emptyMsg.remove();
+    } else {
+      tree.appendChild(header);
+      tree.appendChild(groupDiv);
+    }
+
+    input.value = "";
+    input.dispatchEvent(new Event("input"));
+    _initSortable();
+    _announce("Group '" + groupName + "' created");
+  }
+
+  document.addEventListener("keydown", function (e) {
+    if (e.target.id !== "code-search-input") return;
+
+    if (e.key === "Escape") {
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.target.value) {
+        e.target.value = "";
+        e.target.dispatchEvent(new Event("input"));
+      } else {
+        _focusTextPanel();
+      }
+      return;
+    }
+
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      _focusCodeTree();
+      return;
+    }
+
+    if (e.key !== "Enter") return;
+    var val = e.target.value.trim();
+    if (!val) return;
+    e.preventDefault();
+
+    if (val.startsWith("/")) {
+      _createGroupFromSearch();
+    } else {
+      // Only create if no visible code rows
+      var tree = document.getElementById("code-tree");
+      var count = 0;
+      if (tree) {
+        tree.querySelectorAll(".ace-code-row").forEach(function (r) {
+          if (r.style.display !== "none") count++;
+        });
+      }
+      if (count === 0) {
+        _createCodeFromSearch();
+      } else {
+        // Has matches — clear and return
+        e.target.value = "";
+        e.target.dispatchEvent(new Event("input"));
+        _focusTextPanel();
+      }
+    }
   });
 
   /* ================================================================
-   * 17. CSS Custom Highlight API — annotation rendering
+   * 16. CSS Custom Highlight API — annotation rendering
    * ================================================================ */
 
   /**
@@ -1413,8 +1493,16 @@
   }
 
   /* ================================================================
-   * 18. Sidebar keyboard navigation (ARIA treeview)
+   * 17. Sidebar keyboard navigation (ARIA treeview)
    * ================================================================ */
+
+  /** Push a message to the aria-live region for screen readers. */
+  function _announce(message) {
+    var region = document.getElementById("ace-live-region");
+    if (!region) return;
+    region.textContent = message;
+    setTimeout(function () { region.textContent = ""; }, 3000);
+  }
 
   // --- Zone cycling (Tab / Shift+Tab / Escape / /) ---
 
@@ -1621,7 +1709,7 @@
   }
 
   /* ================================================================
-   * 19. DOMContentLoaded init
+   * 18. DOMContentLoaded init
    * ================================================================ */
 
   document.addEventListener("DOMContentLoaded", function () {
