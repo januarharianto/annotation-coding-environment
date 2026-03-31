@@ -932,18 +932,18 @@
       nameEl.contentEditable = "false";
       if (!newName || newName === original) {
         nameEl.textContent = original;
-        document.getElementById("text-panel").focus();
+        _focusTreeItem(row);
         return;
       }
       _codeAction("PUT", "/api/codes/" + codeId,
         "name=" + encodeURIComponent(newName) + "&current_index=" + window.__aceCurrentIndex
       ).catch(function () { nameEl.textContent = original; });
-      document.getElementById("text-panel").focus();
+      _focusTreeItem(row);
     }
 
     nameEl.addEventListener("keydown", function handler(e) {
       if (e.key === "Enter") { e.preventDefault(); nameEl.removeEventListener("keydown", handler); save(); }
-      if (e.key === "Escape") { e.preventDefault(); nameEl.removeEventListener("keydown", handler); done = true; nameEl.textContent = original; nameEl.contentEditable = "false"; document.getElementById("text-panel").focus(); }
+      if (e.key === "Escape") { e.preventDefault(); nameEl.removeEventListener("keydown", handler); done = true; nameEl.textContent = original; nameEl.contentEditable = "false"; _focusTreeItem(row); }
     });
 
     nameEl.addEventListener("blur", function blurHandler() {
@@ -1620,6 +1620,127 @@
     var items = _getTreeItems();
     var idx = items.indexOf(active);
 
+    // Alt+Shift+↑ — Move code up
+    if (key === "ArrowUp" && alt && shift) {
+      e.preventDefault();
+      if (!_isGroupHeader(active)) {
+        active.classList.add("ace-code-row--reordering");
+        _moveCode(active.getAttribute("data-code-id"), -1);
+        setTimeout(function () { active.classList.remove("ace-code-row--reordering"); }, 300);
+      }
+      return;
+    }
+
+    // Alt+Shift+↓ — Move code down
+    if (key === "ArrowDown" && alt && shift) {
+      e.preventDefault();
+      if (!_isGroupHeader(active)) {
+        active.classList.add("ace-code-row--reordering");
+        _moveCode(active.getAttribute("data-code-id"), 1);
+        setTimeout(function () { active.classList.remove("ace-code-row--reordering"); }, 300);
+      }
+      return;
+    }
+
+    // Alt+→ — Indent: move code into nearest group above
+    if (key === "ArrowRight" && alt && !shift) {
+      e.preventDefault();
+      if (_isGroupHeader(active)) return;
+      var codeId = active.getAttribute("data-code-id");
+      if (!codeId) return;
+
+      // Check if already in a group
+      var groupDiv = active.closest('[role="group"]');
+      if (groupDiv) return; // Already in a group — one level only
+
+      // Find nearest group header above
+      var el = active;
+      var targetGroup = null;
+      while (el) {
+        el = el.previousElementSibling;
+        if (el && el.getAttribute("role") === "group") {
+          var hdr = el.previousElementSibling;
+          if (hdr && _isGroupHeader(hdr)) {
+            targetGroup = hdr.getAttribute("data-group");
+            break;
+          }
+        }
+        if (el && _isGroupHeader(el)) {
+          targetGroup = el.getAttribute("data-group");
+          break;
+        }
+      }
+
+      if (targetGroup !== null) {
+        _moveToGroup(codeId, targetGroup);
+        _announce("'" + (active.querySelector(".ace-code-name") || {}).textContent + "' moved into " + (targetGroup || "Ungrouped"));
+      } else {
+        // No group above — prompt for new group name
+        _promptNewGroupForCode(active);
+      }
+      return;
+    }
+
+    // Alt+← — Outdent: move code out of group (ungrouped)
+    if (key === "ArrowLeft" && alt && !shift) {
+      e.preventDefault();
+      if (_isGroupHeader(active)) return;
+      var codeId2 = active.getAttribute("data-code-id");
+      if (!codeId2) return;
+
+      var groupDiv2 = active.closest('[role="group"]');
+      if (!groupDiv2) return; // Already ungrouped
+
+      _moveToGroup(codeId2, "");
+      _announce("'" + (active.querySelector(".ace-code-name") || {}).textContent + "' moved to ungrouped");
+      return;
+    }
+
+    // Enter — Apply focused code to current sentence (stay in tree)
+    if (key === "Enter" && !alt && !shift) {
+      e.preventDefault();
+      if (!_isGroupHeader(active)) {
+        var codeId3 = active.getAttribute("data-code-id");
+        if (codeId3 && window.__aceFocusIndex >= 0) {
+          _applyCodeToSentence(codeId3);
+          // Flash the row briefly to confirm
+          active.classList.add("ace-code-row--flash");
+          setTimeout(function () { active.classList.remove("ace-code-row--flash"); }, 300);
+          var codeName = active.querySelector(".ace-code-name");
+          _announce("'" + (codeName ? codeName.textContent : "") + "' applied to sentence " + (window.__aceFocusIndex + 1));
+        }
+      } else {
+        // On group header: toggle expand/collapse
+        _toggleGroupCollapse(active);
+      }
+      return;
+    }
+
+    // F2 — Inline rename
+    if (key === "F2" && !alt && !shift) {
+      e.preventDefault();
+      if (!_isGroupHeader(active)) {
+        var codeId4 = active.getAttribute("data-code-id");
+        if (codeId4) _startInlineRename(codeId4);
+      }
+      return;
+    }
+
+    // Delete / Backspace — Delete code (double-press confirm)
+    if ((key === "Delete" || key === "Backspace") && !alt && !shift) {
+      e.preventDefault();
+      if (!_isGroupHeader(active)) {
+        var codeId5 = active.getAttribute("data-code-id");
+        if (!codeId5) return;
+        if (_deleteTarget === codeId5) {
+          _executeDelete(codeId5);
+        } else {
+          _startDeleteConfirm(codeId5);
+        }
+      }
+      return;
+    }
+
     // ↓ — Next visible treeitem
     if (key === "ArrowDown" && !alt && !shift) {
       e.preventDefault();
@@ -1641,9 +1762,9 @@
         if (active.getAttribute("aria-expanded") === "false") {
           _expandGroup(active);
         } else {
-          var groupDiv = active.nextElementSibling;
-          if (groupDiv && groupDiv.getAttribute("role") === "group") {
-            var firstChild = groupDiv.querySelector('[role="treeitem"]');
+          var groupDiv3 = active.nextElementSibling;
+          if (groupDiv3 && groupDiv3.getAttribute("role") === "group") {
+            var firstChild = groupDiv3.querySelector('[role="treeitem"]');
             if (firstChild) _focusTreeItem(firstChild);
           }
         }
@@ -1661,8 +1782,8 @@
       } else {
         var groupEl = active.closest('[role="group"]');
         if (groupEl) {
-          var header = groupEl.previousElementSibling;
-          if (header && _isGroupHeader(header)) _focusTreeItem(header);
+          var header2 = groupEl.previousElementSibling;
+          if (header2 && _isGroupHeader(header2)) _focusTreeItem(header2);
         }
       }
       return;
@@ -1691,6 +1812,64 @@
   });
 
   // --- Group expand / collapse ---
+
+  function _promptNewGroupForCode(codeRow) {
+    var input = document.createElement("input");
+    input.type = "text";
+    input.placeholder = "Group name\u2026";
+    input.className = "ace-sidebar-search";
+    input.style.margin = "2px 10px";
+    input.style.padding = "3px 8px";
+    input.style.borderColor = "var(--ace-focus)";
+
+    codeRow.parentNode.insertBefore(input, codeRow);
+    input.focus();
+
+    function cleanup() {
+      if (input.parentNode) input.remove();
+      _focusTreeItem(codeRow);
+    }
+
+    input.addEventListener("keydown", function (ev) {
+      if (ev.key === "Enter") {
+        ev.preventDefault();
+        var name = input.value.trim();
+        if (name) {
+          var codeId = codeRow.getAttribute("data-code-id");
+          var header = document.createElement("div");
+          header.setAttribute("role", "treeitem");
+          header.setAttribute("aria-expanded", "true");
+          header.setAttribute("aria-level", "1");
+          header.className = "ace-code-group-header";
+          header.setAttribute("data-group", name);
+          header.setAttribute("tabindex", "-1");
+          header.textContent = "\u25be " + name;
+
+          var groupDiv = document.createElement("div");
+          groupDiv.setAttribute("role", "group");
+
+          input.remove();
+          codeRow.parentNode.insertBefore(header, codeRow);
+          codeRow.parentNode.insertBefore(groupDiv, codeRow);
+          groupDiv.appendChild(codeRow);
+
+          _moveToGroup(codeId, name);
+          _initSortable();
+          _announce("Group '" + name + "' created with code inside");
+        } else {
+          cleanup();
+        }
+      }
+      if (ev.key === "Escape") {
+        ev.preventDefault();
+        cleanup();
+      }
+    });
+
+    input.addEventListener("blur", function () {
+      setTimeout(cleanup, 100);
+    });
+  }
 
   function _expandGroup(header) {
     header.setAttribute("aria-expanded", "true");
