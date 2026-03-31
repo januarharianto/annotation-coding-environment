@@ -74,15 +74,20 @@
     {% block code_sidebar %}
     <div id="code-sidebar" class="ace-sidebar">
       <div class="ace-sidebar-toolbar">
-        <input type="text" class="ace-sidebar-search" placeholder="Search or create code…"
-               id="code-search-input" autocomplete="off">
+        <input type="search" class="ace-sidebar-search" placeholder="Filter codes (/)"
+               id="code-search-input" autocomplete="off"
+               aria-controls="code-tree" aria-label="Filter codes">
       </div>
-      <div id="view-groups" class="ace-sidebar-codes">
+      <div id="code-tree" role="tree" aria-label="Code list" class="ace-sidebar-codes">
         {% for group_name, group_codes in grouped_codes %}
-        <div class="ace-code-group" data-group="{{ group_name }}">
-          <div class="ace-code-group-header" data-group="{{ group_name }}">&#9662; {{ group_name }}</div>
+        <div role="treeitem" aria-expanded="true" aria-level="1"
+             class="ace-code-group-header" data-group="{{ group_name }}"
+             tabindex="-1">&#9662; {{ group_name }}</div>
+        <div role="group">
           {% for code in group_codes %}
-          <div class="ace-code-row" data-code-id="{{ code['id'] }}">
+          <div role="treeitem" aria-level="2"
+               class="ace-code-row" data-code-id="{{ code['id'] }}"
+               tabindex="-1">
             <span class="ace-code-dot" style="background: {{ code['colour'] }};"></span>
             <span class="ace-code-name">{{ code['name'] }}</span>
             <span class="ace-keycap"></span>
@@ -91,10 +96,14 @@
         </div>
         {% endfor %}
         {% if ungrouped_codes %}
-        <div class="ace-code-group" data-group="">
-          <div class="ace-code-group-header" data-group="">&#9662; Ungrouped</div>
+        <div role="treeitem" aria-expanded="true" aria-level="1"
+             class="ace-code-group-header" data-group=""
+             tabindex="-1">&#9662; Ungrouped</div>
+        <div role="group">
           {% for code in ungrouped_codes %}
-          <div class="ace-code-row" data-code-id="{{ code['id'] }}">
+          <div role="treeitem" aria-level="2"
+               class="ace-code-row" data-code-id="{{ code['id'] }}"
+               tabindex="-1">
             <span class="ace-code-dot" style="background: {{ code['colour'] }};"></span>
             <span class="ace-code-name">{{ code['name'] }}</span>
             <span class="ace-keycap"></span>
@@ -103,10 +112,10 @@
         </div>
         {% endif %}
         {% if not codes %}
-        <div class="ace-sidebar-empty">No codes yet. Use management mode to add codes.</div>
+        <div class="ace-sidebar-empty">No codes yet. Type a name above and press Enter.</div>
         {% endif %}
-        <div class="ace-add-group" id="add-group-row" onclick="aceStartAddGroup(this)">+ New group</div>
       </div>
+      <div aria-live="polite" class="ace-sr-only" id="ace-live-region"></div>
     </div>
     {% endblock %}
 
