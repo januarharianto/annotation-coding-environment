@@ -827,7 +827,11 @@ async def flag_route(
         update_assignment_status(conn, source_id, coder_id, new_status)
 
         content = _render_full_coding_oob(request, conn, coder_id, source_index)
-        return HTMLResponse(content)
+        response = HTMLResponse(content)
+        response.headers["X-ACE-Toast"] = (
+            "Source flagged" if new_status == "flagged" else "Source unflagged"
+        )
+        return response
     finally:
         conn.close()
 
