@@ -1,5 +1,6 @@
 """Tests for agreement page and API routes."""
 
+import json
 import pytest
 from fastapi.testclient import TestClient
 
@@ -19,6 +20,36 @@ def app():
 def client(app):
     with TestClient(app, raise_server_exceptions=False) as c:
         yield c
+
+
+@pytest.fixture()
+def client_with_agreement_files(tmp_path):
+    """Client fixture with two pre-created .ace files ready for paths-based compute."""
+    path_a = _make_ace_file(
+        tmp_path / "alice.ace",
+        "Project A",
+        "Alice",
+        sources=[("S1", "The cat sat on the mat"), ("S2", "Dogs are great pets")],
+        codes=[("Positive", "#00AA00"), ("Negative", "#AA0000")],
+        annotations=[
+            (0, 0, 0, 7, "The cat"),
+            (1, 0, 0, 8, "Dogs are"),
+        ],
+    )
+    path_b = _make_ace_file(
+        tmp_path / "bob.ace",
+        "Project B",
+        "Bob",
+        sources=[("S1", "The cat sat on the mat"), ("S2", "Dogs are great pets")],
+        codes=[("Positive", "#00AA00"), ("Negative", "#AA0000")],
+        annotations=[
+            (0, 0, 0, 7, "The cat"),
+            (1, 1, 0, 8, "Dogs are"),
+        ],
+    )
+    app = create_app()
+    with TestClient(app, raise_server_exceptions=False) as c:
+        yield c, [str(path_a), str(path_b)]
 
 
 def _make_ace_file(path, project_name, coder_name, sources, codes, annotations):
@@ -136,37 +167,53 @@ def test_add_file_invalid(client, tmp_path):
 
 
 def test_compute(client, ace_file_a, ace_file_b):
-    """Adding 2 files and computing returns metrics dashboard."""
-    # Add both files
-    client.post("/api/agreement/add-file", data={"path": str(ace_file_a)})
-    client.post("/api/agreement/add-file", data={"path": str(ace_file_b)})
-
-    # Compute
-    resp = client.post("/api/agreement/compute")
+    """Compute with paths param returns metrics results."""
+    paths = json.dumps([str(ace_file_a), str(ace_file_b)])
+    resp = client.post("/api/agreement/compute", data={"paths": paths})
     assert resp.status_code == 200
     assert "Krippendorff" in resp.text
-    assert "% agree" in resp.text
     assert "Positive" in resp.text
     assert "Negative" in resp.text
-    # Should have 2 coders, 2 sources, 2 codes
-    assert ">2<" in resp.text  # coders or sources count
+    assert "Overall (pooled)" in resp.text
+
+
+def test_compute_returns_new_results_html(client_with_agreement_files):
+    """Compute returns new minimalist results: title bar, context, table, references."""
+    client, paths = client_with_agreement_files
+    resp = client.post("/api/agreement/compute", data={"paths": json.dumps(paths)})
+    assert resp.status_code == 200
+    html = resp.text
+    assert "ace-agreement-title-bar" in html
+    assert "Summary CSV" in html
+    assert "Raw data CSV" in html
+    assert "ace-agreement-context" in html
+    assert "Overall (pooled)" in html
+    assert "ace-agreement-table" in html
+    assert "ace-agreement-refs" in html
+    assert "Krippendorff" in html
 
 
 def test_compute_insufficient_files(client, ace_file_a):
-    """Computing with < 2 files returns error toast."""
-    client.post("/api/agreement/add-file", data={"path": str(ace_file_a)})
+    """Computing with < 2 paths returns error HTML."""
+    paths = json.dumps([str(ace_file_a)])
+    resp = client.post("/api/agreement/compute", data={"paths": paths})
+    assert resp.status_code == 400
+    assert "at least" in resp.text.lower()
+
+
+def test_compute_missing_paths(client):
+    """Computing with no paths param returns 422."""
     resp = client.post("/api/agreement/compute")
-    assert resp.status_code == 200
-    assert "toast" in resp.text.lower() or "at least" in resp.text.lower()
+    assert resp.status_code == 422
 
 
 # ── Export ────────────────────────────────────────────────────────────
 
 
 def test_export_csv(client, ace_file_a, ace_file_b):
-    """Export returns CSV with per-code metrics."""
-    client.post("/api/agreement/add-file", data={"path": str(ace_file_a)})
-    client.post("/api/agreement/add-file", data={"path": str(ace_file_b)})
+    """Export returns CSV with per-code metrics after compute."""
+    paths = json.dumps([str(ace_file_a), str(ace_file_b)])
+    client.post("/api/agreement/compute", data={"paths": paths})
 
     resp = client.get("/api/agreement/export/results")
     assert resp.status_code == 200
@@ -180,10 +227,10 @@ def test_export_csv(client, ace_file_a, ace_file_b):
 
 
 def test_reset(client, ace_file_a, ace_file_b):
-    """Reset clears the loader so compute fails afterward."""
-    client.post("/api/agreement/add-file", data={"path": str(ace_file_a)})
-    client.post("/api/agreement/add-file", data={"path": str(ace_file_b)})
+    """Reset clears the loader; subsequent export returns 400."""
+    paths = json.dumps([str(ace_file_a), str(ace_file_b)])
+    client.post("/api/agreement/compute", data={"paths": paths})
     client.post("/api/agreement/reset")
 
-    resp = client.post("/api/agreement/compute")
-    assert "toast" in resp.text.lower() or "at least" in resp.text.lower()
+    resp = client.get("/api/agreement/export/results")
+    assert resp.status_code == 400
