@@ -132,7 +132,7 @@
 .ace-agreement-table .interp {
   display: block;
   font-size: 9px;
-  color: #b0b8c4;
+  color: var(--ace-text-muted);
   line-height: 1;
   margin-top: 1px;
   font-variant-numeric: normal;
