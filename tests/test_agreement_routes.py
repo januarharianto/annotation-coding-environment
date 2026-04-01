@@ -101,7 +101,7 @@ def test_agreement_page_renders(client):
     resp = client.get("/agreement")
     assert resp.status_code == 200
     assert "Inter-Coder Agreement" in resp.text
-    assert "agreement-files" in resp.text
+    assert "agreement-results" in resp.text
 
 
 # ── Add file ──────────────────────────────────────────────────────────
