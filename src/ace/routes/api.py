@@ -1600,6 +1600,7 @@ async def agreement_export_results(request: Request):
     """Export per-code metrics as CSV download."""
     import csv
     import io
+    from datetime import date
 
     from ace.services.agreement_computer import compute_agreement
 
@@ -1611,30 +1612,95 @@ async def agreement_export_results(request: Request):
     result = compute_agreement(dataset)
 
     output = io.StringIO()
+
+    # Metadata comment header
+    file_names = ", ".join(f["filename"] for f in loader._files)
+    coder_labels = ", ".join(c.label for c in dataset.coders)
+    output.write(f"# ACE agreement summary — {date.today().isoformat()}\n")
+    output.write(f"# Files: {file_names}\n")
+    output.write(f"# Coders: {coder_labels}\n")
+    output.write(f"# Sources: {result.n_sources}, Codes: {result.n_codes}\n")
+
     writer = csv.writer(output)
     writer.writerow([
-        "code", "percent_agreement", "n_positions",
+        "code", "percent_agreement",
         "krippendorffs_alpha", "cohens_kappa", "fleiss_kappa",
         "congers_kappa", "gwets_ac1", "brennan_prediger",
+        "n_sources", "n_positions",
     ])
+
+    def _fmt(v):
+        return f"{v:.4f}" if v is not None else ""
+
     for code_name in sorted(result.per_code):
         m = result.per_code[code_name]
         writer.writerow([
             code_name,
-            f"{m.percent_agreement:.4f}" if m.percent_agreement is not None else "",
+            _fmt(m.percent_agreement),
+            _fmt(m.krippendorffs_alpha),
+            _fmt(m.cohens_kappa),
+            _fmt(m.fleiss_kappa),
+            _fmt(m.congers_kappa),
+            _fmt(m.gwets_ac1),
+            _fmt(m.brennan_prediger),
+            m.n_sources,
             m.n_positions,
-            f"{m.krippendorffs_alpha:.4f}" if m.krippendorffs_alpha is not None else "",
-            f"{m.cohens_kappa:.4f}" if m.cohens_kappa is not None else "",
-            f"{m.fleiss_kappa:.4f}" if m.fleiss_kappa is not None else "",
-            f"{m.congers_kappa:.4f}" if m.congers_kappa is not None else "",
-            f"{m.gwets_ac1:.4f}" if m.gwets_ac1 is not None else "",
-            f"{m.brennan_prediger:.4f}" if m.brennan_prediger is not None else "",
         ])
+
+    # Overall row
+    o = result.overall
+    writer.writerow([
+        "Overall",
+        _fmt(o.percent_agreement),
+        _fmt(o.krippendorffs_alpha),
+        _fmt(o.cohens_kappa),
+        _fmt(o.fleiss_kappa),
+        _fmt(o.congers_kappa),
+        _fmt(o.gwets_ac1),
+        _fmt(o.brennan_prediger),
+        result.n_sources,
+        o.n_positions,
+    ])
 
     return Response(
         content=output.getvalue(),
         media_type="text/csv",
         headers={"Content-Disposition": 'attachment; filename="agreement_results.csv"'},
+    )
+
+
+@router.get("/agreement/export/raw")
+async def agreement_export_raw(request: Request):
+    """Export raw annotation data as long-form CSV for reproducibility in R/Python."""
+    import csv
+    import io
+    from datetime import date
+
+    loader = getattr(request.app.state, "agreement_loader", None)
+    if loader is None or loader.file_count < 2:
+        return HTMLResponse("No agreement data available.", status_code=400)
+
+    dataset = loader.build_dataset()
+
+    output = io.StringIO()
+    coder_labels = ", ".join(c.label for c in dataset.coders)
+    output.write(f"# ACE raw agreement data — {date.today().isoformat()}\n")
+    output.write(f"# Coders: {coder_labels}\n")
+    output.write(f"# Sources: {len(dataset.sources)}, Codes: {len(dataset.codes)}\n")
+
+    writer = csv.writer(output)
+    writer.writerow(["source_id", "start_offset", "end_offset", "coder_id", "code_name"])
+
+    source_lookup = {s.content_hash: s.display_id for s in dataset.sources}
+
+    for ann in sorted(dataset.annotations, key=lambda a: (a.source_hash, a.start_offset, a.coder_id)):
+        source_id = source_lookup.get(ann.source_hash, ann.source_hash)
+        writer.writerow([source_id, ann.start_offset, ann.end_offset, ann.coder_id, ann.code_name])
+
+    return Response(
+        content=output.getvalue(),
+        media_type="text/csv",
+        headers={"Content-Disposition": 'attachment; filename="agreement_raw_data.csv"'},
     )
 
 

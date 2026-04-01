@@ -223,6 +223,33 @@ def test_export_csv(client, ace_file_a, ace_file_b):
     assert "percent_agreement" in resp.text
 
 
+def test_export_summary_csv_has_metadata_and_overall(client_with_agreement_files):
+    """Summary CSV includes metadata header, n_sources column, and Overall row."""
+    client, paths = client_with_agreement_files
+    client.post("/api/agreement/compute", data={"paths": json.dumps(paths)})
+    resp = client.get("/api/agreement/export/results")
+    assert resp.status_code == 200
+    text = resp.text
+    assert text.startswith("#")
+    assert "n_sources" in text
+    assert "Overall" in text
+
+
+def test_export_raw_data_csv(client_with_agreement_files):
+    """Raw data CSV has correct columns and content-type."""
+    client, paths = client_with_agreement_files
+    client.post("/api/agreement/compute", data={"paths": json.dumps(paths)})
+    resp = client.get("/api/agreement/export/raw")
+    assert resp.status_code == 200
+    assert resp.headers["content-type"].startswith("text/csv")
+    text = resp.text
+    assert "source_id" in text
+    assert "start_offset" in text
+    assert "end_offset" in text
+    assert "coder_id" in text
+    assert "code_name" in text
+
+
 # ── Reset ─────────────────────────────────────────────────────────────
 
 
