@@ -845,11 +845,12 @@
         search.focus();
       }
 
-      // Reset
+      // Reset sidebar state (preserve zone for header block below)
+      var savedZone = _sidebarFocusState.zone;
       _sidebarFocusState.codeId = null;
       _sidebarFocusState.groupName = null;
-      _sidebarFocusState.zone = null;
       _sidebarFocusState.searchText = "";
+      if (savedZone !== "header") _sidebarFocusState.zone = null;
     }
 
     // Header OOB swap: restore focus and announce flag state
@@ -861,8 +862,8 @@
           _announce(pressed ? "Source flagged" : "Source unflagged");
           flagBtn.focus();
         }
-        _sidebarFocusState.zone = null;
       }
+      _sidebarFocusState.zone = null;
     }
 
     // Auto-open dialogs

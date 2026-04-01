@@ -38,15 +38,12 @@ The outer container changes from `<div>` to `<header>` for the banner landmark. 
 - `title="{{ current_source.display_id }}"` for hover tooltip on long names
 - Guard: `{{ current_source.display_id if current_source else '' }}`
 
-### Position counter (centre, after source name)
+### Position counter (text panel navigation only)
 
-- Format: `{{ current_index + 1 }} / {{ total_sources }}`
-- Monospace font, `--ace-font-size-xs`, `--ace-text-muted` colour
-- `aria-label="Source {{ current_index + 1 }} of {{ total_sources }}"`
-- Replaces the old `complete_pct` percentage
-- Updates on page load when navigating sources (source navigation is a full page load via `window.location.href`, not an OOB swap)
+- Not in the header — lives in the existing text panel source navigation cluster
+- Avoids duplication between header and text panel
 
-### Flag indicator (centre, after position)
+### Flag indicator (centre, after source name)
 
 - `<button>` element with `aria-label="Toggle flag"` and `aria-pressed="true|false"`
 - **Unflagged:** `⚑` icon in `var(--ace-text-muted)` colour, no background
@@ -56,7 +53,7 @@ The outer container changes from `<div>` to `<header>` for the banner landmark. 
 - Focus: `:focus-visible` outline using `var(--ace-focus)`
 - Click triggers the existing flag toggle endpoint via `htmx.trigger(document.getElementById("trigger-flag"), "click")`
 - After toggle, `_announce()` is called: "Source flagged" / "Source unflagged"
-- Toast feedback via `HX-Trigger` header: `{"ace-toast": "Source flagged"}` / `{"ace-toast": "Source unflagged"}`
+- Toast feedback via `X-ACE-Toast` response header: `"Source flagged"` / `"Source unflagged"`
 - Known behaviour: unflagging sets status to `in_progress` regardless of previous status (existing API behaviour — not changed in this redesign)
 
 ### ? help button (right)
