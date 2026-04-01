@@ -59,10 +59,20 @@
 
 .ace-header-centre {
   flex: 1;
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  justify-content: center;
-  gap: var(--ace-space-2);
+}
+
+.ace-header-centre .ace-header-source {
+  grid-column: 2;
+  text-align: center;
+}
+
+.ace-header-centre .ace-flag-btn {
+  grid-column: 3;
+  justify-self: start;
+  margin-left: var(--ace-space-2);
 }
 
 .ace-header-source {
