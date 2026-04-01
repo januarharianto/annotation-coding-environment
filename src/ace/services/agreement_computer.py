@@ -88,19 +88,32 @@ def compute_agreement(dataset: AgreementDataset) -> AgreementResult:
                 for pos in coded_positions:
                     per_source_vectors[source_key][cid].append(vec[pos])
 
+    # Count distinct sources per code (from annotations)
+    code_source_sets: dict[str, set[str]] = {cn: set() for cn in code_names}
+    for ann in dataset.annotations:
+        if ann.code_name in code_source_sets:
+            code_source_sets[ann.code_name].add(ann.source_hash)
+
     # Compute per-code metrics
     per_code_results: dict[str, CodeMetrics] = {}
     for cn in code_names:
         vectors = per_code_vectors[cn]
-        per_code_results[cn] = _compute_metrics(vectors, coder_ids)
+        metrics = _compute_metrics(vectors, coder_ids)
+        metrics.n_sources = len(code_source_sets[cn])
+        per_code_results[cn] = metrics
 
     # Compute per-source metrics
     per_source_results: dict[str, CodeMetrics] = {}
     for src_key, vectors in per_source_vectors.items():
         per_source_results[src_key] = _compute_metrics(vectors, coder_ids)
 
-    # Compute overall (macro-average of per-code)
-    overall = _macro_average(list(per_code_results.values()))
+    # Compute overall (pooled across all codes)
+    pooled_vectors: dict[str, list[int]] = {cid: [] for cid in coder_ids}
+    for cn in code_names:
+        for cid in coder_ids:
+            pooled_vectors[cid].extend(per_code_vectors[cn][cid])
+    overall = _compute_metrics(pooled_vectors, coder_ids)
+    overall.n_sources = len(dataset.sources)
 
     # Compute pairwise alpha
     pairwise = _compute_pairwise(per_code_vectors, coder_ids)

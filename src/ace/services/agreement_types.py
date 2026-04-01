@@ -45,6 +45,7 @@ class AgreementDataset:
 class CodeMetrics:
     percent_agreement: float
     n_positions: int
+    n_sources: int = 0
     cohens_kappa: float | None = None
     krippendorffs_alpha: float | None = None
     fleiss_kappa: float | None = None
