@@ -34,9 +34,6 @@
 
   window.acePickAndCompute = function() {
     var results = document.getElementById("agreement-results");
-    results.innerHTML =
-      '<h1 class="ace-agreement-title">Inter-Coder Agreement</h1>' +
-      '<div class="ace-agreement-loading" role="status" aria-live="polite">Computing agreement\u2026</div>';
 
     fetch("/api/native/pick-files", {
       method: "POST",
@@ -46,9 +43,12 @@
       .then(function(r) { return r.json(); })
       .then(function(data) {
         if (!data.paths || data.paths.length < 2) {
-          results.innerHTML = _emptyStateHtml;
           return;
         }
+        // Show loading state only after files are selected
+        results.innerHTML =
+          '<h1 class="ace-agreement-title">Inter-Coder Agreement</h1>' +
+          '<div class="ace-agreement-loading" role="status" aria-live="polite">Computing agreement\u2026</div>';
         htmx.ajax("POST", "/api/agreement/compute", {
           values: { paths: JSON.stringify(data.paths) },
           target: "#agreement-results",
