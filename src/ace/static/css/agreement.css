@@ -49,11 +49,11 @@
   padding: 8px 0;
   border-bottom: 1px solid var(--ace-border);
   font-size: var(--ace-font-size-sm);
-  color: var(--ace-text-muted);
+  color: var(--ace-text);
   margin-bottom: 8px;
 }
 
-.ace-agreement-context strong { color: var(--ace-text); }
+.ace-agreement-context strong { font-weight: 700; }
 .ace-agreement-context .dot { color: var(--ace-border-light); }
 .ace-agreement-context .action {
   margin-left: auto;
@@ -73,9 +73,8 @@
   border: 1px solid #fde68a;
   border-radius: var(--ace-radius);
   line-height: 1.7;
-  color: var(--ace-text-muted);
+  color: var(--ace-text);
 }
-.ace-agreement-warn-body strong { color: var(--ace-text); }
 
 /* Table wrapper for horizontal scroll */
 .ace-table-scroll { overflow-x: auto; margin-bottom: 24px; }
@@ -106,8 +105,8 @@
 }
 
 .ace-agreement-table th:first-child { text-align: left; }
-.ace-agreement-table th.col-primary { color: var(--ace-text-muted); }
-.ace-agreement-table th.col-muted { color: #9ca3af; }
+.ace-agreement-table th.col-primary { color: var(--ace-text); }
+.ace-agreement-table th.col-muted { color: var(--ace-text-muted); }
 .ace-agreement-table th.col-gap { padding-left: 20px; }
 
 .ace-agreement-table td {
@@ -126,7 +125,7 @@
 
 .ace-agreement-table td.col-gap { padding-left: 20px; }
 .ace-agreement-table .col-val-primary { color: var(--ace-text); }
-.ace-agreement-table .col-val-muted { color: #757575; }
+.ace-agreement-table .col-val-muted { color: var(--ace-text); }
 .ace-agreement-table .col-val-faint { color: var(--ace-text-muted); }
 .ace-agreement-table .col-val-low { color: #9a3412; }
 
