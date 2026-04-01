@@ -168,6 +168,22 @@ def test_coding_page_includes_idiomorph(client_with_sources):
     assert "idiomorph-ext.min.js" in resp.text
 
 
+def test_header_has_ace_wordmark_and_source_name(client_with_sources):
+    """Header shows ACE wordmark and source display ID."""
+    client, _ = client_with_sources
+    resp = client.get("/code")
+    assert resp.status_code == 200
+    html = resp.text
+    # Extract header element to avoid false positives from text panel
+    start = html.find('<header id="coding-header"')
+    assert start != -1, "Missing <header id='coding-header'>"
+    end = html.find("</header>", start)
+    header = html[start : end + len("</header>")]
+    assert "ACE" in header
+    assert "S001" in header
+    assert 'aria-label="Toggle flag"' in header
+
+
 def test_sidebar_has_aria_tree_roles(client_with_sources):
     """Sidebar renders with ARIA treeview roles."""
     client, _ = client_with_sources
@@ -415,6 +431,7 @@ def test_flag_source(client_with_sources):
     )
     assert resp.status_code == 200
     assert "flagged" in resp.text.lower()
+    assert resp.headers.get("X-ACE-Toast") == "Source flagged"
 
     # Flag again to unflag
     resp = client.post(
