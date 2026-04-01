@@ -14,39 +14,58 @@
   overflow: hidden;
 }
 
-/* ---- Header with merged nav ---- */
+/* ---- Header ---- */
 
 .ace-coding-header {
   display: flex;
   align-items: center;
-  gap: var(--ace-space-3);
   padding: var(--ace-space-2) var(--ace-space-4);
   border-bottom: 1px solid var(--ace-border);
   background: var(--ace-bg);
   height: 40px;
   flex-shrink: 0;
-  font-size: var(--ace-font-size-md);
 }
 
-.ace-coding-header-back {
+.ace-header-brand {
+  flex: 0 0 auto;
+  font-weight: 700;
+  font-size: var(--ace-font-size-sm);
+  letter-spacing: -0.3px;
   color: var(--ace-text-muted);
   text-decoration: none;
   transition: color var(--ace-transition);
 }
 
-.ace-coding-header-back:hover {
-  color: var(--ace-text);
+.ace-header-brand:hover { color: var(--ace-text); }
+
+.ace-header-brand:focus-visible {
+  outline: 2px solid var(--ace-focus);
+  outline-offset: 2px;
+  border-radius: var(--ace-radius);
 }
 
-.ace-coding-header-left {
+.ace-header-centre {
+  flex: 1;
   display: flex;
   align-items: center;
-  gap: var(--ace-space-3);
-  flex: 1;
+  justify-content: center;
+  gap: var(--ace-space-2);
 }
 
-.ace-coding-header-title {
+.ace-header-source {
   font-weight: var(--ace-weight-semibold);
+  font-size: var(--ace-font-size-base);
+  color: var(--ace-text);
+  max-width: 30ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ace-header-position {
+  font-family: var(--ace-font-mono);
+  font-size: var(--ace-font-size-xs);
+  color: var(--ace-text-muted);
 }
 
 .ace-nav-cluster {
@@ -102,29 +121,61 @@
   padding: 0 var(--ace-space-3) var(--ace-space-1);
 }
 
-.ace-coding-header-right {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  flex: 1;
-  gap: var(--ace-space-3);
-  font-size: var(--ace-font-size-sm);
-  color: var(--ace-text-muted);
-}
-
-.ace-coding-header-right a {
-  color: var(--ace-text-muted);
-  text-decoration: none;
+/* Flag button */
+.ace-flag-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
   transition: color var(--ace-transition);
 }
 
-.ace-coding-header-right a:hover {
-  color: var(--ace-text);
+.ace-flag-btn:focus-visible {
+  outline: 2px solid var(--ace-focus);
+  outline-offset: 2px;
+  border-radius: var(--ace-radius);
 }
 
-.ace-completion {
-  font-family: var(--ace-font-mono);
-  font-size: var(--ace-font-size-xs);
+.ace-flag-icon {
+  color: var(--ace-text-muted);
+  font-size: var(--ace-font-size-sm);
+}
+
+.ace-flag-btn:hover .ace-flag-icon { color: var(--ace-text); }
+
+.ace-flag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  background: rgba(191, 54, 12, 0.1);
+  color: #bf360c;
+  border: 1px solid rgba(191, 54, 12, 0.25);
+  border-radius: var(--ace-radius);
+  font-size: var(--ace-font-size-2xs);
+  font-weight: 600;
+  padding: 1px 6px;
+}
+
+.ace-flag-btn:hover .ace-flag-chip { background: rgba(191, 54, 12, 0.16); }
+
+/* Help button */
+.ace-header-help {
+  flex: 0 0 auto;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--ace-text-muted);
+  font-size: var(--ace-font-size-sm);
+  padding: var(--ace-space-1);
+  transition: color var(--ace-transition);
+}
+
+.ace-header-help:hover { color: var(--ace-text); }
+
+.ace-header-help:focus-visible {
+  outline: 2px solid var(--ace-focus);
+  outline-offset: 2px;
+  border-radius: var(--ace-radius);
 }
 
 /* ---- Status badge ---- */
