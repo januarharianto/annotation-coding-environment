@@ -55,7 +55,10 @@
   {# Header #}
   {% block coding_header %}
   <header id="coding-header" class="ace-coding-header">
-    <a href="/" class="ace-header-brand">ACE</a>
+    <a href="/" class="ace-header-brand">
+      <span class="ace-header-brand-name">ACE</span>
+      <span class="ace-header-brand-sub">Annotation Coding Environment</span>
+    </a>
     <div class="ace-header-centre">
       <span class="ace-header-source" title="{{ current_source.display_id if current_source else '' }}">{{ current_source.display_id if current_source else '' }}</span>
       <button type="button" class="ace-flag-btn{% if current_status == 'flagged' %} ace-flag-btn--active{% endif %}"

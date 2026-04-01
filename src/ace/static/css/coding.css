@@ -22,18 +22,31 @@
   padding: var(--ace-space-2) var(--ace-space-4);
   border-bottom: 1px solid var(--ace-border);
   background: var(--ace-bg);
-  height: 40px;
+  height: 44px;
   flex-shrink: 0;
 }
 
 .ace-header-brand {
-  flex: 0 0 auto;
-  font-weight: 700;
-  font-size: var(--ace-font-size-sm);
-  letter-spacing: -0.3px;
-  color: var(--ace-text-muted);
+  flex: 0 0 var(--ace-sidebar-width);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  line-height: 1.15;
   text-decoration: none;
   transition: color var(--ace-transition);
+}
+
+.ace-header-brand-name {
+  font-weight: 800;
+  font-size: 16px;
+  letter-spacing: -0.5px;
+  color: var(--ace-text);
+}
+
+.ace-header-brand-sub {
+  font-size: 8px;
+  color: var(--ace-text-muted);
+  letter-spacing: 0.3px;
 }
 
 .ace-header-brand:hover { color: var(--ace-text); }
