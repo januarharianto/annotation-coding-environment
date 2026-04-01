@@ -52,19 +52,25 @@
             hx-swap="outerHTML">Flag</button>
   </div>
 
-  {# Header (project info only) #}
+  {# Header #}
   {% block coding_header %}
-  <div id="coding-header" class="ace-coding-header">
-    <div class="ace-coding-header-left">
-      <a href="/" class="ace-coding-header-back">&larr; Home</a>
-      <span class="ace-coding-header-title">{{ project_name }}</span>
+  <header id="coding-header" class="ace-coding-header">
+    <a href="/" class="ace-header-brand">ACE</a>
+    <div class="ace-header-centre">
+      <span class="ace-header-source" title="{{ current_source.display_id if current_source else '' }}">{{ current_source.display_id if current_source else '' }}</span>
+      <span class="ace-header-position" aria-label="Source {{ current_index + 1 }} of {{ total_sources }}">{{ current_index + 1 }} / {{ total_sources }}</span>
+      <button type="button" class="ace-flag-btn{% if current_status == 'flagged' %} ace-flag-btn--active{% endif %}"
+              aria-label="Toggle flag" aria-pressed="{{ 'true' if current_status == 'flagged' else 'false' }}"
+              id="header-flag-btn">
+        {%- if current_status == 'flagged' -%}
+          <span class="ace-flag-chip">&#9873; Flagged</span>
+        {%- else -%}
+          <span class="ace-flag-icon">&#9873;</span>
+        {%- endif -%}
+      </button>
     </div>
-    <div class="ace-coding-header-right">
-      <span class="ace-completion">{{ complete_pct }}%</span>
-      <a href="/api/export/annotations">Export</a>
-      <span>{{ coder_name }}</span>
-    </div>
-  </div>
+    <button type="button" class="ace-header-help" aria-label="Keyboard shortcuts" id="header-help-btn">?</button>
+  </header>
   {% endblock %}
 
   {# Three-column layout #}

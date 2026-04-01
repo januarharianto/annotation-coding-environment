@@ -168,6 +168,19 @@ def test_coding_page_includes_idiomorph(client_with_sources):
     assert "idiomorph-ext.min.js" in resp.text
 
 
+def test_header_has_ace_wordmark_and_source_name(client_with_sources):
+    """Header shows ACE wordmark, source display ID, and position counter."""
+    client, _ = client_with_sources
+    resp = client.get("/code")
+    assert resp.status_code == 200
+    html = resp.text
+    assert '<a href="/"' in html
+    assert "ACE" in html
+    assert "S001" in html
+    assert "1 / 3" in html
+    assert "<header" in html
+
+
 def test_sidebar_has_aria_tree_roles(client_with_sources):
     """Sidebar renders with ARIA treeview roles."""
     client, _ = client_with_sources
