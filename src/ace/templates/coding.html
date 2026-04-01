@@ -58,7 +58,6 @@
     <a href="/" class="ace-header-brand">ACE</a>
     <div class="ace-header-centre">
       <span class="ace-header-source" title="{{ current_source.display_id if current_source else '' }}">{{ current_source.display_id if current_source else '' }}</span>
-      <span class="ace-header-position" aria-label="Source {{ current_index + 1 }} of {{ total_sources }}">{{ current_index + 1 }} / {{ total_sources }}</span>
       <button type="button" class="ace-flag-btn{% if current_status == 'flagged' %} ace-flag-btn--active{% endif %}"
               aria-label="Toggle flag" aria-pressed="{{ 'true' if current_status == 'flagged' else 'false' }}"
               id="header-flag-btn">

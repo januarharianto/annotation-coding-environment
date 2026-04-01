@@ -62,12 +62,6 @@
   white-space: nowrap;
 }
 
-.ace-header-position {
-  font-family: var(--ace-font-mono);
-  font-size: var(--ace-font-size-xs);
-  color: var(--ace-text-muted);
-}
-
 .ace-nav-cluster {
   display: flex;
   align-items: center;
