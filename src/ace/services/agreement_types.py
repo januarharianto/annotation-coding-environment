@@ -59,7 +59,7 @@ class AgreementResult:
     overall: CodeMetrics
     per_code: dict[str, CodeMetrics]  # code_name -> metrics
     per_source: dict[str, CodeMetrics]  # display_id -> metrics
-    pairwise: dict[tuple[str, str], float]  # (coder_id, coder_id) -> alpha
+    pairwise: dict[tuple[str, str], CodeMetrics]  # (coder_id, coder_id) -> metrics
     n_coders: int
     n_sources: int
     n_codes: int

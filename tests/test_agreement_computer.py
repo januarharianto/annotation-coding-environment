@@ -153,3 +153,45 @@ def test_pooled_overall_single_code_matches_per_code():
     result = compute_agreement(dataset)
     assert result.overall.percent_agreement == result.per_code["A"].percent_agreement
     assert result.overall.n_positions == result.per_code["A"].n_positions
+
+
+def test_pairwise_returns_full_code_metrics_for_3_coders():
+    """Pairwise produces full CodeMetrics (%, alpha, kappa) for each pair.
+
+    With 3 coders there are 3 pairs. Each pair has 2 coders so Cohen's kappa
+    is applicable. Verify all three fields are populated and all 3 pairs exist.
+    """
+    sources = [MatchedSource(content_hash="h1", display_id="S1", content_text="x" * 20)]
+    coders = [
+        CoderInfo(id="c1", label="C1", source_file="a.ace"),
+        CoderInfo(id="c2", label="C2", source_file="b.ace"),
+        CoderInfo(id="c3", label="C3", source_file="c.ace"),
+    ]
+    codes = [MatchedCode(name="A", present_in={"c1", "c2", "c3"})]
+    annotations = [
+        # c1 and c2 agree on positions 0-9; c3 agrees only on 0-4
+        MatchedAnnotation(source_hash="h1", coder_id="c1", code_name="A",
+                          start_offset=0, end_offset=10),
+        MatchedAnnotation(source_hash="h1", coder_id="c2", code_name="A",
+                          start_offset=0, end_offset=10),
+        MatchedAnnotation(source_hash="h1", coder_id="c3", code_name="A",
+                          start_offset=0, end_offset=5),
+    ]
+    dataset = _make_dataset(sources, coders, codes, annotations)
+    result = compute_agreement(dataset)
+
+    assert len(result.pairwise) == 3  # 3 pairs for 3 coders
+
+    for pair_key, metrics in result.pairwise.items():
+        assert isinstance(metrics, CodeMetrics), f"Expected CodeMetrics for pair {pair_key}"
+        assert metrics.percent_agreement is not None
+        assert metrics.krippendorffs_alpha is not None
+        assert metrics.cohens_kappa is not None, (
+            f"cohens_kappa should be set for 2-coder pair {pair_key}"
+        )
+
+    # c1/c2 have perfect agreement — their kappa should be highest
+    metrics_12 = result.pairwise.get(("c1", "c2"))
+    assert metrics_12 is not None
+    assert metrics_12.cohens_kappa > 0.9
+    assert metrics_12.percent_agreement > 0.9
