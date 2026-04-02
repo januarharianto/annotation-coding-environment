@@ -1363,6 +1363,7 @@
 
     if (query && !query.startsWith("/")) {
       // Filter mode
+      _sortableInstances.forEach(function (s) { s.option("disabled", true); });
       var rows = tree.querySelectorAll(".ace-code-row");
       var anyMatch = false;
       rows.forEach(function (row) {
@@ -1430,6 +1431,7 @@
       }
     } else if (query && query.startsWith("/")) {
       // Group creation mode
+      _sortableInstances.forEach(function (s) { s.option("disabled", true); });
       var groupName = query.substring(1).trim();
       // Hide all codes, show group creation prompt
       tree.querySelectorAll(".ace-code-row").forEach(function (r) { r.style.display = "none"; r.setAttribute("aria-hidden", "true"); });
@@ -1458,6 +1460,7 @@
       }
     } else {
       // Empty: restore all rows, clear highlights
+      _sortableInstances.forEach(function (s) { s.option("disabled", false); });
       tree.querySelectorAll(".ace-code-row").forEach(function (row) {
         row.style.display = "";
         row.removeAttribute("aria-hidden");
@@ -2094,6 +2097,7 @@
     // Escape — Return to text panel
     if (key === "Escape" && !alt && !shift) {
       e.preventDefault();
+      _clearSearchFilter();
       _focusTextPanel();
       return;
     }
@@ -2219,6 +2223,7 @@
       var dropdown = document.getElementById("codebook-dropdown");
       if (dropdown && dropdown.style.display !== "none") {
         dropdown.style.display = "none";
+        e.stopPropagation();
       }
     }
   });
