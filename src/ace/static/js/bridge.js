@@ -1293,6 +1293,27 @@
     if (codeId) _openCodeMenu(e.clientX, e.clientY, codeId);
   });
 
+  /** Unified apply helper used by keycap click, search Enter, and tree Enter. */
+  function _applyCode(codeId) {
+    var codeName = "";
+    var row = document.querySelector('.ace-code-row[data-code-id="' + codeId + '"]');
+    if (row) {
+      var nameEl = row.querySelector(".ace-code-name");
+      if (nameEl) codeName = nameEl.textContent;
+    }
+    if (window.__aceLastSelection) {
+      _applyCodeToSelection(codeId);
+    } else if (window.__aceFocusIndex >= 0) {
+      _applyCodeToSentence(codeId);
+    } else {
+      return;
+    }
+    if (codeName) {
+      var target = window.__aceLastSelection ? "selection" : "sentence " + (window.__aceFocusIndex + 1);
+      _announce("'" + codeName + "' applied to " + target);
+    }
+  }
+
   // Keycap badge click: apply code to focused sentence/selection
   document.addEventListener("click", function (e) {
     var keycap = e.target.closest(".ace-keycap");
@@ -1304,11 +1325,7 @@
     var codeId = row.getAttribute("data-code-id");
     if (!codeId) return;
     _clearSearchFilter();
-    if (window.__aceLastSelection) {
-      _applyCodeToSelection(codeId);
-    } else if (window.__aceFocusIndex >= 0) {
-      _applyCodeToSentence(codeId);
-    }
+    _applyCode(codeId);
   });
 
   // Click on code row (not keycap): focus/select for management
@@ -1395,6 +1412,22 @@
         });
         tree.appendChild(prompt);
       }
+
+      // Highlight first visible match as search target
+      var prevTarget = tree.querySelector(".ace-code-row--search-target");
+      if (prevTarget) {
+        prevTarget.classList.remove("ace-code-row--search-target");
+        prevTarget.removeAttribute("aria-current");
+      }
+      if (anyMatch) {
+        var target = Array.from(tree.querySelectorAll(".ace-code-row")).find(function (r) {
+          return r.style.display !== "none";
+        });
+        if (target) {
+          target.classList.add("ace-code-row--search-target");
+          target.setAttribute("aria-current", "true");
+        }
+      }
     } else if (query && query.startsWith("/")) {
       // Group creation mode
       var groupName = query.substring(1).trim();
@@ -1436,6 +1469,11 @@
       tree.querySelectorAll(".ace-code-group-header").forEach(function (h) { h.style.display = ""; h.removeAttribute("aria-hidden"); });
       tree.querySelectorAll('[role="group"]').forEach(function (g) { g.style.display = ""; g.removeAttribute("aria-hidden"); });
       _restoreCollapseState();
+      var prevTarget = tree.querySelector(".ace-code-row--search-target");
+      if (prevTarget) {
+        prevTarget.classList.remove("ace-code-row--search-target");
+        prevTarget.removeAttribute("aria-current");
+      }
     }
 
     _updateKeycaps();
@@ -1534,9 +1572,9 @@
           ? Array.from(tree.querySelectorAll(".ace-code-row")).find(function (r) { return r.style.display !== "none"; })
           : null;
         _clearSearchFilter();
-        if (firstMatch && window.__aceFocusIndex >= 0) {
+        if (firstMatch) {
           var codeId = firstMatch.getAttribute("data-code-id");
-          if (codeId) _applyCodeToSentence(codeId);
+          if (codeId) _applyCode(codeId);
         }
       }
     }
@@ -1949,14 +1987,12 @@
       e.preventDefault();
       if (!_isGroupHeader(active)) {
         var codeId3 = active.getAttribute("data-code-id");
-        if (codeId3 && window.__aceFocusIndex >= 0) {
+        if (codeId3) {
           _clearSearchFilter();
-          _applyCodeToSentence(codeId3);
+          _applyCode(codeId3);
           // Flash the row briefly to confirm
           active.classList.add("ace-code-row--flash");
           setTimeout(function () { active.classList.remove("ace-code-row--flash"); }, 300);
-          var codeName = active.querySelector(".ace-code-name");
-          _announce("'" + (codeName ? codeName.textContent : "") + "' applied to sentence " + (window.__aceFocusIndex + 1));
         }
       } else {
         // On group header: toggle expand/collapse

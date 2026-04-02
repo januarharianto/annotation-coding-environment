@@ -302,6 +302,10 @@
   border-radius: var(--ace-radius);
 }
 
+.ace-code-row--search-target {
+  background: var(--ace-bg-muted);
+}
+
 /* Screen reader only (visually hidden, accessible) */
 .ace-sr-only {
   position: absolute;
