@@ -25,13 +25,6 @@
 (function() {
   "use strict";
 
-  var _emptyStateHtml =
-    '<h1 class="ace-agreement-title">Inter-Coder Agreement</h1>' +
-    '<div class="ace-agreement-empty">' +
-    '<p>Select 2 or more .ace files to compute agreement</p>' +
-    '<button class="ace-agreement-choose-btn" onclick="acePickAndCompute()">Choose files</button>' +
-    '</div>';
-
   window.acePickAndCompute = function() {
     var results = document.getElementById("agreement-results");
 

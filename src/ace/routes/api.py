@@ -1381,7 +1381,6 @@ def _agreement_fmt(val: float | None, decimals: int = 2, is_pct: bool = False) -
 
 
 def _render_agreement_results(result, dataset, loader) -> str:
-    import html as html_mod
 
     n_coders = result.n_coders
     kappa_header = "Cohen \u03ba" if n_coders == 2 else "Fleiss \u03ba"
@@ -1416,7 +1415,7 @@ def _render_agreement_results(result, dataset, loader) -> str:
     # --- Warnings ---
     warnings_html = ""
     if dataset.warnings:
-        warn_items = "".join(f"<div>{html_mod.escape(w)}</div>" for w in dataset.warnings)
+        warn_items = "".join(f"<div>{html.escape(w)}</div>" for w in dataset.warnings)
         warnings_html = (
             '<details class="ace-agreement-warnings">'
             f'<summary><span aria-hidden="true">\u26a0</span> '
@@ -1453,7 +1452,7 @@ def _render_agreement_results(result, dataset, loader) -> str:
         interp_html = f'<span class="interp">{interp}</span>' if interp else ""
         rows.append(
             f'<tr>'
-            f'<td>{html_mod.escape(code_name)}</td>'
+            f'<td>{html.escape(code_name)}</td>'
             f'<td class="col-val-primary">{_agreement_fmt(m.percent_agreement, is_pct=True)}</td>'
             f'<td class="col-val-primary">{alpha_str}{interp_html}</td>'
             f'<td class="col-val-primary">{_agreement_fmt(kappa_val)}</td>'
@@ -1469,7 +1468,7 @@ def _render_agreement_results(result, dataset, loader) -> str:
     kappa_val = m.cohens_kappa if n_coders == 2 else m.fleiss_kappa
     alpha_str = _agreement_fmt(m.krippendorffs_alpha)
     interp = _interp_label(m.krippendorffs_alpha)
-    interp_html = f'<span class="interp" style="color:#64748b">{interp}</span>' if interp else ""
+    interp_html = f'<span class="interp">{interp}</span>' if interp else ""
     overall_row = (
         f'<tr class="overall-row">'
         f'<td>Overall (pooled)</td>'
@@ -1504,7 +1503,7 @@ def _render_agreement_results(result, dataset, loader) -> str:
             alpha_cls = "col-val-low" if alpha is not None and alpha < 0.60 else "col-val-primary"
             pw_rows.append(
                 f'<tr>'
-                f'<td>{html_mod.escape(label)}</td>'
+                f'<td>{html.escape(label)}</td>'
                 f'<td class="col-val-primary">{_agreement_fmt(pm.percent_agreement, is_pct=True)}</td>'
                 f'<td class="{alpha_cls}">{alpha_str}{interp_html}</td>'
                 f'<td class="col-val-muted">{_agreement_fmt(pm.cohens_kappa)}</td>'
@@ -1554,13 +1553,12 @@ async def agreement_compute(
     paths: str = Form(...),
 ):
     """Load files, compute agreement, return minimalist results HTML."""
-    import json as json_mod
     from ace.services.agreement_loader import AgreementLoader
     from ace.services.agreement_computer import compute_agreement
 
     try:
-        path_list = json_mod.loads(paths)
-    except (json_mod.JSONDecodeError, TypeError):
+        path_list = json.loads(paths)
+    except (json.JSONDecodeError, TypeError):
         return HTMLResponse(_agreement_error("Invalid file paths."), status_code=400)
 
     if len(path_list) < 2:
@@ -1591,6 +1589,9 @@ async def agreement_compute(
 
     result = compute_agreement(dataset)
 
+    request.app.state.agreement_dataset = dataset
+    request.app.state.agreement_result = result
+
     html_out = _render_agreement_results(result, dataset, loader)
     return HTMLResponse(html_out)
 
@@ -1602,14 +1603,11 @@ async def agreement_export_results(request: Request):
     import io
     from datetime import date
 
-    from ace.services.agreement_computer import compute_agreement
-
     loader = getattr(request.app.state, "agreement_loader", None)
-    if loader is None or loader.file_count < 2:
-        return HTMLResponse("No agreement data available.", status_code=400)
-
-    dataset = loader.build_dataset()
-    result = compute_agreement(dataset)
+    dataset = getattr(request.app.state, "agreement_dataset", None)
+    result = getattr(request.app.state, "agreement_result", None)
+    if loader is None or loader.file_count < 2 or dataset is None or result is None:
+        return HTMLResponse("No agreement data available. Compute first.", status_code=400)
 
     output = io.StringIO()
 
@@ -1677,10 +1675,9 @@ async def agreement_export_raw(request: Request):
     from datetime import date
 
     loader = getattr(request.app.state, "agreement_loader", None)
-    if loader is None or loader.file_count < 2:
-        return HTMLResponse("No agreement data available.", status_code=400)
-
-    dataset = loader.build_dataset()
+    dataset = getattr(request.app.state, "agreement_dataset", None)
+    if loader is None or loader.file_count < 2 or dataset is None:
+        return HTMLResponse("No agreement data available. Compute first.", status_code=400)
 
     output = io.StringIO()
     coder_labels = ", ".join(c.label for c in dataset.coders)
