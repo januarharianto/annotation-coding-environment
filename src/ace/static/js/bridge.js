@@ -116,13 +116,11 @@
   document.addEventListener("click", function (e) {
     var header = e.target.closest(".ace-code-group-header");
     if (header && !e.target.closest(".ace-code-menu")) {
-      if (header.getAttribute("tabindex") === "0") {
-        // Already focused — toggle collapse
-        _toggleGroupCollapse(header);
-      } else {
-        // Not focused yet — just select it
-        _focusTreeItem(header);
-      }
+      _focusTreeItem(header);
+      _toggleGroupCollapse(header);
+      var groupName = header.getAttribute("data-group") || "Ungrouped";
+      var expanded = header.getAttribute("aria-expanded") === "true";
+      _announce("Group " + groupName + (expanded ? " expanded" : " collapsed"));
     }
   });
 
@@ -341,24 +339,6 @@
     if (key === "ArrowRight" && shift) {
       e.preventDefault();
       window.aceNavigate(window.__aceCurrentIndex + 1);
-      return;
-    }
-
-    // F2 — Inline rename selected code
-    if (key === "F2" && _lastSelectedCodeId) {
-      e.preventDefault();
-      _startInlineRename(_lastSelectedCodeId);
-      return;
-    }
-
-    // Delete/Backspace — double-press to confirm delete selected code
-    if ((key === "Delete" || key === "Backspace") && _lastSelectedCodeId && !shift && !ctrl) {
-      e.preventDefault();
-      if (_deleteTarget === _lastSelectedCodeId) {
-        _executeDelete(_lastSelectedCodeId);
-      } else {
-        _startDeleteConfirm(_lastSelectedCodeId);
-      }
       return;
     }
 
