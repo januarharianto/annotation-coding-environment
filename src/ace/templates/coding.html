@@ -85,6 +85,14 @@
         <input type="search" class="ace-sidebar-search" placeholder="Filter codes (/)"
                id="code-search-input" autocomplete="off"
                aria-controls="code-tree" aria-label="Filter codes">
+        <div class="ace-codebook-menu" id="codebook-menu-wrapper">
+          <button type="button" class="ace-codebook-menu-btn" id="codebook-menu-btn"
+                  aria-label="Codebook actions">Codebook ▾</button>
+          <div class="ace-codebook-dropdown" id="codebook-dropdown" style="display:none">
+            <button type="button" class="ace-codebook-dropdown-item" id="codebook-menu-import-btn">Import codebook (CSV)</button>
+            <button type="button" class="ace-codebook-dropdown-item" id="codebook-export-btn">Export codebook (CSV)</button>
+          </div>
+        </div>
       </div>
       <div id="code-tree" role="tree" aria-label="Code list" class="ace-sidebar-codes">
         {% for group_name, group_codes in grouped_codes %}
@@ -120,7 +128,11 @@
         </div>
         {% endif %}
         {% if not codes %}
-        <div class="ace-sidebar-empty">No codes yet. Type a name above and press Enter.</div>
+        <div class="ace-sidebar-empty">
+          No codes yet. Type a name above and press Enter,
+          or <a href="#" style="color:var(--ace-text);text-decoration:underline"
+                onclick="event.preventDefault();document.getElementById('codebook-menu-import-btn').click()">import from CSV</a>.
+        </div>
         {% endif %}
       </div>
       <div aria-live="polite" class="ace-sr-only" id="ace-live-region"></div>

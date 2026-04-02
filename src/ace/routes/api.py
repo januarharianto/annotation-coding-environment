@@ -1181,6 +1181,118 @@ async def import_codebook_preview(request: Request, file: UploadFile = File(...)
     )
 
 
+@router.post("/codes/import/preview-path")
+async def import_codebook_preview_path(
+    request: Request,
+    path: str = Form(...),
+    current_index: int = Form(default=0),
+):
+    """Preview a codebook CSV from a local file path (native file picker flow)."""
+    from ace.models.codebook import preview_codebook_csv
+
+    coder_id = getattr(request.app.state, "coder_id", None)
+    if coder_id is None:
+        return HTMLResponse("", status_code=400)
+
+    file_path = Path(path)
+    if file_path.suffix.lower() != ".csv":
+        return _oob_toast("Please select a valid CSV file.")
+
+    conn = _open_project_db(request)
+    try:
+        previewed = preview_codebook_csv(conn, str(file_path))
+    except Exception as e:
+        return _oob_toast(f"Could not parse CSV: {html.escape(str(e))}")
+    finally:
+        conn.close()
+
+    new_codes = [c for c in previewed if not c["exists"]]
+    existing_codes = [c for c in previewed if c["exists"]]
+
+    groups: dict = {}
+    for code in previewed:
+        gn = code.get("group_name") or ""
+        groups.setdefault(gn, []).append(code)
+
+    preview_rows = ""
+    for group_name, codes in groups.items():
+        if group_name:
+            preview_rows += (
+                f'<div class="ace-import-group-label">{html.escape(group_name)}</div>'
+            )
+        for code in codes:
+            esc_name = html.escape(code["name"])
+            if code["exists"]:
+                preview_rows += (
+                    f'<div class="ace-import-row ace-import-row--exists">'
+                    f'<span style="width:7px;height:7px;border-radius:50%;'
+                    f'background:var(--ace-text-muted);display:inline-block"></span>'
+                    f'{esc_name}'
+                    f'<span class="ace-import-badge ace-import-badge--exists">exists</span>'
+                    f'</div>'
+                )
+            else:
+                esc_colour = html.escape(code["colour"])
+                preview_rows += (
+                    f'<div class="ace-import-row ace-import-row--new">'
+                    f'<span style="width:7px;height:7px;border-radius:50%;'
+                    f'background:{esc_colour};display:inline-block"></span>'
+                    f'{esc_name}'
+                    f'<span class="ace-import-badge ace-import-badge--new">new</span>'
+                    f'</div>'
+                )
+
+    filename = html.escape(file_path.name)
+    new_count = len(new_codes)
+    exist_count = len(existing_codes)
+    subtitle_parts = [filename]
+    if exist_count > 0:
+        subtitle_parts.append(f"{exist_count} already exist (skipped)")
+
+    codes_for_import = [
+        {"name": c["name"], "colour": c["colour"], "group_name": c.get("group_name")}
+        for c in new_codes
+    ]
+    codes_json_escaped = html.escape(json.dumps(codes_for_import))
+
+    dialog_html = (
+        f'<dialog class="ace-dialog ace-import-dialog">'
+        f'<div class="ace-import-dialog-title">Import Codebook</div>'
+        f'<div class="ace-import-dialog-sub">{" · ".join(subtitle_parts)}</div>'
+    )
+
+    if new_count > 0:
+        dialog_html += (
+            f'<div class="ace-import-preview">'
+            f'<div class="ace-import-preview-header">Preview</div>'
+            f'<div class="ace-import-preview-list">{preview_rows}</div>'
+            f'</div>'
+        )
+    else:
+        dialog_html += (
+            f'<div class="ace-import-empty">'
+            f'All codes in this file already exist in your codebook.</div>'
+        )
+
+    dialog_html += (
+        f'<div class="ace-import-actions">'
+        f'<button type="button" class="ace-btn" onclick="this.closest(\'dialog\').close()">Cancel</button>'
+    )
+
+    if new_count > 0:
+        dialog_html += (
+            f'<button type="button" class="ace-btn ace-btn--primary" '
+            f'onclick="aceImportFromPreview(this)" '
+            f'data-codes="{codes_json_escaped}" '
+            f'data-current-index="{current_index}">'
+            f'Import {new_count} code{"s" if new_count != 1 else ""}</button>'
+        )
+
+    dialog_html += '</div></dialog>'
+
+    return HTMLResponse(dialog_html)
+
+
 @router.post("/codes/import")
 async def import_codebook(
     request: Request,
