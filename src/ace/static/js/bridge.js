@@ -1293,20 +1293,32 @@
     if (codeId) _openCodeMenu(e.clientX, e.clientY, codeId);
   });
 
-  // Left-click on code row: apply only when search filter is active
-  // (without filter, clicks select/focus the code for rename, delete, etc.)
+  // Keycap badge click: apply code to focused sentence/selection
+  document.addEventListener("click", function (e) {
+    var keycap = e.target.closest(".ace-keycap");
+    if (!keycap) return;
+    e.stopPropagation();
+    var row = keycap.closest(".ace-code-row");
+    if (!row) return;
+    if (row.querySelector('[contenteditable="true"]')) return;
+    var codeId = row.getAttribute("data-code-id");
+    if (!codeId) return;
+    _clearSearchFilter();
+    if (window.__aceLastSelection) {
+      _applyCodeToSelection(codeId);
+    } else if (window.__aceFocusIndex >= 0) {
+      _applyCodeToSentence(codeId);
+    }
+  });
+
+  // Click on code row (not keycap): focus/select for management
   document.addEventListener("click", function (e) {
     var row = e.target.closest(".ace-code-row");
     if (!row) return;
+    if (e.target.closest(".ace-keycap")) return;
     if (e.target.closest(".ace-code-menu") || _isDragging) return;
     if (e.target.isContentEditable) return;
-    var searchInput = document.getElementById("code-search-input");
-    if (!searchInput || !searchInput.value) return;
-    var codeId = row.getAttribute("data-code-id");
-    if (codeId && window.__aceFocusIndex >= 0) {
-      _clearSearchFilter();
-      _applyCodeToSentence(codeId);
-    }
+    _focusTreeItem(row);
   });
 
   /** Clear the search filter input and trigger the input handler to restore all rows. */
