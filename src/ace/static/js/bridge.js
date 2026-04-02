@@ -2125,7 +2125,79 @@
   }
 
   /* ================================================================
-   * 18. DOMContentLoaded init
+   * 18. Codebook menu
+   * ================================================================ */
+
+  // Codebook menu: toggle, import, export
+  document.addEventListener("click", function (e) {
+    var dropdown = document.getElementById("codebook-dropdown");
+
+    // Import button
+    if (e.target.closest("#codebook-menu-import-btn")) {
+      if (dropdown) dropdown.style.display = "none";
+      fetch("/api/native/pick-file", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: "accept=.csv"
+      })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          if (!data.path) return;
+          htmx.ajax("POST", "/api/codes/import/preview-path", {
+            values: { path: data.path, current_index: window.__aceCurrentIndex },
+            target: "#modal-container",
+            swap: "innerHTML",
+          });
+        });
+      return;
+    }
+
+    // Export button
+    if (e.target.closest("#codebook-export-btn")) {
+      if (dropdown) dropdown.style.display = "none";
+      window.location.href = "/api/codes/export";
+      return;
+    }
+
+    // Toggle button
+    if (e.target.closest("#codebook-menu-btn")) {
+      if (dropdown) dropdown.style.display = dropdown.style.display === "none" ? "" : "none";
+      e.stopPropagation();
+      return;
+    }
+
+    // Click outside — close if open
+    if (dropdown && dropdown.style.display !== "none") {
+      dropdown.style.display = "none";
+    }
+  });
+
+  // Codebook menu: Escape closes dropdown
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape") {
+      var dropdown = document.getElementById("codebook-dropdown");
+      if (dropdown && dropdown.style.display !== "none") {
+        dropdown.style.display = "none";
+      }
+    }
+  });
+
+  // Import codes from preview dialog
+  window.aceImportFromPreview = function (btn) {
+    var codesJson = btn.getAttribute("data-codes");
+    var currentIndex = btn.getAttribute("data-current-index") || window.__aceCurrentIndex;
+    var dialog = btn.closest("dialog");
+    if (dialog) dialog.close();
+
+    htmx.ajax("POST", "/api/codes/import", {
+      values: { codes_json: codesJson, current_index: currentIndex },
+      target: "#code-sidebar",
+      swap: "outerHTML",
+    });
+  };
+
+  /* ================================================================
+   * 19. DOMContentLoaded init
    * ================================================================ */
 
   document.addEventListener("DOMContentLoaded", function () {
