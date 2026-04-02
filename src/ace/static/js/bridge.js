@@ -1310,13 +1310,15 @@
     if (codeId) _openCodeMenu(e.clientX, e.clientY, codeId);
   });
 
-  // Left-click on code row: apply to focused sentence (if any)
+  // Left-click on code row: apply only when search filter is active
+  // (without filter, clicks select/focus the code for rename, delete, etc.)
   document.addEventListener("click", function (e) {
     var row = e.target.closest(".ace-code-row");
     if (!row) return;
-    // Don't interfere with context menu, rename, or drag
     if (e.target.closest(".ace-code-menu") || _isDragging) return;
     if (e.target.isContentEditable) return;
+    var searchInput = document.getElementById("code-search-input");
+    if (!searchInput || !searchInput.value) return;
     var codeId = row.getAttribute("data-code-id");
     if (codeId && window.__aceFocusIndex >= 0) {
       _clearSearchFilter();
