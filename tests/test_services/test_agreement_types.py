@@ -39,14 +39,15 @@ def test_code_metrics_defaults():
 
 def test_agreement_result_construction():
     metrics = CodeMetrics(percent_agreement=0.9, n_positions=50)
+    pair_metrics = CodeMetrics(percent_agreement=0.85, n_positions=50, krippendorffs_alpha=0.85)
     result = AgreementResult(
         overall=metrics,
         per_code={"Positive": metrics},
         per_source={"S001": metrics},
-        pairwise={("c1", "c2"): 0.85},
+        pairwise={("c1", "c2"): pair_metrics},
         n_coders=2,
         n_sources=1,
         n_codes=1,
     )
     assert result.n_coders == 2
-    assert result.pairwise[("c1", "c2")] == 0.85
+    assert result.pairwise[("c1", "c2")].krippendorffs_alpha == 0.85

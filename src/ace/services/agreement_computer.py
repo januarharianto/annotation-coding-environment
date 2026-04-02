@@ -88,19 +88,32 @@ def compute_agreement(dataset: AgreementDataset) -> AgreementResult:
                 for pos in coded_positions:
                     per_source_vectors[source_key][cid].append(vec[pos])
 
+    # Count distinct sources per code (from annotations)
+    code_source_sets: dict[str, set[str]] = {cn: set() for cn in code_names}
+    for ann in dataset.annotations:
+        if ann.code_name in code_source_sets:
+            code_source_sets[ann.code_name].add(ann.source_hash)
+
     # Compute per-code metrics
     per_code_results: dict[str, CodeMetrics] = {}
     for cn in code_names:
         vectors = per_code_vectors[cn]
-        per_code_results[cn] = _compute_metrics(vectors, coder_ids)
+        metrics = _compute_metrics(vectors, coder_ids)
+        metrics.n_sources = len(code_source_sets[cn])
+        per_code_results[cn] = metrics
 
     # Compute per-source metrics
     per_source_results: dict[str, CodeMetrics] = {}
     for src_key, vectors in per_source_vectors.items():
         per_source_results[src_key] = _compute_metrics(vectors, coder_ids)
 
-    # Compute overall (macro-average of per-code)
-    overall = _macro_average(list(per_code_results.values()))
+    # Compute overall (pooled across all codes)
+    pooled_vectors: dict[str, list[int]] = {cid: [] for cid in coder_ids}
+    for cn in code_names:
+        for cid in coder_ids:
+            pooled_vectors[cid].extend(per_code_vectors[cn][cid])
+    overall = _compute_metrics(pooled_vectors, coder_ids)
+    overall.n_sources = len(dataset.sources)
 
     # Compute pairwise alpha
     pairwise = _compute_pairwise(per_code_vectors, coder_ids)
@@ -247,47 +260,21 @@ def _extract_coeff(result) -> float | None:
         return None
 
 
-def _macro_average(metrics_list: list[CodeMetrics]) -> CodeMetrics:
-    """Macro-average across a list of CodeMetrics."""
-    if not metrics_list:
-        return CodeMetrics(percent_agreement=0.0, n_positions=0)
-
-    def avg(vals: list[float | None]) -> float | None:
-        nums = [v for v in vals if v is not None]
-        return sum(nums) / len(nums) if nums else None
-
-    total_positions = sum(m.n_positions for m in metrics_list)
-    pct = avg([m.percent_agreement for m in metrics_list if m.n_positions > 0])
-
-    return CodeMetrics(
-        percent_agreement=pct or 0.0,
-        n_positions=total_positions,
-        cohens_kappa=avg([m.cohens_kappa for m in metrics_list]),
-        krippendorffs_alpha=avg([m.krippendorffs_alpha for m in metrics_list]),
-        fleiss_kappa=avg([m.fleiss_kappa for m in metrics_list]),
-        congers_kappa=avg([m.congers_kappa for m in metrics_list]),
-        gwets_ac1=avg([m.gwets_ac1 for m in metrics_list]),
-        brennan_prediger=avg([m.brennan_prediger for m in metrics_list]),
-    )
-
-
 def _compute_pairwise(
     per_code_vectors: dict[str, dict[str, list[int]]],
     coder_ids: list[str],
-) -> dict[tuple[str, str], float]:
-    """Compute pairwise Krippendorff's alpha between each coder pair."""
-    pairwise: dict[tuple[str, str], float] = {}
+) -> dict[tuple[str, str], "CodeMetrics"]:
+    """Compute full CodeMetrics for each coder pair."""
+    pairwise: dict[tuple[str, str], CodeMetrics] = {}
 
     for i in range(len(coder_ids)):
         for j in range(i + 1, len(coder_ids)):
             cid_i, cid_j = coder_ids[i], coder_ids[j]
-            pair_vecs = {cid_i: [], cid_j: []}
+            pair_vecs: dict[str, list[int]] = {cid_i: [], cid_j: []}
             for cn in per_code_vectors:
                 pair_vecs[cid_i].extend(per_code_vectors[cn][cid_i])
                 pair_vecs[cid_j].extend(per_code_vectors[cn][cid_j])
 
-            alpha = _safe_krippendorff(pair_vecs, [cid_i, cid_j])
-            if alpha is not None:
-                pairwise[(cid_i, cid_j)] = alpha
+            pairwise[(cid_i, cid_j)] = _compute_metrics(pair_vecs, [cid_i, cid_j])
 
     return pairwise

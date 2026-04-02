@@ -102,7 +102,7 @@ def test_per_source_metrics():
 
 
 def test_pairwise_alpha():
-    """Verify pairwise alpha is computed."""
+    """Verify pairwise returns CodeMetrics with krippendorffs_alpha."""
     anns = [
         MatchedAnnotation(source_hash="hash1", coder_id="c0", code_name="Positive", start_offset=2, end_offset=28),
         MatchedAnnotation(source_hash="hash1", coder_id="c1", code_name="Positive", start_offset=2, end_offset=28),
@@ -111,7 +111,7 @@ def test_pairwise_alpha():
     result = compute_agreement(ds)
     assert len(result.pairwise) == 1  # one pair for 2 coders
     pair_key = list(result.pairwise.keys())[0]
-    assert result.pairwise[pair_key] > 0.9
+    assert result.pairwise[pair_key].krippendorffs_alpha > 0.9
 
 
 def test_multi_code_dataset():
