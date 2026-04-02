@@ -18,6 +18,86 @@
 - Flag toggle preserves header focus state across OOB swaps
 - Agreement Overall metric now pooled (was misleading macro-average)
 
+## 0.9.0
+
+### Features
+
+- **Codebook CSV import** — sidebar menu, native file picker, preview dialog
+- **Apply codes from sidebar** — click code row, Enter on first search match, filtered ↓ navigation fix
+
+## 0.8.0
+
+### Features
+
+- **Inter-coder agreement overhaul** — streamlined choose-files → auto-compute → results flow, pooled overall, expanded pairwise metrics, minimalist tables with interpretation labels, raw data CSV export, bib-backed references
+
+## 0.7.0
+
+### Features
+
+- **Top bar redesign** — ACE wordmark with subtitle, source name centred, clickable flag toggle, ? help button
+
+## 0.6.0
+
+### Features
+
+- **Keyboard-centric sidebar** — ARIA treeview with roving tabindex, arrow key navigation, Tab zone cycling, keyboard tree operations
+- **Focus underline** — simple underline for focused sentence (no outline box)
+- **Text panel** — 72ch max-width, centred
+
+## 0.5.0
+
+### Features
+
+- **Bottom code bar** — sticky bar showing applied codes as coloured text chips with flash-highlight on click
+- **Simplified sidebar** — single collapsible tree view, removed tabs
+- **Source nav** — moved into text panel as breadcrumb line
+- **Font size bump** — 10px→11px, 11px→12px for accessibility
+- **Sidebar width** — saved and restored before CSS loads (no layout glitch)
+
+## 0.4.0
+
+### Features
+
+- **CSS Custom Highlight API** — seamless cross-sentence annotation highlights
+- **Margin panel** — positioned annotation cards with overlap grouping and click-flash
+- **Centred navigation** — nav cluster centred in header bar
+
+## 0.3.0
+
+### Features
+
+- **Highlighter-pen backgrounds** — seamless merged highlights replacing underlines
+- **Resume last source** — coding page reopens to last viewed source
+
+## 0.2.0
+
+### Features
+
+- **Direct manipulation** — inline rename (double-click), click-dot colour picker, drag-and-drop reorder via SortableJS
+- **Delete confirmation** — double-press Delete, Move Up/Down, Move to Group
+- **Removed management mode** — all code operations are now inline (no gear button/menus)
+
+## 0.1.2
+
+### Features
+
+- **Search/create input** — filter codes by typing, Enter to create new code
+- **Group management** — inline "New group" action, ungrouped codes section
+- **Source navigation** — arrow left/right to navigate sources (Shift = jump 5)
+- **Auto-merge** — adjacent sentences coded with same code merge automatically
+
+### Fixes
+
+- Sentence focus restoration after HTMX swaps
+- Borderless search input until focused
+
+## 0.1.1
+
+### Changes
+
+- Removed code tooltip, annotation click popup, and metadata tags
+
 ## 0.1.0
 
 First release of ACE — Annotation Coding Environment.
