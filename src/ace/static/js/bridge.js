@@ -1329,10 +1329,13 @@
     }
   });
 
-  /** Clear the search filter input (no DOM walk — caller handles the reset). */
+  /** Clear the search filter input and trigger the input handler to restore all rows. */
   function _clearSearchFilter() {
     var el = document.getElementById("code-search-input");
-    if (el && el.value) el.value = "";
+    if (el && el.value) {
+      el.value = "";
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+    }
   }
 
   /* ================================================================
@@ -1360,6 +1363,7 @@
         var match = text.toLowerCase().indexOf(query) >= 0;
         if (match) {
           row.style.display = "";
+          row.removeAttribute("aria-hidden");
           anyMatch = true;
           // Highlight match
           var idx = text.toLowerCase().indexOf(query);
@@ -1369,6 +1373,7 @@
           nameEl.innerHTML = _escapeHtml(before) + '<mark>' + _escapeHtml(matched) + '</mark>' + _escapeHtml(after);
         } else {
           row.style.display = "none";
+          row.setAttribute("aria-hidden", "true");
           nameEl.textContent = text; // Strip any existing highlight
         }
       });
@@ -1382,7 +1387,9 @@
           if (r.style.display !== "none") hasVisible = true;
         });
         header.style.display = hasVisible ? "" : "none";
+        if (hasVisible) { header.removeAttribute("aria-hidden"); } else { header.setAttribute("aria-hidden", "true"); }
         groupDiv.style.display = hasVisible ? "" : "none";
+        if (hasVisible) { groupDiv.removeAttribute("aria-hidden"); } else { groupDiv.setAttribute("aria-hidden", "true"); }
       });
 
       // Show "Create" prompt if no matches
@@ -1400,9 +1407,9 @@
       // Group creation mode
       var groupName = query.substring(1).trim();
       // Hide all codes, show group creation prompt
-      tree.querySelectorAll(".ace-code-row").forEach(function (r) { r.style.display = "none"; });
-      tree.querySelectorAll(".ace-code-group-header").forEach(function (h) { h.style.display = "none"; });
-      tree.querySelectorAll('[role="group"]').forEach(function (g) { g.style.display = "none"; });
+      tree.querySelectorAll(".ace-code-row").forEach(function (r) { r.style.display = "none"; r.setAttribute("aria-hidden", "true"); });
+      tree.querySelectorAll(".ace-code-group-header").forEach(function (h) { h.style.display = "none"; h.setAttribute("aria-hidden", "true"); });
+      tree.querySelectorAll('[role="group"]').forEach(function (g) { g.style.display = "none"; g.setAttribute("aria-hidden", "true"); });
 
       if (groupName) {
         var exists = false;
@@ -1428,13 +1435,14 @@
       // Empty: restore all rows, clear highlights
       tree.querySelectorAll(".ace-code-row").forEach(function (row) {
         row.style.display = "";
+        row.removeAttribute("aria-hidden");
         var nameEl = row.querySelector(".ace-code-name");
         if (nameEl && nameEl.querySelector("mark")) {
           nameEl.textContent = nameEl.textContent; // Strip HTML
         }
       });
-      tree.querySelectorAll(".ace-code-group-header").forEach(function (h) { h.style.display = ""; });
-      tree.querySelectorAll('[role="group"]').forEach(function (g) { g.style.display = ""; });
+      tree.querySelectorAll(".ace-code-group-header").forEach(function (h) { h.style.display = ""; h.removeAttribute("aria-hidden"); });
+      tree.querySelectorAll('[role="group"]').forEach(function (g) { g.style.display = ""; g.removeAttribute("aria-hidden"); });
       _restoreCollapseState();
     }
 
