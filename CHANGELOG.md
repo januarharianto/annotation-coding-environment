@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.10.0
+
+### Features
+
+- **Keyboard-centric sidebar** — ARIA treeview with roving tabindex, arrow key navigation, Tab zone cycling (text → header → search → tree), Enter to apply codes, F2 to rename, Alt+arrows to indent/reorder, drag-and-drop for codes and groups
+- **Top bar redesign** — ACE wordmark with subtitle over sidebar column, source name centred over text panel, clickable flag toggle with toast feedback, ? help button
+- **Agreement overhaul** — streamlined flow (choose files → auto-compute → results), pooled overall computation, expanded pairwise metrics, minimalist tables with interpretation labels, bib-backed references, raw data CSV export for R/Python reproducibility
+- **Codebook CSV import** — "Codebook ▾" sidebar menu with Import/Export, native file picker, sidebar-style preview dialog with new/exists badges, empty state link
+- **Apply codes from sidebar** — click a code row or Enter on first search match to apply to focused sentence, with filter auto-clear and focus return
+
+### Fixes
+
+- CapsLock keyboard shortcut compatibility
+- Focus restoration across HTMX sidebar swaps
+- Search bar events bubble correctly for document-level listeners
+- Flag toggle preserves header focus state across OOB swaps
+- Agreement Overall metric now pooled (was misleading macro-average)
+
 ## 0.1.0
 
 First release of ACE — Annotation Coding Environment.
