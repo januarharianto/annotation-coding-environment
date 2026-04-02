@@ -1399,8 +1399,14 @@ def _render_agreement_results(result, dataset, loader) -> str:
     )
 
     # --- Context bar ---
-    total_sources = sum(f.get("source_count", 0) for f in loader._files)
-    total_codes = len(dataset.codes)
+    all_source_hashes = set()
+    for fd in loader._file_data:
+        all_source_hashes |= {s["content_hash"] for s in fd["sources"].values()}
+    total_sources = len(all_source_hashes)
+    all_code_names = set()
+    for fd in loader._file_data:
+        all_code_names |= set(fd["codes"].values())
+    total_codes = len(all_code_names)
     context_bar = (
         '<div class="ace-agreement-context">'
         f'<span><strong>{n_coders}</strong> coders</span>'
@@ -1431,14 +1437,14 @@ def _render_agreement_results(result, dataset, loader) -> str:
         '<table class="ace-agreement-table">'
         '<caption>Per-code agreement metrics</caption>'
         '<thead><tr>'
-        '<th class="col-primary">Code</th>'
-        '<th class="col-primary">%<sup class="ace-ref-sup" aria-hidden="true">1</sup></th>'
-        '<th class="col-primary">\u03b1<sup class="ace-ref-sup" aria-hidden="true">2</sup></th>'
-        f'<th class="col-primary">{kappa_header}<sup class="ace-ref-sup" aria-hidden="true">{kappa_ref}</sup></th>'
-        '<th class="col-muted col-gap">AC1<sup class="ace-ref-sup" aria-hidden="true">6</sup></th>'
-        '<th class="col-muted">Conger<sup class="ace-ref-sup" aria-hidden="true">5</sup></th>'
-        '<th class="col-muted">B-P<sup class="ace-ref-sup" aria-hidden="true">7</sup></th>'
-        '<th class="col-muted">sources</th>'
+        '<th scope="col" class="col-primary">Code</th>'
+        '<th scope="col" class="col-primary">%<sup class="ace-ref-sup" aria-hidden="true">1</sup></th>'
+        '<th scope="col" class="col-primary">\u03b1<sup class="ace-ref-sup" aria-hidden="true">2</sup></th>'
+        f'<th scope="col" class="col-primary">{kappa_header}<sup class="ace-ref-sup" aria-hidden="true">{kappa_ref}</sup></th>'
+        '<th scope="col" class="col-muted col-gap">AC1<sup class="ace-ref-sup" aria-hidden="true">6</sup></th>'
+        '<th scope="col" class="col-muted">Conger<sup class="ace-ref-sup" aria-hidden="true">5</sup></th>'
+        '<th scope="col" class="col-muted">B-P<sup class="ace-ref-sup" aria-hidden="true">7</sup></th>'
+        '<th scope="col" class="col-muted">sources</th>'
         '</tr></thead><tbody>'
     )
 
@@ -1452,7 +1458,7 @@ def _render_agreement_results(result, dataset, loader) -> str:
         interp_html = f'<span class="interp">{interp}</span>' if interp else ""
         rows.append(
             f'<tr>'
-            f'<td>{html.escape(code_name)}</td>'
+            f'<th scope="row">{html.escape(code_name)}</th>'
             f'<td class="col-val-primary">{_agreement_fmt(m.percent_agreement, is_pct=True)}</td>'
             f'<td class="col-val-primary">{alpha_str}{interp_html}</td>'
             f'<td class="col-val-primary">{_agreement_fmt(kappa_val)}</td>'
@@ -1471,7 +1477,7 @@ def _render_agreement_results(result, dataset, loader) -> str:
     interp_html = f'<span class="interp">{interp}</span>' if interp else ""
     overall_row = (
         f'<tr class="overall-row">'
-        f'<td>Overall (pooled)</td>'
+        f'<th scope="row">Overall (pooled)</th>'
         f'<td class="col-val-primary">{_agreement_fmt(m.percent_agreement, is_pct=True)}</td>'
         f'<td class="col-val-primary">{alpha_str}{interp_html}</td>'
         f'<td class="col-val-primary">{_agreement_fmt(kappa_val)}</td>'
@@ -1503,7 +1509,7 @@ def _render_agreement_results(result, dataset, loader) -> str:
             alpha_cls = "col-val-low" if alpha is not None and alpha < 0.60 else "col-val-primary"
             pw_rows.append(
                 f'<tr>'
-                f'<td>{html.escape(label)}</td>'
+                f'<th scope="row">{html.escape(label)}</th>'
                 f'<td class="col-val-primary">{_agreement_fmt(pm.percent_agreement, is_pct=True)}</td>'
                 f'<td class="{alpha_cls}">{alpha_str}{interp_html}</td>'
                 f'<td class="col-val-muted">{_agreement_fmt(pm.cohens_kappa)}</td>'
@@ -1516,11 +1522,11 @@ def _render_agreement_results(result, dataset, loader) -> str:
             '<table class="ace-agreement-table">'
             '<caption>Pairwise agreement</caption>'
             '<thead><tr>'
-            '<th class="col-primary">Pair</th>'
-            '<th class="col-primary">%<sup class="ace-ref-sup" aria-hidden="true">1</sup></th>'
-            '<th class="col-primary">\u03b1<sup class="ace-ref-sup" aria-hidden="true">2</sup></th>'
-            '<th class="col-muted">Cohen \u03ba<sup class="ace-ref-sup" aria-hidden="true">3</sup></th>'
-            '<th class="col-muted">AC1<sup class="ace-ref-sup" aria-hidden="true">6</sup></th>'
+            '<th scope="col" class="col-primary">Pair</th>'
+            '<th scope="col" class="col-primary">%<sup class="ace-ref-sup" aria-hidden="true">1</sup></th>'
+            '<th scope="col" class="col-primary">\u03b1<sup class="ace-ref-sup" aria-hidden="true">2</sup></th>'
+            '<th scope="col" class="col-muted">Cohen \u03ba<sup class="ace-ref-sup" aria-hidden="true">3</sup></th>'
+            '<th scope="col" class="col-muted">AC1<sup class="ace-ref-sup" aria-hidden="true">6</sup></th>'
             '</tr></thead><tbody>'
             + "".join(pw_rows)
             + '</tbody></table></div>'
@@ -1561,6 +1567,9 @@ async def agreement_compute(
     except (json.JSONDecodeError, TypeError):
         return HTMLResponse(_agreement_error("Invalid file paths."), status_code=400)
 
+    if not isinstance(path_list, list) or not all(isinstance(p, str) and p for p in path_list):
+        return HTMLResponse(_agreement_error("Invalid file paths."), status_code=400)
+
     if len(path_list) < 2:
         return HTMLResponse(_agreement_error("Select at least 2 .ace files."), status_code=400)
 
@@ -1579,7 +1588,7 @@ async def agreement_compute(
     try:
         dataset = loader.build_dataset()
     except Exception as e:
-        return HTMLResponse(_agreement_error(f"Cannot compute: {e}"), status_code=400)
+        return HTMLResponse(_agreement_error("Cannot compute agreement. Check that the files have shared sources and codes."), status_code=400)
 
     if not dataset.sources:
         return HTMLResponse(
@@ -1663,7 +1672,7 @@ async def agreement_export_results(request: Request):
     return Response(
         content=output.getvalue(),
         media_type="text/csv",
-        headers={"Content-Disposition": 'attachment; filename="agreement_results.csv"'},
+        headers={"Content-Disposition": 'attachment; filename="agreement_summary.csv"'},
     )
 
 
