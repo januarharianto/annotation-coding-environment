@@ -168,19 +168,23 @@
     });
   }
 
+  var _KEYCAP_LABELS = [
+    "1","2","3","4","5","6","7","8","9","0",
+    "a","b","c","d","e","f","g","h","i","j","k","l","m","n","o","p",
+    "r","s","t","u","v","w","y"
+  ];
+
   function _keylabel(i) {
-    if (i < 9) return "" + (i + 1);
-    if (i === 9) return "0";
-    if (i < 36) return String.fromCharCode(97 + i - 10);
-    return "";
+    return i < _KEYCAP_LABELS.length ? _KEYCAP_LABELS[i] : "";
   }
 
+  var _KEYCAP_POSITIONS = {};
+  _KEYCAP_LABELS.forEach(function (label, i) { _KEYCAP_POSITIONS[label] = i; });
+
   function _keyToPosition(key) {
-    if (key >= "1" && key <= "9") return parseInt(key) - 1;
-    if (key === "0") return 9;
-    var c = key.toLowerCase().charCodeAt(0);
-    if (c >= 97 && c <= 122) return c - 97 + 10;
-    return -1;
+    var k = key.toLowerCase();
+    var pos = _KEYCAP_POSITIONS[k];
+    return pos !== undefined ? pos : -1;
   }
 
   /* ================================================================
@@ -555,17 +559,16 @@
       '<h3 style="margin:0 0 12px;font-size:15px;font-weight:600;">Keyboard shortcuts</h3>' +
       '<table style="width:100%;border-collapse:collapse;">' +
       _shortcutRow("↑ / ↓", "Navigate sentences") +
-      _shortcutRow("← / →", "Previous / next source") +
-      _shortcutRow("Shift + ← / →", "Jump 5 sources") +
-      _shortcutRow("1 – 9, 0, a – z", "Apply code (per tab)") +
+      _shortcutRow("Shift + ← / →", "Previous / next source") +
+      _shortcutRow("1 – 9, 0, a–y (not q x z)", "Apply code") +
       _shortcutRow("Q", "Repeat last code") +
       _shortcutRow("X", "Remove code from sentence") +
       _shortcutRow("Z", "Undo") +
       _shortcutRow("Ctrl/⌘ + Z", "Undo") +
       _shortcutRow("Ctrl/⌘ + Shift + Z", "Redo") +
       _shortcutRow("Shift + F", "Flag/unflag source") +
-      _shortcutRow("F2", "Rename selected code") +
-      _shortcutRow("Delete", "Delete selected code (press twice)") +
+      _shortcutRow("F2", "Rename code (in sidebar)") +
+      _shortcutRow("Delete", "Delete code (in sidebar, press twice)") +
       _shortcutRow("?", "Toggle this cheat sheet") +
       _shortcutRow("Esc", "Close overlay / clear") +
       "</table>";
