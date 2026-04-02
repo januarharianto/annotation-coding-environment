@@ -1350,146 +1350,263 @@ async def agreement_add_file(request: Request, path: str = Form(...)):
     )
 
 
-@router.post("/agreement/compute")
-async def agreement_compute(request: Request):
-    """Validate, build dataset, compute metrics, return dashboard HTML."""
-    from ace.services.agreement_computer import compute_agreement
-
-    loader = getattr(request.app.state, "agreement_loader", None)
-    if loader is None or loader.file_count < 2:
-        return _oob_toast("Add at least 2 .ace files first.")
-
-    validation = loader.validate()
-    if not validation["valid"]:
-        return _oob_toast(validation["error"])
-
-    dataset = loader.build_dataset()
-    result = compute_agreement(dataset)
-
-    # Resolve coder labels for pairwise display
-    coder_labels = {c.id: c.label for c in dataset.coders}
-
-    # Build warnings
-    warnings_html = ""
-    for w in dataset.warnings:
-        warnings_html += (
-            f'<div style="padding:6px 10px;margin-bottom:8px;border:1px solid #e65100;'
-            f'border-radius:4px;font-size:13px;color:#e65100">'
-            f'{html.escape(w)}</div>'
-        )
-
-    # Overall metrics cards
-    def _fmt(val, is_pct=False):
-        if val is None:
-            return "-"
-        if is_pct:
-            return f"{val * 100:.1f}%"
-        return f"{val:.3f}"
-
-    cards_html = (
-        f'<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:1rem">'
-        f'<div class="ace-metric-card">'
-        f'<div class="ace-metric-value">{_fmt(result.overall.krippendorffs_alpha)}</div>'
-        f'<div class="ace-metric-label">Krippendorff\'s alpha</div></div>'
-        f'<div class="ace-metric-card">'
-        f'<div class="ace-metric-value">{_fmt(result.overall.percent_agreement, True)}</div>'
-        f'<div class="ace-metric-label">% agreement</div></div>'
-        f'<div class="ace-metric-card">'
-        f'<div class="ace-metric-value">{result.n_coders}</div>'
-        f'<div class="ace-metric-label">coders</div></div>'
-        f'<div class="ace-metric-card">'
-        f'<div class="ace-metric-value">{result.n_sources}</div>'
-        f'<div class="ace-metric-label">sources</div></div>'
-        f'<div class="ace-metric-card">'
-        f'<div class="ace-metric-value">{result.n_codes}</div>'
-        f'<div class="ace-metric-label">codes</div></div>'
-        f'</div>'
-    )
-
-    # Per-code table
-    table_rows = ""
-    for code_name in sorted(result.per_code):
-        m = result.per_code[code_name]
-        table_rows += (
-            f'<tr>'
-            f'<td style="padding:6px 10px;border-bottom:1px solid var(--ace-border-light)">'
-            f'{html.escape(code_name)}</td>'
-            f'<td style="padding:6px 10px;border-bottom:1px solid var(--ace-border-light);text-align:right">'
-            f'{_fmt(m.percent_agreement, True)}</td>'
-            f'<td style="padding:6px 10px;border-bottom:1px solid var(--ace-border-light);text-align:right">'
-            f'{m.n_positions:,}</td>'
-            f'<td style="padding:6px 10px;border-bottom:1px solid var(--ace-border-light);text-align:right">'
-            f'{_fmt(m.krippendorffs_alpha)}</td>'
-            f'<td style="padding:6px 10px;border-bottom:1px solid var(--ace-border-light);text-align:right">'
-            f'{_fmt(m.gwets_ac1)}</td>'
-            f'</tr>'
-        )
-
-    table_html = (
-        f'<h3 style="font-size:15px;font-weight:500;margin:1rem 0 8px">Per-Code Metrics</h3>'
-        f'<div style="overflow-x:auto">'
-        f'<table style="width:100%;border-collapse:collapse;font-size:13px">'
-        f'<thead><tr style="border-bottom:2px solid var(--ace-border)">'
-        f'<th style="padding:6px 10px;text-align:left">Code</th>'
-        f'<th style="padding:6px 10px;text-align:right">% agree</th>'
-        f'<th style="padding:6px 10px;text-align:right">positions</th>'
-        f'<th style="padding:6px 10px;text-align:right">alpha</th>'
-        f'<th style="padding:6px 10px;text-align:right">AC1</th>'
-        f'</tr></thead>'
-        f'<tbody>{table_rows}</tbody>'
-        f'</table></div>'
-    )
-
-    # Pairwise heatmap (3+ coders)
-    heatmap_html = ""
-    if result.n_coders >= 3 and result.pairwise:
-        coder_ids = [c.id for c in dataset.coders]
-        heatmap_html = (
-            '<h3 style="font-size:15px;font-weight:500;margin:1rem 0 8px">'
-            'Pairwise Agreement (alpha)</h3>'
-            '<div style="overflow-x:auto">'
-            '<table style="border-collapse:collapse;font-size:13px">'
-            '<thead><tr><th style="padding:6px 8px"></th>'
-        )
-        for cid in coder_ids:
-            lbl = html.escape(coder_labels.get(cid, cid))
-            heatmap_html += f'<th style="padding:6px 8px;text-align:center;font-weight:500">{lbl}</th>'
-        heatmap_html += '</tr></thead><tbody>'
-
-        for i, cid_i in enumerate(coder_ids):
-            lbl_i = html.escape(coder_labels.get(cid_i, cid_i))
-            heatmap_html += f'<tr><td style="padding:6px 8px;font-weight:500">{lbl_i}</td>'
-            for j, cid_j in enumerate(coder_ids):
-                if i == j:
-                    heatmap_html += (
-                        '<td style="padding:6px 8px;text-align:center;'
-                        'background:hsl(210, 10%, 30%);color:#fff">-</td>'
-                    )
-                else:
-                    key = (cid_i, cid_j) if (cid_i, cid_j) in result.pairwise else (cid_j, cid_i)
-                    val = result.pairwise.get(key)
-                    if val is not None:
-                        lightness = 95 - 65 * max(0, min(1, val))
-                        text_colour = "#fff" if lightness < 55 else "var(--ace-text)"
-                        heatmap_html += (
-                            f'<td style="padding:6px 8px;text-align:center;'
-                            f'background:hsl(210, 10%, {lightness:.0f}%);color:{text_colour}">'
-                            f'{val:.3f}</td>'
-                        )
-                    else:
-                        heatmap_html += '<td style="padding:6px 8px;text-align:center">-</td>'
-            heatmap_html += '</tr>'
-        heatmap_html += '</tbody></table></div>'
-
-    # Export button
-    export_html = (
-        '<div style="margin-top:1rem">'
-        '<a href="/api/agreement/export/results" class="ace-btn"'
-        ' style="text-decoration:none;display:inline-block">Export CSV</a>'
+def _agreement_error(message: str) -> str:
+    return (
+        '<h1 class="ace-agreement-title">Inter-Coder Agreement</h1>'
+        '<div class="ace-agreement-error">'
+        f'<p>{html.escape(message)}</p>'
+        '<button class="ace-agreement-choose-btn" onclick="acePickAndCompute()">Choose different files</button>'
         '</div>'
     )
 
-    return HTMLResponse(warnings_html + cards_html + table_html + heatmap_html + export_html)
+
+def _interp_label(alpha: float | None) -> str:
+    if alpha is None:
+        return ""
+    if alpha < 0:
+        return "poor"
+    if alpha <= 0.20:
+        return "slight"
+    if alpha <= 0.40:
+        return "fair"
+    if alpha <= 0.60:
+        return "moderate"
+    if alpha <= 0.80:
+        return "substantial"
+    return "almost perfect"
+
+
+def _agreement_fmt(val: float | None, decimals: int = 2, is_pct: bool = False) -> str:
+    if val is None:
+        return "\u2013"
+    if is_pct:
+        return f"{val * 100:.1f}"
+    return f"{val:.{decimals}f}"
+
+
+def _render_agreement_results(result, dataset, loader) -> str:
+
+    n_coders = result.n_coders
+    kappa_header = "Cohen \u03ba" if n_coders == 2 else "Fleiss \u03ba"
+    kappa_ref = "3" if n_coders == 2 else "4"
+
+    # --- Title bar with export pills ---
+    title_bar = (
+        '<div class="ace-agreement-title-bar">'
+        '<h1 class="ace-agreement-title">Inter-Coder Agreement</h1>'
+        '<span class="spacer" style="flex:1"></span>'
+        '<a href="/api/agreement/export/results" class="ace-export-pill" '
+        'download="agreement_summary.csv" aria-label="Download summary as CSV file">\u2193 Summary CSV</a>'
+        '<a href="/api/agreement/export/raw" class="ace-export-pill" '
+        'download="agreement_raw_data.csv" aria-label="Download raw data as CSV file">\u2193 Raw data CSV</a>'
+        '</div>'
+    )
+
+    # --- Context bar ---
+    all_source_hashes = set()
+    for fd in loader._file_data:
+        all_source_hashes |= {s["content_hash"] for s in fd["sources"].values()}
+    total_sources = len(all_source_hashes)
+    all_code_names = set()
+    for fd in loader._file_data:
+        all_code_names |= set(fd["codes"].values())
+    total_codes = len(all_code_names)
+    context_bar = (
+        '<div class="ace-agreement-context">'
+        f'<span><strong>{n_coders}</strong> coders</span>'
+        '<span class="dot">\u00b7</span>'
+        f'<span><strong>{result.n_sources}</strong> of {total_sources} sources</span>'
+        '<span class="dot">\u00b7</span>'
+        f'<span><strong>{result.n_codes}</strong> of {total_codes} codes</span>'
+        '<a href="#" class="action" onclick="acePickAndCompute();return false">Choose different files</a>'
+        '</div>'
+    )
+
+    # --- Warnings ---
+    warnings_html = ""
+    if dataset.warnings:
+        warn_items = "".join(f"<div>{html.escape(w)}</div>" for w in dataset.warnings)
+        warnings_html = (
+            '<details class="ace-agreement-warnings">'
+            f'<summary><span aria-hidden="true">\u26a0</span> '
+            f'<span class="visually-hidden">Warning: </span>'
+            f'{len(dataset.warnings)} warning{"s" if len(dataset.warnings) != 1 else ""}</summary>'
+            f'<div class="ace-agreement-warn-body">{warn_items}</div>'
+            '</details>'
+        )
+
+    # --- Metrics table ---
+    table_header = (
+        '<div class="ace-table-scroll">'
+        '<table class="ace-agreement-table">'
+        '<caption>Per-code agreement metrics</caption>'
+        '<thead><tr>'
+        '<th scope="col" class="col-primary">Code</th>'
+        '<th scope="col" class="col-primary">%<sup class="ace-ref-sup" aria-hidden="true">1</sup></th>'
+        '<th scope="col" class="col-primary">\u03b1<sup class="ace-ref-sup" aria-hidden="true">2</sup></th>'
+        f'<th scope="col" class="col-primary">{kappa_header}<sup class="ace-ref-sup" aria-hidden="true">{kappa_ref}</sup></th>'
+        '<th scope="col" class="col-muted col-gap">AC1<sup class="ace-ref-sup" aria-hidden="true">6</sup></th>'
+        '<th scope="col" class="col-muted">Conger<sup class="ace-ref-sup" aria-hidden="true">5</sup></th>'
+        '<th scope="col" class="col-muted">B-P<sup class="ace-ref-sup" aria-hidden="true">7</sup></th>'
+        '<th scope="col" class="col-muted">sources</th>'
+        '</tr></thead><tbody>'
+    )
+
+    # Per-code rows
+    rows = []
+    for code_name in sorted(result.per_code):
+        m = result.per_code[code_name]
+        kappa_val = m.cohens_kappa if n_coders == 2 else m.fleiss_kappa
+        alpha_str = _agreement_fmt(m.krippendorffs_alpha)
+        interp = _interp_label(m.krippendorffs_alpha)
+        interp_html = f'<span class="interp">{interp}</span>' if interp else ""
+        rows.append(
+            f'<tr>'
+            f'<th scope="row">{html.escape(code_name)}</th>'
+            f'<td class="col-val-primary">{_agreement_fmt(m.percent_agreement, is_pct=True)}</td>'
+            f'<td class="col-val-primary">{alpha_str}{interp_html}</td>'
+            f'<td class="col-val-primary">{_agreement_fmt(kappa_val)}</td>'
+            f'<td class="col-val-muted col-gap">{_agreement_fmt(m.gwets_ac1)}</td>'
+            f'<td class="col-val-muted">{_agreement_fmt(m.congers_kappa)}</td>'
+            f'<td class="col-val-muted">{_agreement_fmt(m.brennan_prediger)}</td>'
+            f'<td class="col-val-faint">{m.n_sources}</td>'
+            f'</tr>'
+        )
+
+    # Overall row
+    m = result.overall
+    kappa_val = m.cohens_kappa if n_coders == 2 else m.fleiss_kappa
+    alpha_str = _agreement_fmt(m.krippendorffs_alpha)
+    interp = _interp_label(m.krippendorffs_alpha)
+    interp_html = f'<span class="interp">{interp}</span>' if interp else ""
+    overall_row = (
+        f'<tr class="overall-row">'
+        f'<th scope="row">Overall (pooled)</th>'
+        f'<td class="col-val-primary">{_agreement_fmt(m.percent_agreement, is_pct=True)}</td>'
+        f'<td class="col-val-primary">{alpha_str}{interp_html}</td>'
+        f'<td class="col-val-primary">{_agreement_fmt(kappa_val)}</td>'
+        f'<td class="col-val-muted col-gap">{_agreement_fmt(m.gwets_ac1)}</td>'
+        f'<td class="col-val-muted">{_agreement_fmt(m.congers_kappa)}</td>'
+        f'<td class="col-val-muted">{_agreement_fmt(m.brennan_prediger)}</td>'
+        f'<td class="col-val-faint">{m.n_sources}</td>'
+        f'</tr>'
+    )
+
+    table_html = table_header + "".join(rows) + overall_row + "</tbody></table></div>"
+
+    # --- Pairwise table (only for 3+ coders) ---
+    pairwise_html = ""
+    if n_coders >= 3 and result.pairwise:
+        coder_labels = {c.id: c.label for c in dataset.coders}
+        sorted_pairs = sorted(
+            result.pairwise.items(),
+            key=lambda x: x[1].krippendorffs_alpha if x[1].krippendorffs_alpha is not None else -1,
+            reverse=True,
+        )
+        pw_rows = []
+        for (cid_a, cid_b), pm in sorted_pairs:
+            label = f"{coder_labels.get(cid_a, cid_a)} \u2194 {coder_labels.get(cid_b, cid_b)}"
+            alpha = pm.krippendorffs_alpha
+            alpha_str = _agreement_fmt(alpha)
+            interp = _interp_label(alpha)
+            interp_html = f'<span class="interp">{interp}</span>' if interp else ""
+            alpha_cls = "col-val-low" if alpha is not None and alpha < 0.60 else "col-val-primary"
+            pw_rows.append(
+                f'<tr>'
+                f'<th scope="row">{html.escape(label)}</th>'
+                f'<td class="col-val-primary">{_agreement_fmt(pm.percent_agreement, is_pct=True)}</td>'
+                f'<td class="{alpha_cls}">{alpha_str}{interp_html}</td>'
+                f'<td class="col-val-muted">{_agreement_fmt(pm.cohens_kappa)}</td>'
+                f'<td class="col-val-muted">{_agreement_fmt(pm.gwets_ac1)}</td>'
+                f'</tr>'
+            )
+
+        pairwise_html = (
+            '<div class="ace-table-scroll">'
+            '<table class="ace-agreement-table">'
+            '<caption>Pairwise agreement</caption>'
+            '<thead><tr>'
+            '<th scope="col" class="col-primary">Pair</th>'
+            '<th scope="col" class="col-primary">%<sup class="ace-ref-sup" aria-hidden="true">1</sup></th>'
+            '<th scope="col" class="col-primary">\u03b1<sup class="ace-ref-sup" aria-hidden="true">2</sup></th>'
+            '<th scope="col" class="col-muted">Cohen \u03ba<sup class="ace-ref-sup" aria-hidden="true">3</sup></th>'
+            '<th scope="col" class="col-muted">AC1<sup class="ace-ref-sup" aria-hidden="true">6</sup></th>'
+            '</tr></thead><tbody>'
+            + "".join(pw_rows)
+            + '</tbody></table></div>'
+        )
+
+    # --- References ---
+    refs = [
+        'Holsti, O. R. (1969). <em>Content Analysis for the Social Sciences and Humanities.</em> Addison-Wesley.',
+        'Krippendorff, K. (2011). Computing Krippendorff\'s alpha-reliability. <em>Annenberg School for Communication Departmental Papers, 43.</em>',
+        'Cohen, J. (1960). A coefficient of agreement for nominal scales. <em>Educational and Psychological Measurement, 20</em>(1), 37\u201346.',
+        'Fleiss, J. L. (1971). Measuring nominal scale agreement among many raters. <em>Psychological Bulletin, 76</em>(5), 378\u2013382.',
+        'Conger, A. J. (1980). Integration and generalization of kappas for multiple raters. <em>Psychological Bulletin, 88</em>(2), 322\u2013328.',
+        'Gwet, K. L. (2008). Computing inter-rater reliability and its variance in the presence of high agreement. <em>British Journal of Mathematical and Statistical Psychology, 61</em>(1), 29\u201348.',
+        'Brennan, R. L., &amp; Prediger, D. J. (1981). Coefficient kappa: Some uses, misuses, and alternatives. <em>Educational and Psychological Measurement, 41</em>(3), 687\u2013699.',
+        'Landis, J. R., &amp; Koch, G. G. (1977). The measurement of observer agreement for categorical data. <em>Biometrics, 33</em>(1), 159\u2013174.',
+    ]
+    refs_html = (
+        '<div class="ace-agreement-refs">'
+        '<h2>References</h2><ol>'
+        + "".join(f"<li>{r}</li>" for r in refs)
+        + '</ol></div>'
+    )
+
+    return title_bar + context_bar + warnings_html + table_html + pairwise_html + refs_html
+
+
+@router.post("/agreement/compute")
+async def agreement_compute(
+    request: Request,
+    paths: str = Form(...),
+):
+    """Load files, compute agreement, return minimalist results HTML."""
+    from ace.services.agreement_loader import AgreementLoader
+    from ace.services.agreement_computer import compute_agreement
+
+    try:
+        path_list = json.loads(paths)
+    except (json.JSONDecodeError, TypeError):
+        return HTMLResponse(_agreement_error("Invalid file paths."), status_code=400)
+
+    if not isinstance(path_list, list) or not all(isinstance(p, str) and p for p in path_list):
+        return HTMLResponse(_agreement_error("Invalid file paths."), status_code=400)
+
+    if len(path_list) < 2:
+        return HTMLResponse(_agreement_error("Select at least 2 .ace files."), status_code=400)
+
+    loader = AgreementLoader()
+    for p in path_list:
+        result = loader.add_file(p)
+        if result.get("error"):
+            return HTMLResponse(
+                _agreement_error(f"Error loading {Path(p).name}: {result['error']}"),
+                status_code=400,
+            )
+
+    # Store loader for export endpoints
+    request.app.state.agreement_loader = loader
+
+    try:
+        dataset = loader.build_dataset()
+    except Exception as e:
+        return HTMLResponse(_agreement_error("Cannot compute agreement. Check that the files have shared sources and codes."), status_code=400)
+
+    if not dataset.sources:
+        return HTMLResponse(
+            _agreement_error("No shared sources found across the selected files."),
+            status_code=400,
+        )
+
+    result = compute_agreement(dataset)
+
+    request.app.state.agreement_dataset = dataset
+    request.app.state.agreement_result = result
+
+    html_out = _render_agreement_results(result, dataset, loader)
+    return HTMLResponse(html_out)
 
 
 @router.get("/agreement/export/results")
@@ -1497,41 +1614,103 @@ async def agreement_export_results(request: Request):
     """Export per-code metrics as CSV download."""
     import csv
     import io
-
-    from ace.services.agreement_computer import compute_agreement
+    from datetime import date
 
     loader = getattr(request.app.state, "agreement_loader", None)
-    if loader is None or loader.file_count < 2:
-        return HTMLResponse("No agreement data available.", status_code=400)
-
-    dataset = loader.build_dataset()
-    result = compute_agreement(dataset)
+    dataset = getattr(request.app.state, "agreement_dataset", None)
+    result = getattr(request.app.state, "agreement_result", None)
+    if loader is None or loader.file_count < 2 or dataset is None or result is None:
+        return HTMLResponse("No agreement data available. Compute first.", status_code=400)
 
     output = io.StringIO()
+
+    # Metadata comment header
+    file_names = ", ".join(f["filename"] for f in loader._files)
+    coder_labels = ", ".join(c.label for c in dataset.coders)
+    output.write(f"# ACE agreement summary — {date.today().isoformat()}\n")
+    output.write(f"# Files: {file_names}\n")
+    output.write(f"# Coders: {coder_labels}\n")
+    output.write(f"# Sources: {result.n_sources}, Codes: {result.n_codes}\n")
+
     writer = csv.writer(output)
     writer.writerow([
-        "code", "percent_agreement", "n_positions",
+        "code", "percent_agreement",
         "krippendorffs_alpha", "cohens_kappa", "fleiss_kappa",
         "congers_kappa", "gwets_ac1", "brennan_prediger",
+        "n_sources", "n_positions",
     ])
+
+    def _fmt(v):
+        return f"{v:.4f}" if v is not None else ""
+
     for code_name in sorted(result.per_code):
         m = result.per_code[code_name]
         writer.writerow([
             code_name,
-            f"{m.percent_agreement:.4f}" if m.percent_agreement is not None else "",
+            _fmt(m.percent_agreement),
+            _fmt(m.krippendorffs_alpha),
+            _fmt(m.cohens_kappa),
+            _fmt(m.fleiss_kappa),
+            _fmt(m.congers_kappa),
+            _fmt(m.gwets_ac1),
+            _fmt(m.brennan_prediger),
+            m.n_sources,
             m.n_positions,
-            f"{m.krippendorffs_alpha:.4f}" if m.krippendorffs_alpha is not None else "",
-            f"{m.cohens_kappa:.4f}" if m.cohens_kappa is not None else "",
-            f"{m.fleiss_kappa:.4f}" if m.fleiss_kappa is not None else "",
-            f"{m.congers_kappa:.4f}" if m.congers_kappa is not None else "",
-            f"{m.gwets_ac1:.4f}" if m.gwets_ac1 is not None else "",
-            f"{m.brennan_prediger:.4f}" if m.brennan_prediger is not None else "",
         ])
+
+    # Overall row
+    o = result.overall
+    writer.writerow([
+        "Overall",
+        _fmt(o.percent_agreement),
+        _fmt(o.krippendorffs_alpha),
+        _fmt(o.cohens_kappa),
+        _fmt(o.fleiss_kappa),
+        _fmt(o.congers_kappa),
+        _fmt(o.gwets_ac1),
+        _fmt(o.brennan_prediger),
+        result.n_sources,
+        o.n_positions,
+    ])
 
     return Response(
         content=output.getvalue(),
         media_type="text/csv",
-        headers={"Content-Disposition": 'attachment; filename="agreement_results.csv"'},
+        headers={"Content-Disposition": 'attachment; filename="agreement_summary.csv"'},
+    )
+
+
+@router.get("/agreement/export/raw")
+async def agreement_export_raw(request: Request):
+    """Export raw annotation data as long-form CSV for reproducibility in R/Python."""
+    import csv
+    import io
+    from datetime import date
+
+    loader = getattr(request.app.state, "agreement_loader", None)
+    dataset = getattr(request.app.state, "agreement_dataset", None)
+    if loader is None or loader.file_count < 2 or dataset is None:
+        return HTMLResponse("No agreement data available. Compute first.", status_code=400)
+
+    output = io.StringIO()
+    coder_labels = ", ".join(c.label for c in dataset.coders)
+    output.write(f"# ACE raw agreement data — {date.today().isoformat()}\n")
+    output.write(f"# Coders: {coder_labels}\n")
+    output.write(f"# Sources: {len(dataset.sources)}, Codes: {len(dataset.codes)}\n")
+
+    writer = csv.writer(output)
+    writer.writerow(["source_id", "start_offset", "end_offset", "coder_id", "code_name"])
+
+    source_lookup = {s.content_hash: s.display_id for s in dataset.sources}
+
+    for ann in sorted(dataset.annotations, key=lambda a: (a.source_hash, a.start_offset, a.coder_id)):
+        source_id = source_lookup.get(ann.source_hash, ann.source_hash)
+        writer.writerow([source_id, ann.start_offset, ann.end_offset, ann.coder_id, ann.code_name])
+
+    return Response(
+        content=output.getvalue(),
+        media_type="text/csv",
+        headers={"Content-Disposition": 'attachment; filename="agreement_raw_data.csv"'},
     )
 
 
