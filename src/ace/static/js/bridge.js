@@ -82,6 +82,7 @@
     requestAnimationFrame(function () {
       var idx = window.__aceFocusIndex;
       if (idx >= 0) _focusSentence(idx);
+      _focusTextPanel();
     });
   }
 
@@ -1309,6 +1310,26 @@
     if (codeId) _openCodeMenu(e.clientX, e.clientY, codeId);
   });
 
+  // Left-click on code row: apply to focused sentence (if any)
+  document.addEventListener("click", function (e) {
+    var row = e.target.closest(".ace-code-row");
+    if (!row) return;
+    // Don't interfere with context menu, rename, or drag
+    if (e.target.closest(".ace-code-menu") || _isDragging) return;
+    if (e.target.isContentEditable) return;
+    var codeId = row.getAttribute("data-code-id");
+    if (codeId && window.__aceFocusIndex >= 0) {
+      _clearSearchFilter();
+      _applyCodeToSentence(codeId);
+    }
+  });
+
+  /** Clear the search filter input (no DOM walk — caller handles the reset). */
+  function _clearSearchFilter() {
+    var el = document.getElementById("code-search-input");
+    if (el && el.value) el.value = "";
+  }
+
   /* ================================================================
    * 15. Code search / filter / create
    * ================================================================ */
@@ -1503,10 +1524,15 @@
       if (count === 0) {
         _createCodeFromSearch();
       } else {
-        // Has matches — clear and return
-        e.target.value = "";
-        e.target.dispatchEvent(new Event("input", { bubbles: true }));
-        _focusTextPanel();
+        // Has matches — find first visible match, clear search, apply
+        var firstMatch = tree
+          ? Array.from(tree.querySelectorAll(".ace-code-row")).find(function (r) { return r.style.display !== "none"; })
+          : null;
+        _clearSearchFilter();
+        if (firstMatch && window.__aceFocusIndex >= 0) {
+          var codeId = firstMatch.getAttribute("data-code-id");
+          if (codeId) _applyCodeToSentence(codeId);
+        }
       }
     }
   });
@@ -1678,10 +1704,10 @@
     if (sb) sb.focus();
   }
 
-  /** Move focus into the code tree (last-focused item or first item). */
+  /** Move focus into the code tree (last-focused item or first visible item). */
   function _focusCodeTree() {
     var active = _getActiveTreeItem();
-    if (active) {
+    if (active && active.style.display !== "none") {
       active.focus();
     } else {
       var items = _getTreeItems();
@@ -1919,6 +1945,7 @@
       if (!_isGroupHeader(active)) {
         var codeId3 = active.getAttribute("data-code-id");
         if (codeId3 && window.__aceFocusIndex >= 0) {
+          _clearSearchFilter();
           _applyCodeToSentence(codeId3);
           // Flash the row briefly to confirm
           active.classList.add("ace-code-row--flash");
