@@ -1,12 +1,10 @@
-"""Computes inter-coder agreement metrics from an AgreementDataset."""
+"""Computes inter-coder agreement metrics from an AgreementDataset.
+
+Pure Python — no numpy, scipy, or pandas required.
+"""
 
 import math
 from collections import defaultdict
-
-import krippendorff
-import numpy as np
-import pandas as pd
-from irrCAC.raw import CAC
 
 from ace.services.agreement_types import (
     AgreementDataset,
@@ -115,7 +113,7 @@ def compute_agreement(dataset: AgreementDataset) -> AgreementResult:
     overall = _compute_metrics(pooled_vectors, coder_ids)
     overall.n_sources = len(dataset.sources)
 
-    # Compute pairwise alpha
+    # Compute pairwise
     pairwise = _compute_pairwise(per_code_vectors, coder_ids)
 
     return AgreementResult(
@@ -153,10 +151,13 @@ def _compute_metrics(vectors: dict[str, list[int]], coder_ids: list[str]) -> Cod
         cohens_k = _safe_kappa(vectors[coder_ids[0]], vectors[coder_ids[1]])
 
     # Krippendorff's alpha
-    k_alpha = _safe_krippendorff(vectors, coder_ids)
+    k_alpha = _krippendorffs_alpha(vectors, coder_ids)
 
-    # irrCAC metrics (Fleiss, Conger, Gwet, Brennan-Prediger)
-    fleiss_k, congers_k, gwets, bp = _compute_irrcac(vectors, coder_ids)
+    # Fleiss, Conger, Gwet, Brennan-Prediger
+    fleiss_k = _fleiss_kappa(vectors, coder_ids)
+    congers_k = _congers_kappa(vectors, coder_ids)
+    gwets = _gwets_ac1(vectors, coder_ids)
+    bp = _brennan_prediger(vectors, coder_ids)
 
     return CodeMetrics(
         percent_agreement=pct_agree,
@@ -168,6 +169,11 @@ def _compute_metrics(vectors: dict[str, list[int]], coder_ids: list[str]) -> Cod
         gwets_ac1=gwets,
         brennan_prediger=bp,
     )
+
+
+# ---------------------------------------------------------------------------
+# Cohen's kappa (2 raters)
+# ---------------------------------------------------------------------------
 
 
 def _cohens_kappa(y1: list, y2: list) -> float | None:
@@ -202,62 +208,256 @@ def _safe_kappa(vec1: list[int], vec2: list[int]) -> float | None:
     return k
 
 
-def _safe_krippendorff(vectors: dict[str, list[int]], coder_ids: list[str]) -> float | None:
-    """Krippendorff's alpha with edge case handling."""
-    try:
-        matrix = np.array([vectors[cid] for cid in coder_ids])
-        # If all raters agree on every unit, alpha is undefined but agreement
-        # is perfect — return 1.0 by convention.
-        if np.all(matrix == matrix[0]):
-            return 1.0
-        alpha = krippendorff.alpha(
-            reliability_data=matrix, level_of_measurement="nominal"
-        )
-        if math.isnan(alpha):
-            return None
-        return float(alpha)
-    except Exception:
+# ---------------------------------------------------------------------------
+# Krippendorff's alpha (any number of raters, nominal)
+# ---------------------------------------------------------------------------
+
+
+def _krippendorffs_alpha(vectors: dict[str, list[int]], coder_ids: list[str]) -> float | None:
+    """Krippendorff's alpha for nominal data via coincidence matrix."""
+    n_units = len(vectors[coder_ids[0]]) if coder_ids else 0
+    if n_units == 0:
         return None
 
+    # Check if all raters agree on every unit
+    first = vectors[coder_ids[0]]
+    if all(vectors[cid] == first for cid in coder_ids[1:]):
+        return 1.0
 
-def _compute_irrcac(
-    vectors: dict[str, list[int]], coder_ids: list[str]
-) -> tuple[float | None, float | None, float | None, float | None]:
-    """Compute Fleiss, Conger, Gwet AC1, Brennan-Prediger via irrCAC."""
-    try:
-        df = pd.DataFrame({cid: vectors[cid] for cid in coder_ids})
-        cac = CAC(df)
-    except Exception:
-        return None, None, None, None
+    # Collect all distinct categories
+    categories = set()
+    for cid in coder_ids:
+        categories.update(vectors[cid])
+    cats = sorted(categories)
+    cat_idx = {c: i for i, c in enumerate(cats)}
+    q = len(cats)
 
-    # Compute each metric independently so one failure doesn't prevent others
-    fleiss = _safe_irrcac(cac.fleiss)
-    conger = _safe_irrcac(cac.conger)
-    gwet = _safe_irrcac(cac.gwet)
-    bp = _safe_irrcac(cac.bp)
+    # Build coincidence matrix
+    coincidence = [[0.0] * q for _ in range(q)]
 
-    return fleiss, conger, gwet, bp
+    for u in range(n_units):
+        # Collect ratings for this unit (no missing data in our use case)
+        ratings = [vectors[cid][u] for cid in coder_ids]
+        n_r = len(ratings)
+        if n_r < 2:
+            continue
+        for i in range(n_r):
+            for j in range(n_r):
+                if i != j:
+                    ci = cat_idx[ratings[i]]
+                    cj = cat_idx[ratings[j]]
+                    coincidence[ci][cj] += 1.0 / (n_r - 1)
+
+    # Marginals
+    n_total = sum(sum(row) for row in coincidence)
+    if n_total == 0:
+        return None
+    marginals = [sum(coincidence[c]) for c in range(q)]
+
+    # Observed disagreement
+    do = 0.0
+    for c in range(q):
+        for k in range(q):
+            if c != k:
+                do += coincidence[c][k]
+    do /= n_total
+
+    # Expected disagreement
+    de = 0.0
+    for c in range(q):
+        for k in range(q):
+            if c != k:
+                de += marginals[c] * marginals[k]
+    de /= (n_total * (n_total - 1))
+
+    if de == 0:
+        return 1.0
+    alpha = 1.0 - do / de
+    return None if math.isnan(alpha) else alpha
 
 
-def _safe_irrcac(method) -> float | None:
-    """Safely call an irrCAC method and extract its coefficient."""
-    try:
-        return _extract_coeff(method())
-    except Exception:
+# ---------------------------------------------------------------------------
+# Fleiss' kappa (any number of raters)
+# ---------------------------------------------------------------------------
+
+
+def _fleiss_kappa(vectors: dict[str, list[int]], coder_ids: list[str]) -> float | None:
+    """Fleiss' kappa for multiple raters."""
+    n_units = len(vectors[coder_ids[0]]) if coder_ids else 0
+    n_coders = len(coder_ids)
+    if n_units == 0 or n_coders < 2:
         return None
 
+    categories = set()
+    for cid in coder_ids:
+        categories.update(vectors[cid])
+    cats = sorted(categories)
+    q = len(cats)
 
-def _extract_coeff(result) -> float | None:
-    """Extract coefficient value from an irrCAC result."""
-    try:
-        coeff = result["est"]["coefficient_value"]
-        if isinstance(coeff, pd.Series):
-            coeff = coeff.iloc[0]
-        if math.isnan(float(coeff)):
-            return None
-        return float(coeff)
-    except (KeyError, TypeError, IndexError):
+    # Count how many raters assigned each category per unit
+    counts = [[0] * q for _ in range(n_units)]
+    for cid in coder_ids:
+        for u in range(n_units):
+            c_idx = cats.index(vectors[cid][u])
+            counts[u][c_idx] += 1
+
+    # Observed agreement per unit
+    po_sum = 0.0
+    for u in range(n_units):
+        s = sum(counts[u][j] * (counts[u][j] - 1) for j in range(q))
+        po_sum += s / (n_coders * (n_coders - 1))
+    po = po_sum / n_units
+
+    # Expected agreement (marginal proportions)
+    pe = 0.0
+    for j in range(q):
+        pj = sum(counts[u][j] for u in range(n_units)) / (n_units * n_coders)
+        pe += pj * pj
+
+    if pe == 1.0:
+        return 1.0 if po == 1.0 else 0.0
+    return (po - pe) / (1 - pe)
+
+
+# ---------------------------------------------------------------------------
+# Conger's kappa (any number of raters)
+# ---------------------------------------------------------------------------
+
+
+def _congers_kappa(vectors: dict[str, list[int]], coder_ids: list[str]) -> float | None:
+    """Conger's kappa — like Fleiss but uses per-rater marginals."""
+    n_units = len(vectors[coder_ids[0]]) if coder_ids else 0
+    n_coders = len(coder_ids)
+    if n_units == 0 or n_coders < 2:
         return None
+
+    categories = set()
+    for cid in coder_ids:
+        categories.update(vectors[cid])
+    cats = sorted(categories)
+    q = len(cats)
+
+    # Count per unit per category
+    counts = [[0] * q for _ in range(n_units)]
+    for cid in coder_ids:
+        for u in range(n_units):
+            c_idx = cats.index(vectors[cid][u])
+            counts[u][c_idx] += 1
+
+    # Observed agreement (same as Fleiss)
+    po_sum = 0.0
+    for u in range(n_units):
+        s = sum(counts[u][j] * (counts[u][j] - 1) for j in range(q))
+        po_sum += s / (n_coders * (n_coders - 1))
+    po = po_sum / n_units
+
+    # Per-rater marginal proportions
+    rater_props = []
+    for cid in coder_ids:
+        props = [0.0] * q
+        for u in range(n_units):
+            c_idx = cats.index(vectors[cid][u])
+            props[c_idx] += 1.0 / n_units
+        rater_props.append(props)
+
+    # Expected agreement: average of per-rater-pair pe
+    pe = 0.0
+    for j in range(q):
+        s = sum(rater_props[r][j] for r in range(n_coders))
+        pe += (s * s - sum(rater_props[r][j] ** 2 for r in range(n_coders)))
+    pe /= (n_coders * (n_coders - 1))
+
+    if pe == 1.0:
+        return 1.0 if po == 1.0 else 0.0
+    return (po - pe) / (1 - pe)
+
+
+# ---------------------------------------------------------------------------
+# Gwet's AC1 (any number of raters)
+# ---------------------------------------------------------------------------
+
+
+def _gwets_ac1(vectors: dict[str, list[int]], coder_ids: list[str]) -> float | None:
+    """Gwet's AC1 for multiple raters."""
+    n_units = len(vectors[coder_ids[0]]) if coder_ids else 0
+    n_coders = len(coder_ids)
+    if n_units == 0 or n_coders < 2:
+        return None
+
+    categories = set()
+    for cid in coder_ids:
+        categories.update(vectors[cid])
+    cats = sorted(categories)
+    q = len(cats)
+
+    # Count per unit per category
+    counts = [[0] * q for _ in range(n_units)]
+    for cid in coder_ids:
+        for u in range(n_units):
+            c_idx = cats.index(vectors[cid][u])
+            counts[u][c_idx] += 1
+
+    # Observed agreement (same as Fleiss)
+    po_sum = 0.0
+    for u in range(n_units):
+        s = sum(counts[u][j] * (counts[u][j] - 1) for j in range(q))
+        po_sum += s / (n_coders * (n_coders - 1))
+    po = po_sum / n_units
+
+    # Gwet's chance agreement: based on marginal proportions with
+    # propensity adjustment
+    marginals = [0.0] * q
+    for j in range(q):
+        marginals[j] = sum(counts[u][j] for u in range(n_units)) / (n_units * n_coders)
+
+    pe = sum(p * (1 - p) for p in marginals) / (q - 1) if q > 1 else 0.0
+
+    if pe == 1.0:
+        return 1.0 if po == 1.0 else 0.0
+    return (po - pe) / (1 - pe)
+
+
+# ---------------------------------------------------------------------------
+# Brennan-Prediger (any number of raters)
+# ---------------------------------------------------------------------------
+
+
+def _brennan_prediger(vectors: dict[str, list[int]], coder_ids: list[str]) -> float | None:
+    """Brennan-Prediger coefficient — chance = 1/q (uniform)."""
+    n_units = len(vectors[coder_ids[0]]) if coder_ids else 0
+    n_coders = len(coder_ids)
+    if n_units == 0 or n_coders < 2:
+        return None
+
+    categories = set()
+    for cid in coder_ids:
+        categories.update(vectors[cid])
+    cats = sorted(categories)
+    q = len(cats)
+
+    # Count per unit per category
+    counts = [[0] * q for _ in range(n_units)]
+    for cid in coder_ids:
+        for u in range(n_units):
+            c_idx = cats.index(vectors[cid][u])
+            counts[u][c_idx] += 1
+
+    # Observed agreement
+    po_sum = 0.0
+    for u in range(n_units):
+        s = sum(counts[u][j] * (counts[u][j] - 1) for j in range(q))
+        po_sum += s / (n_coders * (n_coders - 1))
+    po = po_sum / n_units
+
+    pe = 1.0 / q
+    if pe == 1.0:
+        return 1.0 if po == 1.0 else 0.0
+    return (po - pe) / (1 - pe)
+
+
+# ---------------------------------------------------------------------------
+# Pairwise
+# ---------------------------------------------------------------------------
 
 
 def _compute_pairwise(
