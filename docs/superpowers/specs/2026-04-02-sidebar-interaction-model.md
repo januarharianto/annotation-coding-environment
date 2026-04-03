@@ -22,7 +22,7 @@ The sidebar currently overloads clicks — clicking a code row can mean "apply t
 | **Search-to-apply** | `/` → type → Enter | Applies first visible match, clears filter, returns to text |
 | **Search-to-apply (navigate)** | `/` → type → ↓ → Enter | Applies the **focused** code (not first match), clears filter, returns to text |
 | **Click keycap badge** | Click the keycap label (1, 2, etc.) on a code row | Applies that code. Always works, regardless of filter state. |
-| **Tree Enter** | Tab/↓ into tree → arrow to code → Enter | Applies focused code. If search filter was active: clears filter, returns to text. If no filter: stays in tree (for multi-code workflow). |
+| **Tree Enter** | Tab/↓ into tree → arrow to code → Enter | Applies focused code. Returns to text panel (consistent across all apply paths). |
 
 All apply paths check `__aceLastSelection` first — if a custom text selection exists, uses `_applyCodeToSelection`; otherwise uses `_applyCodeToSentence` on the focused sentence.
 

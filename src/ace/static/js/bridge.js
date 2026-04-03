@@ -1301,7 +1301,8 @@
       var nameEl = row.querySelector(".ace-code-name");
       if (nameEl) codeName = nameEl.textContent;
     }
-    if (window.__aceLastSelection) {
+    var isSelection = !!window.__aceLastSelection;
+    if (isSelection) {
       _applyCodeToSelection(codeId);
     } else if (window.__aceFocusIndex >= 0) {
       _applyCodeToSentence(codeId);
@@ -1309,7 +1310,7 @@
       return;
     }
     if (codeName) {
-      var target = window.__aceLastSelection ? "selection" : "sentence " + (window.__aceFocusIndex + 1);
+      var target = isSelection ? "selection" : "sentence " + (window.__aceFocusIndex + 1);
       _announce("'" + codeName + "' applied to " + target);
     }
   }
@@ -1985,7 +1986,7 @@
       return;
     }
 
-    // Enter — Apply focused code to current sentence (stay in tree)
+    // Enter — Apply focused code to current sentence, return focus to text panel
     if (key === "Enter" && !alt && !shift) {
       e.preventDefault();
       if (!_isGroupHeader(active)) {
@@ -1993,9 +1994,6 @@
         if (codeId3) {
           _clearSearchFilter();
           _applyCode(codeId3);
-          // Flash the row briefly to confirm
-          active.classList.add("ace-code-row--flash");
-          setTimeout(function () { active.classList.remove("ace-code-row--flash"); }, 300);
         }
       } else {
         // On group header: toggle expand/collapse
