@@ -116,13 +116,11 @@
   document.addEventListener("click", function (e) {
     var header = e.target.closest(".ace-code-group-header");
     if (header && !e.target.closest(".ace-code-menu")) {
-      if (header.getAttribute("tabindex") === "0") {
-        // Already focused — toggle collapse
-        _toggleGroupCollapse(header);
-      } else {
-        // Not focused yet — just select it
-        _focusTreeItem(header);
-      }
+      _focusTreeItem(header);
+      _toggleGroupCollapse(header);
+      var groupName = header.getAttribute("data-group") || "Ungrouped";
+      var expanded = header.getAttribute("aria-expanded") === "true";
+      _announce("Group " + groupName + (expanded ? " expanded" : " collapsed"));
     }
   });
 
@@ -168,19 +166,23 @@
     });
   }
 
+  var _KEYCAP_LABELS = [
+    "1","2","3","4","5","6","7","8","9","0",
+    "a","b","c","d","e","f","g","h","i","j","k","l","m","n","o","p",
+    "r","s","t","u","v","w","y"
+  ];
+
   function _keylabel(i) {
-    if (i < 9) return "" + (i + 1);
-    if (i === 9) return "0";
-    if (i < 36) return String.fromCharCode(97 + i - 10);
-    return "";
+    return i < _KEYCAP_LABELS.length ? _KEYCAP_LABELS[i] : "";
   }
 
+  var _KEYCAP_POSITIONS = {};
+  _KEYCAP_LABELS.forEach(function (label, i) { _KEYCAP_POSITIONS[label] = i; });
+
   function _keyToPosition(key) {
-    if (key >= "1" && key <= "9") return parseInt(key) - 1;
-    if (key === "0") return 9;
-    var c = key.toLowerCase().charCodeAt(0);
-    if (c >= 97 && c <= 122) return c - 97 + 10;
-    return -1;
+    var k = key.toLowerCase();
+    var pos = _KEYCAP_POSITIONS[k];
+    return pos !== undefined ? pos : -1;
   }
 
   /* ================================================================
@@ -337,24 +339,6 @@
     if (key === "ArrowRight" && shift) {
       e.preventDefault();
       window.aceNavigate(window.__aceCurrentIndex + 1);
-      return;
-    }
-
-    // F2 — Inline rename selected code
-    if (key === "F2" && _lastSelectedCodeId) {
-      e.preventDefault();
-      _startInlineRename(_lastSelectedCodeId);
-      return;
-    }
-
-    // Delete/Backspace — double-press to confirm delete selected code
-    if ((key === "Delete" || key === "Backspace") && _lastSelectedCodeId && !shift && !ctrl) {
-      e.preventDefault();
-      if (_deleteTarget === _lastSelectedCodeId) {
-        _executeDelete(_lastSelectedCodeId);
-      } else {
-        _startDeleteConfirm(_lastSelectedCodeId);
-      }
       return;
     }
 
@@ -555,17 +539,16 @@
       '<h3 style="margin:0 0 12px;font-size:15px;font-weight:600;">Keyboard shortcuts</h3>' +
       '<table style="width:100%;border-collapse:collapse;">' +
       _shortcutRow("↑ / ↓", "Navigate sentences") +
-      _shortcutRow("← / →", "Previous / next source") +
-      _shortcutRow("Shift + ← / →", "Jump 5 sources") +
-      _shortcutRow("1 – 9, 0, a – z", "Apply code (per tab)") +
+      _shortcutRow("Shift + ← / →", "Previous / next source") +
+      _shortcutRow("1 – 9, 0, a–y (not q x z)", "Apply code") +
       _shortcutRow("Q", "Repeat last code") +
       _shortcutRow("X", "Remove code from sentence") +
       _shortcutRow("Z", "Undo") +
       _shortcutRow("Ctrl/⌘ + Z", "Undo") +
       _shortcutRow("Ctrl/⌘ + Shift + Z", "Redo") +
       _shortcutRow("Shift + F", "Flag/unflag source") +
-      _shortcutRow("F2", "Rename selected code") +
-      _shortcutRow("Delete", "Delete selected code (press twice)") +
+      _shortcutRow("F2", "Rename code (in sidebar)") +
+      _shortcutRow("Delete", "Delete code (in sidebar, press twice)") +
       _shortcutRow("?", "Toggle this cheat sheet") +
       _shortcutRow("Esc", "Close overlay / clear") +
       "</table>";
@@ -1310,24 +1293,59 @@
     if (codeId) _openCodeMenu(e.clientX, e.clientY, codeId);
   });
 
-  // Left-click on code row: apply to focused sentence (if any)
+  /** Unified apply helper used by keycap click, search Enter, and tree Enter. */
+  function _applyCode(codeId) {
+    var codeName = "";
+    var row = document.querySelector('.ace-code-row[data-code-id="' + codeId + '"]');
+    if (row) {
+      var nameEl = row.querySelector(".ace-code-name");
+      if (nameEl) codeName = nameEl.textContent;
+    }
+    var isSelection = !!window.__aceLastSelection;
+    if (isSelection) {
+      _applyCodeToSelection(codeId);
+    } else if (window.__aceFocusIndex >= 0) {
+      _applyCodeToSentence(codeId);
+    } else {
+      return;
+    }
+    if (codeName) {
+      var target = isSelection ? "selection" : "sentence " + (window.__aceFocusIndex + 1);
+      _announce("'" + codeName + "' applied to " + target);
+    }
+  }
+
+  // Keycap badge click: apply code to focused sentence/selection
+  document.addEventListener("click", function (e) {
+    var keycap = e.target.closest(".ace-keycap");
+    if (!keycap) return;
+    e.stopPropagation();
+    var row = keycap.closest(".ace-code-row");
+    if (!row) return;
+    if (row.querySelector('[contenteditable="true"]')) return;
+    var codeId = row.getAttribute("data-code-id");
+    if (!codeId) return;
+    _clearSearchFilter();
+    _applyCode(codeId);
+  });
+
+  // Click on code row (not keycap): focus/select for management
   document.addEventListener("click", function (e) {
     var row = e.target.closest(".ace-code-row");
     if (!row) return;
-    // Don't interfere with context menu, rename, or drag
+    if (e.target.closest(".ace-keycap")) return;
     if (e.target.closest(".ace-code-menu") || _isDragging) return;
     if (e.target.isContentEditable) return;
-    var codeId = row.getAttribute("data-code-id");
-    if (codeId && window.__aceFocusIndex >= 0) {
-      _clearSearchFilter();
-      _applyCodeToSentence(codeId);
-    }
+    _focusTreeItem(row);
   });
 
-  /** Clear the search filter input (no DOM walk — caller handles the reset). */
+  /** Clear the search filter input and trigger the input handler to restore all rows. */
   function _clearSearchFilter() {
     var el = document.getElementById("code-search-input");
-    if (el && el.value) el.value = "";
+    if (el && el.value) {
+      el.value = "";
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+    }
   }
 
   /* ================================================================
@@ -1346,6 +1364,7 @@
 
     if (query && !query.startsWith("/")) {
       // Filter mode
+      _sortableInstances.forEach(function (s) { s.option("disabled", true); });
       var rows = tree.querySelectorAll(".ace-code-row");
       var anyMatch = false;
       rows.forEach(function (row) {
@@ -1355,6 +1374,7 @@
         var match = text.toLowerCase().indexOf(query) >= 0;
         if (match) {
           row.style.display = "";
+          row.removeAttribute("aria-hidden");
           anyMatch = true;
           // Highlight match
           var idx = text.toLowerCase().indexOf(query);
@@ -1364,6 +1384,7 @@
           nameEl.innerHTML = _escapeHtml(before) + '<mark>' + _escapeHtml(matched) + '</mark>' + _escapeHtml(after);
         } else {
           row.style.display = "none";
+          row.setAttribute("aria-hidden", "true");
           nameEl.textContent = text; // Strip any existing highlight
         }
       });
@@ -1377,7 +1398,9 @@
           if (r.style.display !== "none") hasVisible = true;
         });
         header.style.display = hasVisible ? "" : "none";
+        if (hasVisible) { header.removeAttribute("aria-hidden"); } else { header.setAttribute("aria-hidden", "true"); }
         groupDiv.style.display = hasVisible ? "" : "none";
+        if (hasVisible) { groupDiv.removeAttribute("aria-hidden"); } else { groupDiv.setAttribute("aria-hidden", "true"); }
       });
 
       // Show "Create" prompt if no matches
@@ -1391,13 +1414,30 @@
         });
         tree.appendChild(prompt);
       }
+
+      // Highlight first visible match as search target
+      var prevTarget = tree.querySelector(".ace-code-row--search-target");
+      if (prevTarget) {
+        prevTarget.classList.remove("ace-code-row--search-target");
+        prevTarget.removeAttribute("aria-current");
+      }
+      if (anyMatch) {
+        var target = Array.from(tree.querySelectorAll(".ace-code-row")).find(function (r) {
+          return r.style.display !== "none";
+        });
+        if (target) {
+          target.classList.add("ace-code-row--search-target");
+          target.setAttribute("aria-current", "true");
+        }
+      }
     } else if (query && query.startsWith("/")) {
       // Group creation mode
+      _sortableInstances.forEach(function (s) { s.option("disabled", true); });
       var groupName = query.substring(1).trim();
       // Hide all codes, show group creation prompt
-      tree.querySelectorAll(".ace-code-row").forEach(function (r) { r.style.display = "none"; });
-      tree.querySelectorAll(".ace-code-group-header").forEach(function (h) { h.style.display = "none"; });
-      tree.querySelectorAll('[role="group"]').forEach(function (g) { g.style.display = "none"; });
+      tree.querySelectorAll(".ace-code-row").forEach(function (r) { r.style.display = "none"; r.setAttribute("aria-hidden", "true"); });
+      tree.querySelectorAll(".ace-code-group-header").forEach(function (h) { h.style.display = "none"; h.setAttribute("aria-hidden", "true"); });
+      tree.querySelectorAll('[role="group"]').forEach(function (g) { g.style.display = "none"; g.setAttribute("aria-hidden", "true"); });
 
       if (groupName) {
         var exists = false;
@@ -1421,16 +1461,23 @@
       }
     } else {
       // Empty: restore all rows, clear highlights
+      _sortableInstances.forEach(function (s) { s.option("disabled", false); });
       tree.querySelectorAll(".ace-code-row").forEach(function (row) {
         row.style.display = "";
+        row.removeAttribute("aria-hidden");
         var nameEl = row.querySelector(".ace-code-name");
         if (nameEl && nameEl.querySelector("mark")) {
           nameEl.textContent = nameEl.textContent; // Strip HTML
         }
       });
-      tree.querySelectorAll(".ace-code-group-header").forEach(function (h) { h.style.display = ""; });
-      tree.querySelectorAll('[role="group"]').forEach(function (g) { g.style.display = ""; });
+      tree.querySelectorAll(".ace-code-group-header").forEach(function (h) { h.style.display = ""; h.removeAttribute("aria-hidden"); });
+      tree.querySelectorAll('[role="group"]').forEach(function (g) { g.style.display = ""; g.removeAttribute("aria-hidden"); });
       _restoreCollapseState();
+      var prevTarget = tree.querySelector(".ace-code-row--search-target");
+      if (prevTarget) {
+        prevTarget.classList.remove("ace-code-row--search-target");
+        prevTarget.removeAttribute("aria-current");
+      }
     }
 
     _updateKeycaps();
@@ -1529,9 +1576,9 @@
           ? Array.from(tree.querySelectorAll(".ace-code-row")).find(function (r) { return r.style.display !== "none"; })
           : null;
         _clearSearchFilter();
-        if (firstMatch && window.__aceFocusIndex >= 0) {
+        if (firstMatch) {
           var codeId = firstMatch.getAttribute("data-code-id");
-          if (codeId) _applyCodeToSentence(codeId);
+          if (codeId) _applyCode(codeId);
         }
       }
     }
@@ -1939,19 +1986,14 @@
       return;
     }
 
-    // Enter — Apply focused code to current sentence (stay in tree)
+    // Enter — Apply focused code to current sentence, return focus to text panel
     if (key === "Enter" && !alt && !shift) {
       e.preventDefault();
       if (!_isGroupHeader(active)) {
         var codeId3 = active.getAttribute("data-code-id");
-        if (codeId3 && window.__aceFocusIndex >= 0) {
+        if (codeId3) {
           _clearSearchFilter();
-          _applyCodeToSentence(codeId3);
-          // Flash the row briefly to confirm
-          active.classList.add("ace-code-row--flash");
-          setTimeout(function () { active.classList.remove("ace-code-row--flash"); }, 300);
-          var codeName = active.querySelector(".ace-code-name");
-          _announce("'" + (codeName ? codeName.textContent : "") + "' applied to sentence " + (window.__aceFocusIndex + 1));
+          _applyCode(codeId3);
         }
       } else {
         // On group header: toggle expand/collapse
@@ -2053,6 +2095,7 @@
     // Escape — Return to text panel
     if (key === "Escape" && !alt && !shift) {
       e.preventDefault();
+      _clearSearchFilter();
       _focusTextPanel();
       return;
     }
@@ -2178,6 +2221,7 @@
       var dropdown = document.getElementById("codebook-dropdown");
       if (dropdown && dropdown.style.display !== "none") {
         dropdown.style.display = "none";
+        e.stopPropagation();
       }
     }
   });

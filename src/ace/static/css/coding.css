@@ -302,6 +302,10 @@
   border-radius: var(--ace-radius);
 }
 
+.ace-code-row--search-target {
+  background: var(--ace-bg-muted);
+}
+
 /* Screen reader only (visually hidden, accessible) */
 .ace-sr-only {
   position: absolute;
@@ -361,6 +365,23 @@
   width: 18px;
   text-align: center;
   line-height: var(--ace-leading-tight);
+  cursor: pointer;
+  min-height: 24px;
+  min-width: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--ace-transition), border-color var(--ace-transition);
+}
+
+.ace-keycap:hover {
+  border-color: var(--ace-text-muted);
+  background: var(--ace-bg-muted);
+}
+
+.ace-keycap:focus-visible {
+  outline: 2px solid var(--ace-focus);
+  outline-offset: 1px;
 }
 
 .ace-sidebar-empty {
