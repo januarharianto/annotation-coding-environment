@@ -6,7 +6,7 @@
   "build": {
     "devUrl": "http://127.0.0.1:18080",
     "frontendDist": "http://127.0.0.1:18080",
-    "beforeBundleCommand": {
+    "beforeBuildCommand": {
       "script": "uv run python scripts/build_sidecar.py",
       "cwd": "../.."
     }
