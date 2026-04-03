@@ -220,3 +220,60 @@ class TestBuildAllowedOrigins:
         origins = _build_allowed_origins(9000)
         assert "http://127.0.0.1:9000" in origins
         assert "http://localhost:9000" in origins
+
+
+# ── run() behaviour ────────────────────────────────────────────────────
+
+
+from unittest.mock import patch
+
+
+def test_run_accepts_port_parameter():
+    """run(port=9999) should pass port=9999 to uvicorn."""
+    with patch("ace.app.uvicorn.run") as mock_run, \
+         patch("ace.app._kill_stale_server"):
+        from ace.app import run
+        run(port=9999)
+        mock_run.assert_called_once()
+        assert mock_run.call_args.kwargs["port"] == 9999
+
+
+def test_run_defaults_to_8080():
+    """run() without port should default to 8080."""
+    import os
+    os.environ.pop("ACE_PORT", None)
+    with patch("ace.app.uvicorn.run") as mock_run, \
+         patch("ace.app._kill_stale_server"):
+        from ace.app import run
+        run()
+        assert mock_run.call_args.kwargs["port"] == 8080
+
+
+def test_run_respects_ace_port_env():
+    """run() without --port should use ACE_PORT env var."""
+    with patch("ace.app.uvicorn.run") as mock_run, \
+         patch("ace.app._kill_stale_server"), \
+         patch.dict("os.environ", {"ACE_PORT": "9000"}):
+        from ace.app import run
+        run()
+        assert mock_run.call_args.kwargs["port"] == 9000
+
+
+def test_run_cli_port_overrides_env():
+    """run(port=7777) should take priority over ACE_PORT."""
+    with patch("ace.app.uvicorn.run") as mock_run, \
+         patch("ace.app._kill_stale_server"), \
+         patch.dict("os.environ", {"ACE_PORT": "9000"}):
+        from ace.app import run
+        run(port=7777)
+        assert mock_run.call_args.kwargs["port"] == 7777
+
+
+def test_run_uses_callable_not_string():
+    """run() should pass the create_app callable, not a string, to uvicorn."""
+    with patch("ace.app.uvicorn.run") as mock_run, \
+         patch("ace.app._kill_stale_server"):
+        from ace.app import run
+        run()
+        first_arg = mock_run.call_args[0][0]
+        assert callable(first_arg), f"Expected callable, got {type(first_arg)}: {first_arg}"

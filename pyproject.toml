@@ -33,5 +33,6 @@ pythonpath = ["src"]
 [dependency-groups]
 dev = [
     "httpx>=0.28.1",
+    "nuitka[onefile]>=4.0.7",
     "pytest>=9.0.2",
 ]
