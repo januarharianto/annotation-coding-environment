@@ -102,24 +102,22 @@ Example:
 
 ```
 src/ace/
-├── app.py              — app entry point and server config
-├── pages/              — page routes and UI
-│   ├── landing.py      — home page (/)
-│   ├── import_page.py  — source import (/import)
-│   ├── coding.py       — main coding interface (/code)
-│   ├── coding_*.py     — extracted modules (actions, dialogs, shortcuts, etc.)
-│   └── header.py       — shared header bar
+├── app.py              — FastAPI app factory, middleware, server config
+├── routes/
+│   ├── pages.py        — GET routes (/, /import, /code, /agreement)
+│   └── api.py          — HTMX API endpoints (annotation CRUD, codebook, import, export)
+├── templates/          — Jinja2 templates (base, landing, import, coding, agreement)
 ├── models/             — database operations (one file per table)
-├── services/           — business logic (palette, undo, agreement, etc.)
+├── services/           — business logic (undo, importer, exporter, agreement, text_splitter)
 ├── db/                 — schema, migrations, connection management
-└── static/             — JavaScript and CSS
+└── static/             — CSS, JavaScript (bridge.js), vendored libs (htmx, Sortable)
 ```
 
 ## Code conventions
 
 A few things to know if you're working in the code:
 
-- The UI is built with [NiceGUI](https://nicegui.io/) and uses Quasar component classes for layout (things like `q-pa-md`, `full-width`, `items-center`)
-- Custom CSS classes are prefixed with `ace-` (e.g. `ace-annotation`, `ace-group-header`)
+- The UI is built with FastAPI + Jinja2 templates + HTMX for server-rendered HTML
+- Custom CSS classes are prefixed with `ace-` (e.g. `ace-sentence`, `ace-code-chip`)
 - Data is stored in `.ace` files, which are SQLite databases
-- The colour scheme is monochrome — near-black primary (`#212121`), grey borders (`#bdbdbd`). The only colour in the app comes from the annotation palette.
+- The colour scheme is monochrome slate — the only colour comes from the annotation palette
