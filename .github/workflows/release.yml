@@ -1,0 +1,78 @@
+name: Release Desktop App
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-latest        # ARM64 (Apple Silicon)
+            args: '--target aarch64-apple-darwin'
+            rust-targets: aarch64-apple-darwin
+          # - platform: macos-latest-large  # x86_64 (Intel) — requires paid runner
+          #   args: '--target x86_64-apple-darwin'
+          #   rust-targets: x86_64-apple-darwin
+          - platform: windows-latest
+            args: ''
+            rust-targets: ''
+
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.0.0
+        with:
+          python-version: '3.12'
+
+      - name: Install Python dependencies
+        run: uv sync --frozen
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust-targets }}
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: desktop/src-tauri -> target
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+
+      - name: Build and release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: desktop
+          tagName: v__VERSION__
+          releaseName: 'ACE v__VERSION__'
+          releaseBody: |
+            ## Download
+
+            | Platform | File |
+            |---|---|
+            | macOS (Apple Silicon) | `ACE_x.x.x_aarch64.dmg` |
+            | Windows | `ACE_x.x.x_x64-setup.exe` |
+
+            **macOS:** Open the `.dmg`, drag ACE to Applications.
+            **Windows:** Run the installer. You may see a SmartScreen warning — click "More info" then "Run anyway".
+
+            Not code-signed yet — see [signing plan](https://github.com/januarharianto/annotation-coding-environment/blob/main/docs/superpowers/specs/2026-04-03-tauri-desktop-packaging.md#code-signing) for details.
+          releaseDraft: true
+          prerelease: false
+          args: ${{ matrix.args }}

@@ -7,7 +7,7 @@
     "devUrl": "http://127.0.0.1:18080",
     "frontendDist": "http://127.0.0.1:18080",
     "beforeBundleCommand": {
-      "script": "sh scripts/compile-python.sh",
+      "script": "uv run python scripts/build_sidecar.py",
       "cwd": "../.."
     }
   },
