@@ -4,3 +4,11 @@ __pycache__/
 node_modules/
 .nicegui/
 tmp/
+*.ace
+*.ace-wal
+*.ace-shm
+.superpowers/
+docs/superpowers/
+.DS_Store
+dist/
+build/
