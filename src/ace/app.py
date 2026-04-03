@@ -212,13 +212,14 @@ def _kill_stale_server(port: int) -> None:
         pass
 
 
-def run() -> None:
-    port = int(os.environ.get("ACE_PORT", "8080"))
+def run(port: int | None = None) -> None:
+    if port is None:
+        port = int(os.environ.get("ACE_PORT", "8080"))
     global _ALLOWED_ORIGINS
     _ALLOWED_ORIGINS = _build_allowed_origins(port)
     _kill_stale_server(port)
     uvicorn.run(
-        "ace.app:create_app",
+        create_app,
         factory=True,
         host="127.0.0.1",
         port=port,
