@@ -35,3 +35,11 @@ uv run ace
 
 
 ACE will open in your web browser.
+
+In the future, you only need to run the following:
+
+
+```
+cd annotation-coding-environment
+uv run ace
+```
