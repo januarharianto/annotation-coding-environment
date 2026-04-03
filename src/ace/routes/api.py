@@ -33,6 +33,18 @@ def _accept_to_types(accept: str | None) -> str:
     return f" of type {{{quoted}}}"
 
 
+def _accept_to_filetypes(accept: str | None) -> list[tuple[str, str]]:
+    """Convert an accept filter like ".ace,.csv" to tkinter filetypes."""
+    if not accept:
+        return []
+    extensions = [ext.strip() for ext in accept.split(",") if ext.strip()]
+    types = []
+    for ext in extensions:
+        ext = ext if ext.startswith(".") else f".{ext}"
+        types.append((f"{ext.lstrip('.')} files", f"*{ext}"))
+    return types
+
+
 def _run_osascript(script: str, timeout: int = 120) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         ["osascript", "-e", script],
@@ -42,59 +54,91 @@ def _run_osascript(script: str, timeout: int = 120) -> subprocess.CompletedProce
     )
 
 
+def _tk_pick_file(filetypes: list[tuple[str, str]] | None = None) -> str:
+    """Open a tkinter file picker (cross-platform fallback)."""
+    import tkinter as tk
+    from tkinter import filedialog
+    root = tk.Tk()
+    root.withdraw()
+    root.attributes("-topmost", True)
+    path = filedialog.askopenfilename(filetypes=filetypes or [])
+    root.destroy()
+    return path or ""
+
+
+def _tk_pick_folder() -> str:
+    """Open a tkinter folder picker (cross-platform fallback)."""
+    import tkinter as tk
+    from tkinter import filedialog
+    root = tk.Tk()
+    root.withdraw()
+    root.attributes("-topmost", True)
+    path = filedialog.askdirectory()
+    root.destroy()
+    return path or ""
+
+
+def _tk_pick_files(filetypes: list[tuple[str, str]] | None = None) -> list[str]:
+    """Open a tkinter multi-file picker (cross-platform fallback)."""
+    import tkinter as tk
+    from tkinter import filedialog
+    root = tk.Tk()
+    root.withdraw()
+    root.attributes("-topmost", True)
+    paths = filedialog.askopenfilenames(filetypes=filetypes or [])
+    root.destroy()
+    return list(paths)
+
+
 # ---------------------------------------------------------------------------
 # Native file picker endpoints
 # ---------------------------------------------------------------------------
 
 @router.post("/native/pick-file")
 async def pick_file(accept: str | None = Form(default=None)):
-    """Open a native macOS file picker and return the selected path."""
-    if platform.system() != "Darwin":
-        return JSONResponse({"path": ""})
-
-    type_filter = _accept_to_types(accept)
-    script = f'POSIX path of (choose file{type_filter})'
-    result = await asyncio.to_thread(_run_osascript, script)
-
-    path = result.stdout.strip() if result.returncode == 0 else ""
+    """Open a native file picker and return the selected path."""
+    if platform.system() == "Darwin":
+        type_filter = _accept_to_types(accept)
+        script = f'POSIX path of (choose file{type_filter})'
+        result = await asyncio.to_thread(_run_osascript, script)
+        path = result.stdout.strip() if result.returncode == 0 else ""
+    else:
+        filetypes = _accept_to_filetypes(accept)
+        path = await asyncio.to_thread(_tk_pick_file, filetypes)
     return JSONResponse({"path": path})
 
 
 @router.post("/native/pick-folder")
 async def pick_folder():
-    """Open a native macOS folder picker and return the selected path."""
-    if platform.system() != "Darwin":
-        return JSONResponse({"path": ""})
-
-    script = 'POSIX path of (choose folder)'
-    result = await asyncio.to_thread(_run_osascript, script)
-
-    path = result.stdout.strip() if result.returncode == 0 else ""
+    """Open a native folder picker and return the selected path."""
+    if platform.system() == "Darwin":
+        script = 'POSIX path of (choose folder)'
+        result = await asyncio.to_thread(_run_osascript, script)
+        path = result.stdout.strip() if result.returncode == 0 else ""
+    else:
+        path = await asyncio.to_thread(_tk_pick_folder)
     return JSONResponse({"path": path})
 
 
 @router.post("/native/pick-files")
 async def pick_files(accept: str | None = Form(default=None)):
-    """Open a native macOS file picker (multiple selection) and return paths."""
-    if platform.system() != "Darwin":
-        return JSONResponse({"paths": []})
-
-    type_filter = _accept_to_types(accept)
-    script = (
-        f'set theFiles to (choose file{type_filter}'
-        f' with multiple selections allowed)\n'
-        f'set output to ""\n'
-        f'repeat with f in theFiles\n'
-        f'  set output to output & POSIX path of f & linefeed\n'
-        f'end repeat\n'
-        f'return output'
-    )
-    result = await asyncio.to_thread(_run_osascript, script)
-
-    if result.returncode == 0:
-        paths = [p for p in result.stdout.strip().split("\n") if p]
+    """Open a native file picker (multiple selection) and return paths."""
+    if platform.system() == "Darwin":
+        type_filter = _accept_to_types(accept)
+        script = (
+            f'set theFiles to (choose file{type_filter}'
+            f' with multiple selections allowed)\n'
+            f'set output to ""\n'
+            f'repeat with f in theFiles\n'
+            f'  set output to output & POSIX path of f & linefeed\n'
+            f'end repeat\n'
+            f'return output'
+        )
+        result = await asyncio.to_thread(_run_osascript, script)
+        paths = [p for p in result.stdout.strip().split("\n") if p] if result.returncode == 0 else []
     else:
-        paths = []
+        filetypes = _accept_to_filetypes(accept)
+        paths = await asyncio.to_thread(_tk_pick_files, filetypes)
     return JSONResponse({"paths": paths})
 
 

@@ -84,14 +84,30 @@ def test_pick_files_returns_multiple_paths(mock_osascript, mock_platform):
 
 
 @patch("ace.routes.api.platform")
-def test_non_darwin_returns_empty(mock_platform):
-    """Endpoints return empty values on non-macOS platforms."""
+@patch("ace.routes.api._tk_pick_file", return_value="/tmp/test.ace")
+def test_non_darwin_uses_tkinter_file(mock_tk, mock_platform):
+    """Non-macOS platforms fall back to tkinter file picker."""
     mock_platform.system.return_value = "Linux"
+    r = client.post("/api/native/pick-file", data={"accept": ".ace"})
+    assert r.json() == {"path": "/tmp/test.ace"}
+    mock_tk.assert_called_once()
 
-    r1 = client.post("/api/native/pick-file")
-    r2 = client.post("/api/native/pick-folder")
-    r3 = client.post("/api/native/pick-files")
 
-    assert r1.json() == {"path": ""}
-    assert r2.json() == {"path": ""}
-    assert r3.json() == {"paths": []}
+@patch("ace.routes.api.platform")
+@patch("ace.routes.api._tk_pick_folder", return_value="/tmp/my_folder")
+def test_non_darwin_uses_tkinter_folder(mock_tk, mock_platform):
+    """Non-macOS platforms fall back to tkinter folder picker."""
+    mock_platform.system.return_value = "Linux"
+    r = client.post("/api/native/pick-folder")
+    assert r.json() == {"path": "/tmp/my_folder"}
+    mock_tk.assert_called_once()
+
+
+@patch("ace.routes.api.platform")
+@patch("ace.routes.api._tk_pick_files", return_value=["/tmp/a.csv", "/tmp/b.csv"])
+def test_non_darwin_uses_tkinter_files(mock_tk, mock_platform):
+    """Non-macOS platforms fall back to tkinter multi-file picker."""
+    mock_platform.system.return_value = "Linux"
+    r = client.post("/api/native/pick-files", data={"accept": ".csv"})
+    assert r.json() == {"paths": ["/tmp/a.csv", "/tmp/b.csv"]}
+    mock_tk.assert_called_once()
