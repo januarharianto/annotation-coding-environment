@@ -66,6 +66,7 @@ def main() -> None:
         "--include-package=ace",
         "--include-data-dir=src/ace/static=ace/static",
         "--include-data-dir=src/ace/templates=ace/templates",
+        "--assume-yes-for-downloads",
         str(Path("src/ace/__main__.py")),
     ]
 
