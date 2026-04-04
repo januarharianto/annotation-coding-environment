@@ -82,6 +82,23 @@ def test_open_invalid_file(client, tmp_path):
     assert resp.status_code == 200  # toast error, not 500
 
 
+def test_create_project_with_coder_name(client, tmp_path):
+    """POST /api/project/create stores the provided coder name."""
+    import sqlite3
+
+    path = str(tmp_path / "named.ace")
+    resp = client.post(
+        "/api/project/create",
+        data={"name": "Test", "path": path, "coder_name": "Alice"},
+    )
+    assert Path(path).exists()
+    conn = sqlite3.connect(path)
+    conn.row_factory = sqlite3.Row
+    coder = conn.execute("SELECT name FROM coder LIMIT 1").fetchone()
+    conn.close()
+    assert coder["name"] == "Alice"
+
+
 def test_open_missing_file(client, tmp_path):
     """Missing file returns error toast."""
     resp = client.post(

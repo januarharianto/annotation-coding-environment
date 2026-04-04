@@ -165,6 +165,7 @@ async def project_create(
     name: str = Form(...),
     path: str = Form(...),
     overwrite: bool = Form(default=False),
+    coder_name: str = Form(default="default"),
 ):
     """Create a new .ace project file."""
     from ace.db.connection import create_project
@@ -179,6 +180,8 @@ async def project_create(
     try:
         if file_path.exists() and not overwrite:
             # Return an overwrite confirmation dialog
+            esc_name = html.escape(name, quote=True)
+            esc_coder = html.escape(coder_name, quote=True)
             return HTMLResponse(
                 '<dialog open class="ace-dialog">'
                 "<p>This file already exists. Overwrite it?</p>"
@@ -186,7 +189,7 @@ async def project_create(
                 '<button class="ace-btn" onclick="this.closest(\'dialog\').remove()" type="button">Cancel</button>'
                 f'<button class="ace-btn ace-btn--danger" '
                 f'hx-post="/api/project/create" '
-                f'hx-vals=\'{{"name":"{name}","path":"{file_path}","overwrite":"true"}}\' '
+                f'hx-vals=\'{{"name":"{esc_name}","path":"{file_path}","overwrite":"true","coder_name":"{esc_coder}"}}\' '
                 f'hx-target="#modal-container" '
                 f'hx-swap="innerHTML"'
                 f">Overwrite</button>"
@@ -197,7 +200,7 @@ async def project_create(
         if file_path.exists() and overwrite:
             file_path.unlink()
 
-        conn = create_project(str(file_path), name)
+        conn = create_project(str(file_path), name, coder_name=coder_name)
         coders = list_coders(conn)
         coder_id = coders[0]["id"] if coders else None
         conn.close()
