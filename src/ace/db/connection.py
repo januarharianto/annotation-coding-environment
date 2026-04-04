@@ -11,7 +11,8 @@ from ace.models.project import add_coder
 
 
 def create_project(
-    path: str | Path, name: str, description: str | None = None
+    path: str | Path, name: str, description: str | None = None,
+    coder_name: str = "default",
 ) -> sqlite3.Connection:
     """Create a new .ace project file with schema and initial project row.
 
@@ -34,7 +35,7 @@ def create_project(
     )
     conn.commit()
 
-    add_coder(conn, "default")
+    add_coder(conn, coder_name)
     return conn
 
 
