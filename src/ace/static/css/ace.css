@@ -220,6 +220,13 @@ body {
   max-width: 380px;
   width: 100%;
 }
+.ace-home-logo {
+  margin-bottom: var(--ace-space-8);
+}
+.ace-home-logo img {
+  display: block;
+  margin: 0 auto;
+}
 .ace-home-section {
   margin-bottom: var(--ace-space-6);
 }
