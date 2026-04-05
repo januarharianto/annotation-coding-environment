@@ -158,6 +158,11 @@
     return d.innerHTML;
   }
 
+  function clearResume() {
+    localStorage.removeItem(STORAGE_KEY);
+    renderResume();
+  }
+
   function renderResume() {
     var list = getRecent();
     var el = document.getElementById("resume-link");
@@ -169,12 +174,14 @@
     var filename = parts.pop();
     var path = list[0].path;
     el.innerHTML = '<a href="#" onclick="event.preventDefault(); window._aceOpenProject(\'' +
-      path.replace(/'/g, "\\'") + '\'); return false;">' + escapeHtml(filename) + '</a>';
+      path.replace(/'/g, "\\'") + '\'); return false;">' + escapeHtml(filename) + '</a>' +
+      '<button class="ace-home-resume-close" onclick="window._aceClearResume()" title="Dismiss">\u00d7</button>';
     el.style.display = "block";
   }
 
   window._aceOpenProject = openProject;
   window._aceAddRecent = addRecent;
+  window._aceClearResume = clearResume;
 
   // Dialog auto-open for overwrite confirmation
   document.addEventListener("htmx:afterSwap", function(evt) {
