@@ -30,12 +30,7 @@
       <p class="ace-home-input-hint">press Enter to choose folder</p>
     </div>
 
-    <!-- Coder name expand (hidden by default, shown after folder pick) -->
-    <div id="coder-name-wrap" class="ace-home-expand">
-      <input id="coder-name-input" class="ace-home-input"
-             placeholder="Your name..." aria-label="Coder name">
-      <p class="ace-home-input-hint">press Enter to create project</p>
-    </div>
+
 
     <!-- Tools -->
     <div class="ace-home-tools">
@@ -54,25 +49,16 @@
   "use strict";
 
   var STORAGE_KEY = "ace-recent-files";
-  var CODER_KEY = "ace-coder-name";
   var cloudPatterns = [/dropbox/i, /onedrive/i, /icloud/i, /google\s*drive/i];
 
   // --- New project flow ---
   var newWrap = document.getElementById("new-project-wrap");
   var newInput = document.getElementById("new-project-input");
-  var coderWrap = document.getElementById("coder-name-wrap");
-  var coderInput = document.getElementById("coder-name-input");
-  var pendingProjectName = "";
-  var pendingProjectPath = "";
 
   window.toggleNewProject = function() {
     if (newWrap.classList.contains("open")) {
       newWrap.classList.remove("open");
-      coderWrap.classList.remove("open");
       newInput.value = "";
-      coderInput.value = "";
-      pendingProjectName = "";
-      pendingProjectPath = "";
     } else {
       newWrap.classList.add("open");
       setTimeout(function() { newInput.focus(); }, 180);
@@ -106,40 +92,17 @@
           "SQLite databases can corrupt when synced.\n\nContinue anyway?"
         )) return;
 
-        pendingProjectName = name;
-        pendingProjectPath = data.path.replace(/\/$/, "") + "/" + name.replace(/\.ace$/, "") + ".ace";
+        var projectPath = data.path.replace(/\/$/, "") + "/" + name.replace(/\.ace$/, "") + ".ace";
 
-        // Show coder name input
         newWrap.classList.remove("open");
-        coderWrap.classList.add("open");
-        var savedName = localStorage.getItem(CODER_KEY) || "";
-        coderInput.value = savedName;
-        setTimeout(function() { coderInput.focus(); }, 180);
+        addRecent(projectPath);
+
+        htmx.ajax("POST", "/api/project/create", {
+          values: { name: name, path: projectPath },
+          target: "#modal-container",
+          swap: "innerHTML"
+        });
       });
-  });
-
-  coderInput.addEventListener("keydown", function(e) {
-    if (e.key === "Escape") {
-      window.toggleNewProject();
-      return;
-    }
-    if (e.key !== "Enter") return;
-    var coderName = this.value.trim();
-    if (!coderName) return;
-
-    localStorage.setItem(CODER_KEY, coderName);
-    addRecent(pendingProjectPath);
-    coderWrap.classList.remove("open");
-
-    htmx.ajax("POST", "/api/project/create", {
-      values: {
-        name: pendingProjectName,
-        path: pendingProjectPath,
-        coder_name: coderName
-      },
-      target: "#modal-container",
-      swap: "innerHTML"
-    });
   });
 
   // --- Open existing ---
