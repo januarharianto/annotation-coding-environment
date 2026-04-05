@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ACE Favicons</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@700;800&family=Inter:wght@400;500;700&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Inter', -apple-system, sans-serif;
+    background: #0f1117;
+    color: #e0e0e0;
+    min-height: 100vh;
+    padding: 40px 24px 80px;
+  }
+
+  .page-header { text-align: center; margin-bottom: 48px; }
+  .page-header h1 { font-size: 28px; font-weight: 700; color: #fff; margin-bottom: 8px; }
+  .page-header p { font-size: 14px; color: #888; max-width: 500px; margin: 0 auto; line-height: 1.5; }
+
+  :root {
+    --bar: linear-gradient(90deg, #D55E00 33%, #56B4E9 33%, #56B4E9 66%, #F0E442 66%);
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 24px;
+    max-width: 1000px;
+    margin: 0 auto;
+  }
+
+  .card {
+    background: #1a1d27;
+    border-radius: 16px;
+    overflow: hidden;
+    border: 2px solid transparent;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+  .card:hover { border-color: #444; transform: translateY(-2px); }
+  .card.selected { border-color: #4a9eff; box-shadow: 0 0 24px rgba(74,158,255,0.2); }
+
+  .card-body {
+    padding: 32px;
+    display: flex;
+    align-items: center;
+    gap: 32px;
+  }
+
+  /* Enlarged preview (64px render of the favicon concept) */
+  .enlarged {
+    width: 64px; height: 64px;
+    border-radius: 14px;
+    flex-shrink: 0;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    overflow: hidden;
+  }
+
+  /* Actual-size previews in a mock tab bar */
+  .tab-mock {
+    display: flex;
+    align-items: center;
+    background: #2a2d37;
+    border-radius: 8px;
+    padding: 6px 10px;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+  .tab-mock .favicon {
+    width: 16px; height: 16px;
+    border-radius: 3px;
+    flex-shrink: 0;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    overflow: hidden;
+  }
+  .tab-mock .tab-text {
+    font-size: 11px;
+    color: #ccc;
+    white-space: nowrap;
+  }
+
+  .card-info {
+    padding: 14px 20px;
+    border-top: 1px solid #2a2d37;
+  }
+  .card-info h3 { font-size: 14px; font-weight: 700; color: #fff; margin-bottom: 4px; }
+  .card-info p { font-size: 12px; color: #888; line-height: 1.4; }
+
+  .indicator {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    background: #1a1d27;
+    border-top: 1px solid #2a2d37;
+    padding: 12px 24px;
+    text-align: center;
+    font-size: 13px; color: #888; z-index: 100;
+  }
+  .indicator strong { color: #4a9eff; }
+</style>
+</head>
+<body>
+
+<div class="page-header">
+  <h1>Favicon Variants</h1>
+</div>
+
+<div class="grid">
+
+  <!-- F1: Just "A" on dark -->
+  <div class="card" onclick="toggle(this, 1)">
+    <div class="card-body">
+      <div class="enlarged" style="background:#1a1d27; border: 1px solid #333;">
+        <span style="font-family:'Plus Jakarta Sans';font-weight:800;font-size:38px;color:#fff;">A</span>
+      </div>
+      <div class="tab-mock">
+        <div class="favicon" style="background:#1a1d27; border: 1px solid #333;">
+          <span style="font-family:'Plus Jakarta Sans';font-weight:800;font-size:11px;color:#fff;">A</span>
+        </div>
+        <span class="tab-text">ACE</span>
+      </div>
+    </div>
+    <div class="card-info">
+      <h3>F1 — Monogram</h3>
+    </div>
+  </div>
+
+  <!-- F2: "A" with colour bar beneath -->
+  <div class="card" onclick="toggle(this, 2)">
+    <div class="card-body">
+      <div class="enlarged" style="background:#1a1d27; border: 1px solid #333; gap: 3px;">
+        <span style="font-family:'Plus Jakarta Sans';font-weight:800;font-size:32px;color:#fff;">A</span>
+        <div style="width:40px;height:5px;border-radius:2px;background:var(--bar);"></div>
+      </div>
+      <div class="tab-mock">
+        <div class="favicon" style="background:#1a1d27; border: 1px solid #333; gap: 1px;">
+          <span style="font-family:'Plus Jakarta Sans';font-weight:800;font-size:9px;color:#fff;">A</span>
+          <div style="width:11px;height:2px;border-radius:1px;background:var(--bar);"></div>
+        </div>
+        <span class="tab-text">ACE</span>
+      </div>
+    </div>
+    <div class="card-info">
+      <h3>F2 — Monogram + Bar</h3>
+    </div>
+  </div>
+
+  <!-- F3: Colour bar only -->
+  <div class="card" onclick="toggle(this, 3)">
+    <div class="card-body">
+      <div class="enlarged" style="background:#1a1d27; border: 1px solid #333;">
+        <div style="width:44px;height:8px;border-radius:3px;background:var(--bar);"></div>
+      </div>
+      <div class="tab-mock">
+        <div class="favicon" style="background:#1a1d27; border: 1px solid #333;">
+          <div style="width:11px;height:3px;border-radius:1px;background:var(--bar);"></div>
+        </div>
+        <span class="tab-text">ACE</span>
+      </div>
+    </div>
+    <div class="card-info">
+      <h3>F3 — Bar Only</h3>
+    </div>
+  </div>
+
+  <!-- F4: Single white tile with bar -->
+  <div class="card" onclick="toggle(this, 4)">
+    <div class="card-body">
+      <div class="enlarged" style="background:#1a1d27; border: 1px solid #333; gap: 3px;">
+        <div style="width:28px;height:28px;background:#fff;border-radius:5px;display:flex;align-items:center;justify-content:center;font-family:'Plus Jakarta Sans';font-weight:800;font-size:18px;color:#1a1d27;">A</div>
+        <div style="width:40px;height:5px;border-radius:2px;background:var(--bar);"></div>
+      </div>
+      <div class="tab-mock">
+        <div class="favicon" style="background:#1a1d27; border: 1px solid #333; gap: 1px;">
+          <div style="width:9px;height:9px;background:#fff;border-radius:2px;display:flex;align-items:center;justify-content:center;font-family:'Plus Jakarta Sans';font-weight:800;font-size:6px;color:#1a1d27;">A</div>
+          <div style="width:11px;height:2px;border-radius:1px;background:var(--bar);"></div>
+        </div>
+        <span class="tab-text">ACE</span>
+      </div>
+    </div>
+    <div class="card-info">
+      <h3>F4 — Single Tile + Bar</h3>
+    </div>
+  </div>
+
+  <!-- F5: Three dots + bar -->
+  <div class="card" onclick="toggle(this, 5)">
+    <div class="card-body">
+      <div class="enlarged" style="background:#1a1d27; border: 1px solid #333; gap: 5px;">
+        <div style="display:flex;gap:4px;">
+          <div style="width:14px;height:14px;background:#fff;border-radius:3px;"></div>
+          <div style="width:14px;height:14px;background:#fff;border-radius:3px;"></div>
+          <div style="width:14px;height:14px;background:#fff;border-radius:3px;"></div>
+        </div>
+        <div style="width:48px;height:5px;border-radius:2px;background:var(--bar);"></div>
+      </div>
+      <div class="tab-mock">
+        <div class="favicon" style="background:#1a1d27; border: 1px solid #333; gap: 1px;">
+          <div style="display:flex;gap:1px;">
+            <div style="width:4px;height:4px;background:#fff;border-radius:1px;"></div>
+            <div style="width:4px;height:4px;background:#fff;border-radius:1px;"></div>
+            <div style="width:4px;height:4px;background:#fff;border-radius:1px;"></div>
+          </div>
+          <div style="width:14px;height:2px;border-radius:1px;background:var(--bar);"></div>
+        </div>
+        <span class="tab-text">ACE</span>
+      </div>
+    </div>
+    <div class="card-info">
+      <h3>F5 — Three Squares + Bar</h3>
+    </div>
+  </div>
+
+  <!-- F6: Stacked bars -->
+  <div class="card" onclick="toggle(this, 6)">
+    <div class="card-body">
+      <div class="enlarged" style="background:#1a1d27; border: 1px solid #333; gap: 4px;">
+        <div style="width:40px;height:6px;border-radius:2px;background:#fff;"></div>
+        <div style="width:40px;height:6px;border-radius:2px;background:var(--bar);"></div>
+        <div style="width:40px;height:6px;border-radius:2px;background:#fff; opacity:0.4;"></div>
+      </div>
+      <div class="tab-mock">
+        <div class="favicon" style="background:#1a1d27; border: 1px solid #333; gap: 1px;">
+          <div style="width:10px;height:2px;border-radius:1px;background:#fff;"></div>
+          <div style="width:10px;height:2px;border-radius:1px;background:var(--bar);"></div>
+          <div style="width:10px;height:2px;border-radius:1px;background:#fff;opacity:0.4;"></div>
+        </div>
+        <span class="tab-text">ACE</span>
+      </div>
+    </div>
+    <div class="card-info">
+      <h3>F6 — Text + Highlight</h3>
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>
