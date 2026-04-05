@@ -302,6 +302,7 @@ body {
   background: transparent;
   color: var(--ace-text);
   outline: none;
+  text-align: center;
 }
 .ace-home-input:focus {
   border-bottom-color: var(--ace-text);
