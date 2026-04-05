@@ -248,6 +248,30 @@ body {
 .ace-home-resume a:hover {
   color: var(--ace-text);
 }
+.ace-home-resume-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: none;
+  border: none;
+  color: transparent;
+  font-size: var(--ace-font-size-xs);
+  line-height: 1;
+  cursor: pointer;
+  vertical-align: middle;
+  margin-left: var(--ace-space-1);
+  transition: background var(--ace-transition), color var(--ace-transition);
+}
+.ace-home-resume:hover .ace-home-resume-close {
+  color: var(--ace-border);
+}
+.ace-home-resume-close:hover {
+  background: var(--ace-bg-muted);
+  color: var(--ace-text-muted);
+}
 .ace-home-actions {
   display: flex;
   flex-direction: column;
