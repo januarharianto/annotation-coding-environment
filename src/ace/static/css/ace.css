@@ -227,8 +227,54 @@ body {
   display: block;
   margin: 0 auto;
 }
-.ace-home-section {
+.ace-home-subtitle {
+  font-size: var(--ace-font-size-xs);
+  letter-spacing: 2.5px;
+  text-transform: uppercase;
+  color: var(--ace-text-muted);
+  margin-top: var(--ace-space-2);
+}
+.ace-home-resume {
   margin-bottom: var(--ace-space-6);
+}
+.ace-home-resume a {
+  font-size: var(--ace-font-size-md);
+  color: var(--ace-text-muted);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: var(--ace-border-light);
+  transition: color var(--ace-transition);
+}
+.ace-home-resume a:hover {
+  color: var(--ace-text);
+}
+.ace-home-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--ace-space-2);
+  margin-bottom: var(--ace-space-8);
+}
+.ace-home-action-primary {
+  font-size: var(--ace-font-size-lg);
+  font-weight: var(--ace-weight-medium);
+  color: var(--ace-text);
+  text-decoration: none;
+  cursor: pointer;
+  transition: color var(--ace-transition);
+}
+.ace-home-action-secondary {
+  font-size: var(--ace-font-size-base);
+  color: var(--ace-border);
+  text-decoration: none;
+  cursor: pointer;
+  transition: color var(--ace-transition);
+}
+.ace-home-action-secondary:hover {
+  color: var(--ace-text-muted);
+}
+.ace-home-tools {
+  margin-top: var(--ace-space-8);
 }
 .ace-home-section-label {
   font-size: var(--ace-font-size-2xs);
@@ -237,26 +283,6 @@ body {
   letter-spacing: 0.05em;
   color: var(--ace-text-muted);
   margin: 0 0 var(--ace-space-2);
-}
-.ace-home-start-row {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  font-size: var(--ace-font-size-base);
-}
-.ace-home-start-row a {
-  color: var(--ace-text-muted);
-  text-decoration: none;
-  cursor: pointer;
-  transition: color var(--ace-transition);
-}
-.ace-home-start-row a:hover {
-  color: var(--ace-text);
-}
-.ace-home-pipe {
-  color: var(--ace-border-light);
-  user-select: none;
 }
 .ace-home-expand {
   max-height: 0;
@@ -287,37 +313,6 @@ body {
   font-size: var(--ace-font-size-2xs);
   color: var(--ace-border);
   margin-top: var(--ace-space-1);
-}
-.ace-home-recent {
-  display: block;
-  padding: 5px var(--ace-space-2);
-  text-decoration: none;
-  cursor: pointer;
-  transition: background var(--ace-transition);
-}
-.ace-home-recent:hover {
-  background: var(--ace-bg-muted);
-}
-.ace-home-recent:hover .ace-home-recent-name {
-  color: var(--ace-text);
-}
-.ace-home-recent-name {
-  font-size: var(--ace-font-size-md);
-  color: var(--ace-text-muted);
-  transition: color var(--ace-transition);
-}
-.ace-home-recent-sep {
-  color: var(--ace-border);
-  margin: 0 2px;
-}
-.ace-home-recent-time {
-  font-size: var(--ace-font-size-xs);
-  color: var(--ace-border);
-}
-.ace-home-empty {
-  font-size: var(--ace-font-size-md);
-  color: var(--ace-border);
-  padding: 5px var(--ace-space-2);
 }
 .ace-home-tool-link {
   display: block;
