@@ -87,15 +87,16 @@
     if (e.key !== "Enter") return;
     var name = this.value.trim();
     if (!name) return;
+    this.value = "";
     this.disabled = true;
-    this.placeholder = "Choosing folder...";
+    this.placeholder = "Choosing folder\u2026";
 
     fetch("/api/native/pick-folder", { method: "POST" })
       .then(function(r) { return r.json(); })
       .then(function(data) {
         newInput.disabled = false;
         newInput.placeholder = "Project name...";
-        if (!data.path) return;
+        if (!data.path) { newInput.value = name; return; }
 
         // Cloud sync warning
         var lower = data.path.toLowerCase();
