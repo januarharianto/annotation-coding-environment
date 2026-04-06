@@ -354,56 +354,6 @@ async def import_upload(request: Request, file: UploadFile = File(...)):
     </form>
     <button class="ace-wizard-back" onclick="showStep('step-upload')">&larr; Back</button>
 
-    <script>
-    (function() {{
-      var form = document.getElementById('import-form');
-      if (!form) return;
-
-      form.addEventListener('click', function(e) {{
-        var btn = e.target.closest('.ace-role-btn');
-        if (!btn) return;
-        var row = btn.closest('.ace-glimpse-row');
-        var role = btn.dataset.role;
-        var wasActive = btn.classList.contains('active');
-
-        if (role === 'id') {{
-          // Radio: clear all other IDs
-          form.querySelectorAll('.ace-role-btn[data-role="id"].active').forEach(function(b) {{
-            b.classList.remove('active');
-            b.closest('.ace-glimpse-row').dataset.role = b.closest('.ace-glimpse-row').querySelector('.ace-role-btn[data-role="text"].active') ? 'text' : '';
-          }});
-          // Clear text on this row if setting ID
-          var textBtn = row.querySelector('.ace-role-btn[data-role="text"]');
-          if (textBtn) {{ textBtn.classList.remove('active'); }}
-        }} else {{
-          // Clear ID on this row if setting text
-          var idBtn = row.querySelector('.ace-role-btn[data-role="id"]');
-          if (idBtn) {{ idBtn.classList.remove('active'); }}
-        }}
-
-        if (wasActive) {{
-          btn.classList.remove('active');
-          row.dataset.role = '';
-        }} else {{
-          btn.classList.add('active');
-          row.dataset.role = role;
-        }}
-
-        // Update hidden inputs
-        var idRow = form.querySelector('.ace-role-btn[data-role="id"].active');
-        document.getElementById('import-id-col').value = idRow ? idRow.closest('.ace-glimpse-row').dataset.col : '';
-
-        var textCols = [];
-        form.querySelectorAll('.ace-role-btn[data-role="text"].active').forEach(function(b) {{
-          textCols.push(b.closest('.ace-glimpse-row').dataset.col);
-        }});
-        document.getElementById('import-text-cols').value = textCols.join(',');
-
-        // Enable/disable submit
-        document.getElementById('import-submit').disabled = !(idRow && textCols.length);
-      }});
-    }})();
-    </script>
     """
     return HTMLResponse(fragment)
 
@@ -1542,177 +1492,50 @@ def _agreement_fmt(val: float | None, decimals: int = 2, is_pct: bool = False) -
     return f"{val:.{decimals}f}"
 
 
-def _render_agreement_results(result, dataset, loader) -> str:
-
+def _render_agreement_results(result, dataset, loader, jinja_env) -> str:
     n_coders = result.n_coders
-    kappa_header = "Cohen \u03ba" if n_coders == 2 else "Fleiss \u03ba"
-    kappa_ref = "3" if n_coders == 2 else "4"
 
-    # --- Title bar with export pills ---
-    title_bar = (
-        '<div class="ace-agreement-title-bar">'
-        '<h1 class="ace-agreement-title">Inter-Coder Agreement</h1>'
-        '<span class="spacer" style="flex:1"></span>'
-        '<a href="/api/agreement/export/results" class="ace-export-pill" '
-        'download="agreement_summary.csv" aria-label="Download summary as CSV file">\u2193 Summary CSV</a>'
-        '<a href="/api/agreement/export/raw" class="ace-export-pill" '
-        'download="agreement_raw_data.csv" aria-label="Download raw data as CSV file">\u2193 Raw data CSV</a>'
-        '</div>'
-    )
-
-    # --- Context bar ---
+    # Compute totals for context bar
     all_source_hashes = set()
     for fd in loader._file_data:
         all_source_hashes |= {s["content_hash"] for s in fd["sources"].values()}
-    total_sources = len(all_source_hashes)
     all_code_names = set()
     for fd in loader._file_data:
         all_code_names |= set(fd["codes"].values())
-    total_codes = len(all_code_names)
-    context_bar = (
-        '<div class="ace-agreement-context">'
-        f'<span><strong>{n_coders}</strong> coders</span>'
-        '<span class="dot">\u00b7</span>'
-        f'<span><strong>{result.n_sources}</strong> of {total_sources} sources</span>'
-        '<span class="dot">\u00b7</span>'
-        f'<span><strong>{result.n_codes}</strong> of {total_codes} codes</span>'
-        '<a href="#" class="action" onclick="acePickAndCompute();return false">Choose different files</a>'
-        '</div>'
-    )
 
-    # --- Warnings ---
-    warnings_html = ""
-    if dataset.warnings:
-        warn_items = "".join(f"<div>{html.escape(w)}</div>" for w in dataset.warnings)
-        warnings_html = (
-            '<details class="ace-agreement-warnings">'
-            f'<summary><span aria-hidden="true">\u26a0</span> '
-            f'<span class="visually-hidden">Warning: </span>'
-            f'{len(dataset.warnings)} warning{"s" if len(dataset.warnings) != 1 else ""}</summary>'
-            f'<div class="ace-agreement-warn-body">{warn_items}</div>'
-            '</details>'
-        )
-
-    # --- Metrics table ---
-    table_header = (
-        '<div class="ace-table-scroll">'
-        '<table class="ace-agreement-table">'
-        '<caption>Per-code agreement metrics</caption>'
-        '<thead><tr>'
-        '<th scope="col" class="col-primary">Code</th>'
-        '<th scope="col" class="col-primary">%<sup class="ace-ref-sup" aria-hidden="true">1</sup></th>'
-        '<th scope="col" class="col-primary">\u03b1<sup class="ace-ref-sup" aria-hidden="true">2</sup></th>'
-        f'<th scope="col" class="col-primary">{kappa_header}<sup class="ace-ref-sup" aria-hidden="true">{kappa_ref}</sup></th>'
-        '<th scope="col" class="col-muted col-gap">AC1<sup class="ace-ref-sup" aria-hidden="true">6</sup></th>'
-        '<th scope="col" class="col-muted">Conger<sup class="ace-ref-sup" aria-hidden="true">5</sup></th>'
-        '<th scope="col" class="col-muted">B-P<sup class="ace-ref-sup" aria-hidden="true">7</sup></th>'
-        '<th scope="col" class="col-muted">sources</th>'
-        '</tr></thead><tbody>'
-    )
-
-    # Per-code rows
-    rows = []
-    for code_name in sorted(result.per_code):
-        m = result.per_code[code_name]
-        kappa_val = m.cohens_kappa if n_coders == 2 else m.fleiss_kappa
-        alpha_str = _agreement_fmt(m.krippendorffs_alpha)
-        interp = _interp_label(m.krippendorffs_alpha)
-        interp_html = f'<span class="interp">{interp}</span>' if interp else ""
-        rows.append(
-            f'<tr>'
-            f'<th scope="row">{html.escape(code_name)}</th>'
-            f'<td class="col-val-primary">{_agreement_fmt(m.percent_agreement, is_pct=True)}</td>'
-            f'<td class="col-val-primary">{alpha_str}{interp_html}</td>'
-            f'<td class="col-val-primary">{_agreement_fmt(kappa_val)}</td>'
-            f'<td class="col-val-muted col-gap">{_agreement_fmt(m.gwets_ac1)}</td>'
-            f'<td class="col-val-muted">{_agreement_fmt(m.congers_kappa)}</td>'
-            f'<td class="col-val-muted">{_agreement_fmt(m.brennan_prediger)}</td>'
-            f'<td class="col-val-faint">{m.n_sources}</td>'
-            f'</tr>'
-        )
-
-    # Overall row
-    m = result.overall
-    kappa_val = m.cohens_kappa if n_coders == 2 else m.fleiss_kappa
-    alpha_str = _agreement_fmt(m.krippendorffs_alpha)
-    interp = _interp_label(m.krippendorffs_alpha)
-    interp_html = f'<span class="interp">{interp}</span>' if interp else ""
-    overall_row = (
-        f'<tr class="overall-row">'
-        f'<th scope="row">Overall (pooled)</th>'
-        f'<td class="col-val-primary">{_agreement_fmt(m.percent_agreement, is_pct=True)}</td>'
-        f'<td class="col-val-primary">{alpha_str}{interp_html}</td>'
-        f'<td class="col-val-primary">{_agreement_fmt(kappa_val)}</td>'
-        f'<td class="col-val-muted col-gap">{_agreement_fmt(m.gwets_ac1)}</td>'
-        f'<td class="col-val-muted">{_agreement_fmt(m.congers_kappa)}</td>'
-        f'<td class="col-val-muted">{_agreement_fmt(m.brennan_prediger)}</td>'
-        f'<td class="col-val-faint">{m.n_sources}</td>'
-        f'</tr>'
-    )
-
-    table_html = table_header + "".join(rows) + overall_row + "</tbody></table></div>"
-
-    # --- Pairwise table (only for 3+ coders) ---
-    pairwise_html = ""
+    # Prepare pairwise data
+    pairwise_sorted = []
     if n_coders >= 3 and result.pairwise:
         coder_labels = {c.id: c.label for c in dataset.coders}
-        sorted_pairs = sorted(
-            result.pairwise.items(),
-            key=lambda x: x[1].krippendorffs_alpha if x[1].krippendorffs_alpha is not None else -1,
-            reverse=True,
-        )
-        pw_rows = []
-        for (cid_a, cid_b), pm in sorted_pairs:
-            label = f"{coder_labels.get(cid_a, cid_a)} \u2194 {coder_labels.get(cid_b, cid_b)}"
-            alpha = pm.krippendorffs_alpha
-            alpha_str = _agreement_fmt(alpha)
-            interp = _interp_label(alpha)
-            interp_html = f'<span class="interp">{interp}</span>' if interp else ""
-            alpha_cls = "col-val-low" if alpha is not None and alpha < 0.60 else "col-val-primary"
-            pw_rows.append(
-                f'<tr>'
-                f'<th scope="row">{html.escape(label)}</th>'
-                f'<td class="col-val-primary">{_agreement_fmt(pm.percent_agreement, is_pct=True)}</td>'
-                f'<td class="{alpha_cls}">{alpha_str}{interp_html}</td>'
-                f'<td class="col-val-muted">{_agreement_fmt(pm.cohens_kappa)}</td>'
-                f'<td class="col-val-muted">{_agreement_fmt(pm.gwets_ac1)}</td>'
-                f'</tr>'
+        pairwise_sorted = [
+            (
+                f"{coder_labels.get(cid_a, cid_a)} \u2194 {coder_labels.get(cid_b, cid_b)}",
+                pm,
             )
+            for (cid_a, cid_b), pm in sorted(
+                result.pairwise.items(),
+                key=lambda x: x[1].krippendorffs_alpha if x[1].krippendorffs_alpha is not None else -1,
+                reverse=True,
+            )
+        ]
 
-        pairwise_html = (
-            '<div class="ace-table-scroll">'
-            '<table class="ace-agreement-table">'
-            '<caption>Pairwise agreement</caption>'
-            '<thead><tr>'
-            '<th scope="col" class="col-primary">Pair</th>'
-            '<th scope="col" class="col-primary">%<sup class="ace-ref-sup" aria-hidden="true">1</sup></th>'
-            '<th scope="col" class="col-primary">\u03b1<sup class="ace-ref-sup" aria-hidden="true">2</sup></th>'
-            '<th scope="col" class="col-muted">Cohen \u03ba<sup class="ace-ref-sup" aria-hidden="true">3</sup></th>'
-            '<th scope="col" class="col-muted">AC1<sup class="ace-ref-sup" aria-hidden="true">6</sup></th>'
-            '</tr></thead><tbody>'
-            + "".join(pw_rows)
-            + '</tbody></table></div>'
-        )
-
-    # --- References ---
-    refs = [
-        'Holsti, O. R. (1969). <em>Content Analysis for the Social Sciences and Humanities.</em> Addison-Wesley.',
-        'Krippendorff, K. (2011). Computing Krippendorff\'s alpha-reliability. <em>Annenberg School for Communication Departmental Papers, 43.</em>',
-        'Cohen, J. (1960). A coefficient of agreement for nominal scales. <em>Educational and Psychological Measurement, 20</em>(1), 37\u201346.',
-        'Fleiss, J. L. (1971). Measuring nominal scale agreement among many raters. <em>Psychological Bulletin, 76</em>(5), 378\u2013382.',
-        'Conger, A. J. (1980). Integration and generalization of kappas for multiple raters. <em>Psychological Bulletin, 88</em>(2), 322\u2013328.',
-        'Gwet, K. L. (2008). Computing inter-rater reliability and its variance in the presence of high agreement. <em>British Journal of Mathematical and Statistical Psychology, 61</em>(1), 29\u201348.',
-        'Brennan, R. L., &amp; Prediger, D. J. (1981). Coefficient kappa: Some uses, misuses, and alternatives. <em>Educational and Psychological Measurement, 41</em>(3), 687\u2013699.',
-        'Landis, J. R., &amp; Koch, G. G. (1977). The measurement of observer agreement for categorical data. <em>Biometrics, 33</em>(1), 159\u2013174.',
-    ]
-    refs_html = (
-        '<div class="ace-agreement-refs">'
-        '<h2>References</h2><ol>'
-        + "".join(f"<li>{r}</li>" for r in refs)
-        + '</ol></div>'
+    tmpl = jinja_env.get_template("agreement_results.html")
+    return tmpl.render(
+        n_coders=n_coders,
+        n_sources=result.n_sources,
+        n_codes=result.n_codes,
+        total_sources=len(all_source_hashes),
+        total_codes=len(all_code_names),
+        warnings=dataset.warnings,
+        kappa_header="Cohen \u03ba" if n_coders == 2 else "Fleiss \u03ba",
+        kappa_ref="3" if n_coders == 2 else "4",
+        per_code_sorted=sorted(result.per_code.items()),
+        overall=result.overall,
+        pairwise=result.pairwise,
+        pairwise_sorted=pairwise_sorted,
+        fmt=_agreement_fmt,
+        interp_label=_interp_label,
     )
-
-    return title_bar + context_bar + warnings_html + table_html + pairwise_html + refs_html
 
 
 @router.post("/agreement/compute")
@@ -1763,7 +1586,7 @@ async def agreement_compute(
     request.app.state.agreement_dataset = dataset
     request.app.state.agreement_result = result
 
-    html_out = _render_agreement_results(result, dataset, loader)
+    html_out = _render_agreement_results(result, dataset, loader, request.app.state.templates.env)
     return HTMLResponse(html_out)
 
 
