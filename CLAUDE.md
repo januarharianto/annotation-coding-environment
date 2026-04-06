@@ -44,6 +44,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `_clearSearchFilter()` must dispatch `new Event("input", { bubbles: true })` — just clearing the value doesn't restore hidden rows
 - Keycaps q, x, z are reserved (repeat, delete-annotation, undo) — `_KEYCAP_LABELS` array skips them
 - Don't nest `role="button"` inside `role="treeitem"` — ARIA violation. Use event delegation + `title` for clickable spans inside treeitems
+- `htmx:afterSettle` fires with the PRIMARY swap target, not OOB targets — when `_render_full_coding_oob` swaps `#text-panel` (primary) + `#code-sidebar` (OOB), `evt.detail.target.id` is `"text-panel"`. Must call `_updateKeycaps()` and `_restoreCollapseState()` in the text-panel afterSettle branch too.
+- `htmx:beforeSwap` guard must include `text-panel` alongside `code-sidebar` and `coding-workspace` — otherwise sidebar focus state isn't saved before OOB sidebar re-render during flag/navigate
+- Colour picker opens via right-click (`contextmenu` event) on code row — was dot click, dots removed
+- Source name + flag button now in text panel nav (`.ace-nav-cluster`), not a header bar
+- Text panel element is `<main>` (not `<div>`), sidebar is `<aside>` with `role="banner"` branding section
+- `__version__` in `src/ace/__init__.py` must match `version` in `pyproject.toml` — keep in sync manually
 
 ## CSS Design System
 - 33 design tokens in `:root` — see ace.css header block
@@ -64,13 +70,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **CSS Custom Highlight API**: annotation highlights painted client-side via `_paintHighlights()` in bridge.js — creates Range objects from annotation offsets, registers via `CSS.highlights.set("ace-hl-{code_id}", highlight)`. Seamlessly spans across sentence boundaries
 - **Annotation data**: passed to client via hidden `<div id="ace-ann-data" data-annotations="...">` element, updated via OOB swap
 - **Bottom code bar**: sticky bar at bottom of text panel showing applied codes as coloured text chips. Click flashes the annotated text using a temporary `CSS.highlights.set("ace-flash", ...)` highlight
-- **Sidebar**: ARIA treeview with roving tabindex. Group collapse via `aria-expanded` on headers. Collapse state in `_collapsedGroups`, restored after OOB swaps. "Codebook ▾" dropdown menu for import/export.
-- **Keyboard shortcuts**: 1-9/0/a-p/r-w/y apply codes (q/x/z reserved), ↑/↓ navigate sentences, Shift+←/→ navigate sources, Q repeat, Z undo, X delete, / opens search, Tab cycles zones (text→header→search→tree)
+- **Sidebar**: `<aside>` with branding row (ACE + ? help, 32px) at top. ARIA treeview with roving tabindex. Left-border colour stripes (3px) per code row, 28px row height, no dots. Group collapse via `aria-expanded`. Collapse state in `_collapsedGroups`, restored after OOB swaps. "Codebook ▾" dropdown menu for import/export. Right-click context menu has "New Group…" in Move to Group submenu.
+- **Keyboard shortcuts**: 1-9/0/a-p/r-w/y apply codes (q/x/z reserved), ↑/↓ navigate sentences, Shift+←/→ navigate sources, Q repeat, Z undo, X delete, / opens search, Tab cycles zones (text→search→tree)
 - **Code application**: keycap badge click (mouse), keycap hotkey (keyboard), search Enter (first match), tree Enter (focused code). All paths use `_applyCode()` helper which supports custom selection and announces to aria-live region
 
 ## HTMX Patterns
 - Templates use `{% block name %}` regions that `jinja2-fragments` renders independently
-- Coding page swap zones: `#coding-header`, `#code-sidebar`, `#text-panel`, `#source-grid-overlay`, `#ace-ann-data`, `<style id="code-colours">`
+- Coding page swap zones: `#code-sidebar`, `#text-panel`, `#source-grid-overlay`, `#ace-ann-data`, `<style id="code-colours">`
 - Annotation actions use `htmx.ajax()` directly (not hidden trigger buttons) to avoid `hx-sync` queue timing issues
 - Dialogs: native `<dialog>` loaded into `#modal-container` via HTMX, auto-opened by bridge.js `htmx:afterSettle`
 - Toast: `X-ACE-Toast` response header — bridge.js `htmx:afterRequest` handler calls `aceToast()`. Do NOT use `HX-Trigger` with `ace-toast` (dead code pattern)
