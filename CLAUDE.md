@@ -22,7 +22,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Running
 - `uv run ace` — start server on http://127.0.0.1:8080
 - `uv run uvicorn ace.app:create_app --factory --host 127.0.0.1 --port 8080 --reload --reload-dir src/ace` — dev server with hot reload
-- `uv run pytest` — run tests (252 tests)
+- `uv run pytest` — run tests (237 tests)
 - `uv run pytest tests/path/test_file.py::test_name -v` — run a single test
 - `uv build` — build wheel
 
@@ -39,7 +39,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `timeout` command not available on macOS — use `& sleep N` pattern instead
 - Jinja2's `tojson` filter wraps output in `Markup()` — `| e` after `| tojson` is a no-op. For HTML attributes, pre-escape in Python with `Markup(html.escape(json.dumps(...)))`
 - `::highlight()` pseudo-elements do NOT support CSS custom properties (`var()`) cross-browser — use literal alpha values
-- Toast uses `X-ACE-Toast` response header (NOT `HX-Trigger` with `ace-toast` — that pattern is dead code in this codebase)
+- Toast uses `X-ACE-Toast` response header — the ONLY working toast mechanism. `HX-Trigger` with `ace-toast` was dead code and has been removed.
+- `annotator.css` was deleted (never loaded). CSS for agreement page is in `agreement.css`; coding page in `coding.css`
 - HTMX OOB swaps destroy DOM elements — click handlers MUST use event delegation on `document` (not bind to specific elements) to survive swaps
 - `_clearSearchFilter()` must dispatch `new Event("input", { bubbles: true })` — just clearing the value doesn't restore hidden rows
 - Keycaps q, x, z are reserved (repeat, delete-annotation, undo) — `_KEYCAP_LABELS` array skips them
@@ -50,6 +51,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Source name + flag button now in text panel nav (`.ace-nav-cluster`), not a header bar
 - Text panel element is `<main>` (not `<div>`), sidebar is `<aside>` with `role="banner"` branding section
 - `__version__` in `src/ace/__init__.py` must match `version` in `pyproject.toml` — keep in sync manually
+- `_require_coder_id(request)` in api.py — use instead of the 3-line `getattr` + `if None` guard
+- `_tk_root()` in api.py — shared tkinter root setup for file picker fallbacks
+- `_build_counts()` / `_observed_agreement()` in agreement_computer.py — shared helpers for kappa functions
 
 ## CSS Design System
 - 33 design tokens in `:root` — see ace.css header block
@@ -105,7 +109,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `sips` cannot render SVG — Tauri master icon.png (1024×1024) generated via HTML→browser screenshot, then `sips` resizes to all icon sizes
 
 ## Testing
-- `uv run pytest` — 252 tests
+- `uv run pytest` — 237 tests
 
 ## Agreement
 - Streamlined flow: choose files → auto-compute → results page (no intermediate steps)
