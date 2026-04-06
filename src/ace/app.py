@@ -19,7 +19,7 @@ from fastapi.staticfiles import StaticFiles
 from jinja2_fragments.fastapi import Jinja2Blocks
 from starlette.middleware.sessions import SessionMiddleware
 
-from ace.db.connection import checkpoint_and_close, open_project
+from ace.db.connection import checkpoint_and_close
 from ace.db.schema import ACE_APPLICATION_ID
 
 _DATA_DIR = Path.home() / ".ace"

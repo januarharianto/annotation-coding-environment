@@ -128,11 +128,6 @@ body {
   color: var(--ace-danger);
 }
 
-.ace-toast--ok {
-  border-color: var(--ace-success);
-  color: var(--ace-success);
-}
-
 /* Buttons */
 .ace-btn {
   display: inline-flex;
@@ -172,39 +167,6 @@ body {
 .ace-btn--danger:hover {
   background: var(--ace-danger-dark);
   border-color: var(--ace-danger-dark);
-}
-
-/* Inputs */
-.ace-input {
-  display: block;
-  width: 100%;
-  padding: var(--ace-space-2) var(--ace-space-3);
-  font-size: var(--ace-font-size-base);
-  border: 1px solid var(--ace-border);
-  background: var(--ace-bg);
-  color: var(--ace-text);
-  transition: border-color var(--ace-transition);
-}
-
-.ace-input:focus {
-  border-color: var(--ace-focus);
-  outline: none;
-}
-
-.ace-input[readonly] {
-  background: var(--ace-bg-muted);
-  color: var(--ace-text-muted);
-}
-
-/* Labels */
-.ace-label {
-  display: block;
-  font-size: var(--ace-font-size-xs);
-  font-weight: var(--ace-weight-semibold);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--ace-text-muted);
-  margin-bottom: var(--ace-space-1);
 }
 
 /* Landing page */
@@ -487,42 +449,6 @@ body {
   background: rgba(0, 0, 0, 0.3);
 }
 
-/* Header bar */
-.ace-header {
-  display: flex;
-  align-items: center;
-  padding: var(--ace-space-2) var(--ace-space-4);
-  border-bottom: 1px solid var(--ace-border);
-  background: var(--ace-bg);
-}
-
-/* Data tables */
-.ace-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: var(--ace-font-size-md);
-}
-
-.ace-table th {
-  text-align: left;
-  text-transform: uppercase;
-  font-size: var(--ace-font-size-xs);
-  font-weight: var(--ace-weight-semibold);
-  letter-spacing: 0.05em;
-  color: var(--ace-text-muted);
-  padding: var(--ace-space-2) var(--ace-space-3);
-  border-bottom: 2px solid var(--ace-border);
-}
-
-.ace-table td {
-  padding: 0.4rem var(--ace-space-3);
-  border-bottom: 1px solid var(--ace-border-light);
-}
-
-.ace-table tr:hover td {
-  background: var(--ace-bg-muted);
-}
-
 /* ---- Glimpse preview ---- */
 .ace-glimpse {
   font-family: var(--ace-font-mono);
@@ -594,13 +520,3 @@ body {
 .ace-role-btn.active[data-role="id"] { background: var(--ace-text); color: var(--ace-bg); border-color: var(--ace-text); }
 .ace-role-btn.active[data-role="text"] { background: var(--ace-focus); color: #fff; border-color: var(--ace-focus); }
 
-/* Agreement metric cards */
-.ace-metric-card {
-  border: 1px solid var(--ace-border);
-  border-radius: var(--ace-radius);
-  padding: var(--ace-space-3) var(--ace-space-4);
-  min-width: 100px;
-  text-align: center;
-}
-.ace-metric-value { font-size: var(--ace-font-size-xl); font-weight: var(--ace-weight-semibold); color: var(--ace-text); }
-.ace-metric-label { font-size: var(--ace-font-size-sm); color: var(--ace-text-muted); margin-top: 2px; }

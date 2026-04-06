@@ -277,36 +277,61 @@ def _krippendorffs_alpha(vectors: dict[str, list[int]], coder_ids: list[str]) ->
 
 
 # ---------------------------------------------------------------------------
-# Fleiss' kappa (any number of raters)
+# Shared helpers for kappa-family metrics
 # ---------------------------------------------------------------------------
 
 
-def _fleiss_kappa(vectors: dict[str, list[int]], coder_ids: list[str]) -> float | None:
-    """Fleiss' kappa for multiple raters."""
+def _build_counts(
+    vectors: dict[str, list[int]], coder_ids: list[str]
+) -> tuple[int, int, list[int], int, list[list[int]]] | None:
+    """Build a counts matrix (n_units x q) of raters per category per unit.
+
+    Returns (n_units, n_coders, cats, q, counts) or None if insufficient data.
+    """
     n_units = len(vectors[coder_ids[0]]) if coder_ids else 0
     n_coders = len(coder_ids)
     if n_units == 0 or n_coders < 2:
         return None
 
-    categories = set()
+    categories: set[int] = set()
     for cid in coder_ids:
         categories.update(vectors[cid])
     cats = sorted(categories)
     q = len(cats)
 
-    # Count how many raters assigned each category per unit
     counts = [[0] * q for _ in range(n_units)]
     for cid in coder_ids:
         for u in range(n_units):
             c_idx = cats.index(vectors[cid][u])
             counts[u][c_idx] += 1
 
-    # Observed agreement per unit
+    return n_units, n_coders, cats, q, counts
+
+
+def _observed_agreement(
+    counts: list[list[int]], n_units: int, n_coders: int, q: int
+) -> float:
+    """Pairwise observed agreement from a counts matrix."""
     po_sum = 0.0
     for u in range(n_units):
         s = sum(counts[u][j] * (counts[u][j] - 1) for j in range(q))
         po_sum += s / (n_coders * (n_coders - 1))
-    po = po_sum / n_units
+    return po_sum / n_units
+
+
+# ---------------------------------------------------------------------------
+# Fleiss' kappa (any number of raters)
+# ---------------------------------------------------------------------------
+
+
+def _fleiss_kappa(vectors: dict[str, list[int]], coder_ids: list[str]) -> float | None:
+    """Fleiss' kappa for multiple raters."""
+    result = _build_counts(vectors, coder_ids)
+    if result is None:
+        return None
+    n_units, n_coders, cats, q, counts = result
+
+    po = _observed_agreement(counts, n_units, n_coders, q)
 
     # Expected agreement (marginal proportions)
     pe = 0.0
@@ -326,30 +351,12 @@ def _fleiss_kappa(vectors: dict[str, list[int]], coder_ids: list[str]) -> float 
 
 def _congers_kappa(vectors: dict[str, list[int]], coder_ids: list[str]) -> float | None:
     """Conger's kappa — like Fleiss but uses per-rater marginals."""
-    n_units = len(vectors[coder_ids[0]]) if coder_ids else 0
-    n_coders = len(coder_ids)
-    if n_units == 0 or n_coders < 2:
+    result = _build_counts(vectors, coder_ids)
+    if result is None:
         return None
+    n_units, n_coders, cats, q, counts = result
 
-    categories = set()
-    for cid in coder_ids:
-        categories.update(vectors[cid])
-    cats = sorted(categories)
-    q = len(cats)
-
-    # Count per unit per category
-    counts = [[0] * q for _ in range(n_units)]
-    for cid in coder_ids:
-        for u in range(n_units):
-            c_idx = cats.index(vectors[cid][u])
-            counts[u][c_idx] += 1
-
-    # Observed agreement (same as Fleiss)
-    po_sum = 0.0
-    for u in range(n_units):
-        s = sum(counts[u][j] * (counts[u][j] - 1) for j in range(q))
-        po_sum += s / (n_coders * (n_coders - 1))
-    po = po_sum / n_units
+    po = _observed_agreement(counts, n_units, n_coders, q)
 
     # Per-rater marginal proportions
     rater_props = []
@@ -379,30 +386,12 @@ def _congers_kappa(vectors: dict[str, list[int]], coder_ids: list[str]) -> float
 
 def _gwets_ac1(vectors: dict[str, list[int]], coder_ids: list[str]) -> float | None:
     """Gwet's AC1 for multiple raters."""
-    n_units = len(vectors[coder_ids[0]]) if coder_ids else 0
-    n_coders = len(coder_ids)
-    if n_units == 0 or n_coders < 2:
+    result = _build_counts(vectors, coder_ids)
+    if result is None:
         return None
+    n_units, n_coders, cats, q, counts = result
 
-    categories = set()
-    for cid in coder_ids:
-        categories.update(vectors[cid])
-    cats = sorted(categories)
-    q = len(cats)
-
-    # Count per unit per category
-    counts = [[0] * q for _ in range(n_units)]
-    for cid in coder_ids:
-        for u in range(n_units):
-            c_idx = cats.index(vectors[cid][u])
-            counts[u][c_idx] += 1
-
-    # Observed agreement (same as Fleiss)
-    po_sum = 0.0
-    for u in range(n_units):
-        s = sum(counts[u][j] * (counts[u][j] - 1) for j in range(q))
-        po_sum += s / (n_coders * (n_coders - 1))
-    po = po_sum / n_units
+    po = _observed_agreement(counts, n_units, n_coders, q)
 
     # Gwet's chance agreement: based on marginal proportions with
     # propensity adjustment
@@ -424,30 +413,12 @@ def _gwets_ac1(vectors: dict[str, list[int]], coder_ids: list[str]) -> float | N
 
 def _brennan_prediger(vectors: dict[str, list[int]], coder_ids: list[str]) -> float | None:
     """Brennan-Prediger coefficient — chance = 1/q (uniform)."""
-    n_units = len(vectors[coder_ids[0]]) if coder_ids else 0
-    n_coders = len(coder_ids)
-    if n_units == 0 or n_coders < 2:
+    result = _build_counts(vectors, coder_ids)
+    if result is None:
         return None
+    n_units, n_coders, cats, q, counts = result
 
-    categories = set()
-    for cid in coder_ids:
-        categories.update(vectors[cid])
-    cats = sorted(categories)
-    q = len(cats)
-
-    # Count per unit per category
-    counts = [[0] * q for _ in range(n_units)]
-    for cid in coder_ids:
-        for u in range(n_units):
-            c_idx = cats.index(vectors[cid][u])
-            counts[u][c_idx] += 1
-
-    # Observed agreement
-    po_sum = 0.0
-    for u in range(n_units):
-        s = sum(counts[u][j] * (counts[u][j] - 1) for j in range(q))
-        po_sum += s / (n_coders * (n_coders - 1))
-    po = po_sum / n_units
+    po = _observed_agreement(counts, n_units, n_coders, q)
 
     pe = 1.0 / q
     if pe == 1.0:

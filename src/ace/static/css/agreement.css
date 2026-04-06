@@ -190,9 +190,6 @@
 
 .ace-agreement-refs ol { padding-left: 18px; margin: 0; }
 .ace-agreement-refs li { margin-bottom: 3px; }
-.ace-agreement-refs .ref-author { color: var(--ace-text-muted); }
-.ace-agreement-refs .ref-journal { color: var(--ace-text-muted); }
-
 /* Empty / loading / error states */
 .ace-agreement-empty,
 .ace-agreement-loading,

@@ -18,6 +18,11 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 router = APIRouter(prefix="/api")
 
 
+def _require_coder_id(request: Request) -> str | None:
+    """Return coder_id from app state, or None."""
+    return getattr(request.app.state, "coder_id", None)
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -54,37 +59,34 @@ def _run_osascript(script: str, timeout: int = 120) -> subprocess.CompletedProce
     )
 
 
-def _tk_pick_file(filetypes: list[tuple[str, str]] | None = None) -> str:
-    """Open a tkinter file picker (cross-platform fallback)."""
+def _tk_root():
+    """Create a hidden topmost tkinter root for file dialogs."""
     import tkinter as tk
-    from tkinter import filedialog
     root = tk.Tk()
     root.withdraw()
     root.attributes("-topmost", True)
+    return root
+
+
+def _tk_pick_file(filetypes: list[tuple[str, str]] | None = None) -> str:
+    from tkinter import filedialog
+    root = _tk_root()
     path = filedialog.askopenfilename(filetypes=filetypes or [])
     root.destroy()
     return path or ""
 
 
 def _tk_pick_folder() -> str:
-    """Open a tkinter folder picker (cross-platform fallback)."""
-    import tkinter as tk
     from tkinter import filedialog
-    root = tk.Tk()
-    root.withdraw()
-    root.attributes("-topmost", True)
+    root = _tk_root()
     path = filedialog.askdirectory()
     root.destroy()
     return path or ""
 
 
 def _tk_pick_files(filetypes: list[tuple[str, str]] | None = None) -> list[str]:
-    """Open a tkinter multi-file picker (cross-platform fallback)."""
-    import tkinter as tk
     from tkinter import filedialog
-    root = tk.Tk()
-    root.withdraw()
-    root.attributes("-topmost", True)
+    root = _tk_root()
     paths = filedialog.askopenfilenames(filetypes=filetypes or [])
     root.destroy()
     return list(paths)
@@ -590,7 +592,7 @@ async def annotate(
     from ace.models.annotation import add_annotation
     from ace.models.assignment import update_assignment_status
 
-    coder_id = getattr(request.app.state, "coder_id", None)
+    coder_id = _require_coder_id(request)
     if coder_id is None:
         return HTMLResponse("", status_code=400)
 
@@ -636,7 +638,7 @@ async def delete_annotation_route(
     """Soft-delete an annotation and return updated HTML."""
     from ace.models.annotation import delete_annotation
 
-    coder_id = getattr(request.app.state, "coder_id", None)
+    coder_id = _require_coder_id(request)
     if coder_id is None:
         return HTMLResponse("", status_code=400)
 
@@ -671,7 +673,7 @@ async def undo_route(
     """Undo the last annotation action for the current source."""
     from ace.models.annotation import delete_annotation, undelete_annotation
 
-    coder_id = getattr(request.app.state, "coder_id", None)
+    coder_id = _require_coder_id(request)
     if coder_id is None:
         return HTMLResponse("", status_code=400)
 
@@ -696,10 +698,9 @@ async def undo_route(
             msg = "Undo"
 
         content = _render_coding_oob(request, conn, coder_id, current_index)
-        return HTMLResponse(
-            content,
-            headers={"HX-Trigger": f'{{"ace-toast": "{msg}"}}'},
-        )
+        response = HTMLResponse(content)
+        response.headers["X-ACE-Toast"] = msg
+        return response
     finally:
         conn.close()
 
@@ -712,7 +713,7 @@ async def redo_route(
     """Redo the last undone annotation action for the current source."""
     from ace.models.annotation import delete_annotation, undelete_annotation
 
-    coder_id = getattr(request.app.state, "coder_id", None)
+    coder_id = _require_coder_id(request)
     if coder_id is None:
         return HTMLResponse("", status_code=400)
 
@@ -737,10 +738,9 @@ async def redo_route(
             msg = "Redo"
 
         content = _render_coding_oob(request, conn, coder_id, current_index)
-        return HTMLResponse(
-            content,
-            headers={"HX-Trigger": f'{{"ace-toast": "{msg}"}}'},
-        )
+        response = HTMLResponse(content)
+        response.headers["X-ACE-Toast"] = msg
+        return response
     finally:
         conn.close()
 
@@ -761,7 +761,7 @@ async def navigate_route(
 
     from ace.models.assignment import get_assignments_for_coder, update_assignment_status
 
-    coder_id = getattr(request.app.state, "coder_id", None)
+    coder_id = _require_coder_id(request)
     if coder_id is None:
         return HTMLResponse("", status_code=400)
 
@@ -805,7 +805,7 @@ async def flag_route(
     """Toggle the flagged status of the current source."""
     from ace.models.assignment import get_assignments_for_coder, update_assignment_status
 
-    coder_id = getattr(request.app.state, "coder_id", None)
+    coder_id = _require_coder_id(request)
     if coder_id is None:
         return HTMLResponse("", status_code=400)
 
@@ -853,7 +853,7 @@ async def annotate_sentence(
     from ace.models.source import get_source_content
     from ace.services.text_splitter import split_into_units
 
-    coder_id = getattr(request.app.state, "coder_id", None)
+    coder_id = _require_coder_id(request)
     if coder_id is None:
         return HTMLResponse("", status_code=400)
 
@@ -947,7 +947,7 @@ async def delete_sentence_annotations(
     from ace.models.source import get_source_content
     from ace.services.text_splitter import split_into_units
 
-    coder_id = getattr(request.app.state, "coder_id", None)
+    coder_id = _require_coder_id(request)
     if coder_id is None:
         return HTMLResponse("", status_code=400)
 
@@ -985,10 +985,9 @@ async def delete_sentence_annotations(
 
         content = _render_coding_oob(request, conn, coder_id, current_index)
         if most_recent:
-            return HTMLResponse(
-                content,
-                headers={"HX-Trigger": '{"ace-toast": "Annotation removed"}'},
-            )
+            response = HTMLResponse(content)
+            response.headers["X-ACE-Toast"] = "Annotation removed"
+            return response
         return HTMLResponse(content)
     finally:
         conn.close()
@@ -1045,7 +1044,7 @@ async def create_code(
     """Create a new code and return updated sidebar."""
     from ace.models.codebook import add_code, list_codes, next_colour
 
-    coder_id = getattr(request.app.state, "coder_id", None)
+    coder_id = _require_coder_id(request)
     if coder_id is None:
         return HTMLResponse("", status_code=400)
 
@@ -1077,7 +1076,7 @@ async def reorder_codes_route(
     """Reorder codes and return updated sidebar."""
     from ace.models.codebook import reorder_codes
 
-    coder_id = getattr(request.app.state, "coder_id", None)
+    coder_id = _require_coder_id(request)
     if coder_id is None:
         return HTMLResponse("", status_code=400)
 
@@ -1120,63 +1119,6 @@ async def export_codebook(request: Request):
     )
 
 
-@router.post("/codes/import/preview")
-async def import_codebook_preview(request: Request, file: UploadFile = File(...)):
-    """Upload a codebook CSV and return a preview dialog."""
-    from ace.models.codebook import preview_codebook_csv
-
-    data = await file.read()
-    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".csv")
-    try:
-        tmp.write(data)
-        tmp.close()
-
-        conn = _open_project_db(request)
-        try:
-            previewed = preview_codebook_csv(conn, tmp.name)
-        finally:
-            conn.close()
-    except Exception as e:
-        Path(tmp.name).unlink(missing_ok=True)
-        return _oob_toast(f"Could not parse codebook CSV: {e}")
-
-    # Store temp path for the import step
-    request.app.state.codebook_import_tmp = tmp.name
-
-    # Build preview rows
-    rows_html = ""
-    for code in previewed:
-        esc_name = html.escape(code["name"])
-        esc_colour = html.escape(code["colour"])
-        esc_group = html.escape(code.get("group_name") or "")
-        exists = code["exists"]
-        checked = "" if exists else "checked"
-        disabled = "disabled" if exists else ""
-        opacity = "opacity:0.5" if exists else ""
-        label_extra = " (already exists)" if exists else ""
-        rows_html += (
-            f'<label style="display:flex;align-items:center;gap:8px;padding:4px 0;{opacity}">'
-            f'<input type="checkbox" name="selected" value="{esc_name}" {checked} {disabled}>'
-            f'<span class="ace-code-dot" style="background:{esc_colour};width:12px;height:12px;'
-            f'border-radius:50%;display:inline-block;flex-shrink:0"></span>'
-            f'<span>{esc_name}{label_extra}</span>'
-            f'</label>'
-        )
-
-    return HTMLResponse(
-        f'<dialog class="ace-dialog">'
-        f'<h3 style="font-size:15px;font-weight:500;margin:0 0 16px">Import Codebook</h3>'
-        f'<div style="max-height:300px;overflow-y:auto">{rows_html}</div>'
-        f'<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">'
-        f'<button type="button" class="ace-btn" onclick="this.closest(\'dialog\').close()">Cancel</button>'
-        f'<button type="button" class="ace-btn ace-btn--primary" '
-        f'id="codebook-import-btn" '
-        f'onclick="aceImportCodebook(this)">Import</button>'
-        f'</div>'
-        f'</dialog>'
-    )
-
-
 @router.post("/codes/import/preview-path")
 async def import_codebook_preview_path(
     request: Request,
@@ -1186,7 +1128,7 @@ async def import_codebook_preview_path(
     """Preview a codebook CSV from a local file path (native file picker flow)."""
     from ace.models.codebook import preview_codebook_csv
 
-    coder_id = getattr(request.app.state, "coder_id", None)
+    coder_id = _require_coder_id(request)
     if coder_id is None:
         return HTMLResponse("", status_code=400)
 
@@ -1298,7 +1240,7 @@ async def import_codebook(
     """Import selected codes from a previously previewed CSV."""
     from ace.models.codebook import import_selected_codes
 
-    coder_id = getattr(request.app.state, "coder_id", None)
+    coder_id = _require_coder_id(request)
     if coder_id is None:
         return HTMLResponse("", status_code=400)
 
@@ -1340,7 +1282,7 @@ async def update_code_route(
     """Update a code (rename, recolour, move group) and return sidebar + text panel."""
     from ace.models.codebook import update_code
 
-    coder_id = getattr(request.app.state, "coder_id", None)
+    coder_id = _require_coder_id(request)
     if coder_id is None:
         return HTMLResponse("", status_code=400)
 
@@ -1379,7 +1321,7 @@ async def delete_code_route(
     """Delete a code (cascades annotations) and return sidebar + text panel."""
     from ace.models.codebook import delete_code
 
-    coder_id = getattr(request.app.state, "coder_id", None)
+    coder_id = _require_coder_id(request)
     if coder_id is None:
         return HTMLResponse("", status_code=400)
 
@@ -1395,67 +1337,6 @@ async def delete_code_route(
 # ---------------------------------------------------------------------------
 # Agreement routes
 # ---------------------------------------------------------------------------
-
-
-def _get_agreement_loader(request: Request):
-    """Get or create the AgreementLoader on app.state."""
-    from ace.services.agreement_loader import AgreementLoader
-
-    loader = getattr(request.app.state, "agreement_loader", None)
-    if loader is None:
-        loader = AgreementLoader()
-        request.app.state.agreement_loader = loader
-    return loader
-
-
-@router.post("/agreement/add-file")
-async def agreement_add_file(request: Request, path: str = Form(...)):
-    """Add an .ace file and return an HTML fragment row."""
-    loader = _get_agreement_loader(request)
-    try:
-        info = loader.add_file(path)
-    except Exception as e:
-        esc_error = html.escape(str(e))
-        return HTMLResponse(
-            f'<div class="ace-agreement-file ace-agreement-file--error"'
-            f' style="padding:8px 12px;margin-bottom:4px;border:1px solid var(--ace-danger);'
-            f'border-radius:4px;font-size:13px;color:var(--ace-danger)">'
-            f'{esc_error}</div>'
-        )
-
-    if info.get("error"):
-        esc_error = html.escape(info["error"])
-        return HTMLResponse(
-            f'<div class="ace-agreement-file ace-agreement-file--error"'
-            f' style="padding:8px 12px;margin-bottom:4px;border:1px solid var(--ace-danger);'
-            f'border-radius:4px;font-size:13px;color:var(--ace-danger)">'
-            f'{esc_error}</div>'
-        )
-
-    esc_name = html.escape(info["filename"])
-    coder_names = ", ".join(html.escape(n) for n in info["coder_names"])
-    source_count = info["source_count"]
-    ann_count = info["annotation_count"]
-
-    warnings_html = ""
-    for w in info.get("warnings", []):
-        warnings_html += (
-            f'<div style="font-size:12px;color:#e65100;margin-top:2px">'
-            f'{html.escape(w)}</div>'
-        )
-
-    return HTMLResponse(
-        f'<div class="ace-agreement-file"'
-        f' style="padding:8px 12px;margin-bottom:4px;border:1px solid var(--ace-border);'
-        f'border-radius:4px;font-size:13px">'
-        f'<div style="font-weight:500">{esc_name}</div>'
-        f'<div style="color:var(--ace-text-muted)">'
-        f'{source_count} source{"s" if source_count != 1 else ""}, '
-        f'{ann_count} annotation{"s" if ann_count != 1 else ""} '
-        f'&middot; {coder_names}</div>'
-        f'{warnings_html}'
-        f'</div>'
-    )
 
 
 def _agreement_error(message: str) -> str:
@@ -1693,12 +1574,3 @@ async def agreement_export_raw(request: Request):
         media_type="text/csv",
         headers={"Content-Disposition": 'attachment; filename="agreement_raw_data.csv"'},
     )
-
-
-@router.post("/agreement/reset")
-async def agreement_reset(request: Request):
-    """Clear the agreement loader."""
-    from ace.services.agreement_loader import AgreementLoader
-
-    request.app.state.agreement_loader = AgreementLoader()
-    return HTMLResponse("")

@@ -295,7 +295,7 @@ def test_undo_after_annotate(client_with_codes):
         data={"current_index": 0},
     )
     assert resp.status_code == 200
-    assert "HX-Trigger" in resp.headers
+    assert "X-ACE-Toast" in resp.headers
 
     # Verify annotation is now soft-deleted
     conn = sqlite3.connect(db_path)
@@ -329,7 +329,7 @@ def test_redo_after_undo(client_with_codes):
     # Redo
     resp = client.post("/api/code/redo", data={"current_index": 0})
     assert resp.status_code == 200
-    assert "HX-Trigger" in resp.headers
+    assert "X-ACE-Toast" in resp.headers
 
     # Verify annotation is active again
     conn = sqlite3.connect(db_path)

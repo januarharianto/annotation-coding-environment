@@ -147,9 +147,7 @@ class AgreementLoader:
             {s["content_hash"] for s in fd["sources"].values()}
             for fd in self._file_data
         ]
-        common_hashes = hash_sets[0]
-        for hs in hash_sets[1:]:
-            common_hashes = common_hashes & hs
+        common_hashes = hash_sets[0].intersection(*hash_sets[1:])
 
         all_hashes = set()
         for hs in hash_sets:
@@ -178,9 +176,7 @@ class AgreementLoader:
             common_code_names = set(self._file_data[0]["codes"].values())
         else:
             name_sets = [set(fd["codes"].values()) for fd in self._file_data]
-            common_code_names = name_sets[0]
-            for ns in name_sets[1:]:
-                common_code_names = common_code_names & ns
+            common_code_names = name_sets[0].intersection(*name_sets[1:])
 
             all_code_names = set()
             for ns in name_sets:
@@ -252,9 +248,7 @@ class AgreementLoader:
             {s["content_hash"] for s in fd["sources"].values()}
             for fd in self._file_data
         ]
-        common_hashes = hash_sets[0]
-        for hs in hash_sets[1:]:
-            common_hashes = common_hashes & hs
+        common_hashes = hash_sets[0].intersection(*hash_sets[1:])
 
         # Pick display_id and content_text from the first file that has each hash
         sources: list[MatchedSource] = []
@@ -279,9 +273,7 @@ class AgreementLoader:
             common_code_names = set(self._file_data[0]["codes"].values())
         else:
             name_sets = [set(fd["codes"].values()) for fd in self._file_data]
-            common_code_names = name_sets[0]
-            for ns in name_sets[1:]:
-                common_code_names = common_code_names & ns
+            common_code_names = name_sets[0].intersection(*name_sets[1:])
 
         codes = [MatchedCode(name=n) for n in sorted(common_code_names)]
         code_name_set = common_code_names
