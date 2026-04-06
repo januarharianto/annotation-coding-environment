@@ -7,11 +7,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `src/ace/app.py` — FastAPI app factory, middleware (CSRF, session), lifespan, `get_db` dependency, `run()`
 - `src/ace/routes/pages.py` — GET routes for `/`, `/import`, `/code`, `/agreement`
 - `src/ace/routes/api.py` — HTMX API endpoints (annotation CRUD, codebook CRUD, import, agreement, native file pickers)
-- `src/ace/templates/` — Jinja2 templates: `base.html`, `landing.html`, `import.html`, `coding.html`, `agreement.html`
-- `src/ace/static/css/` — `ace.css` (design tokens + shared), `coding.css` (coding page)
+- `src/ace/templates/` — Jinja2 templates: `base.html`, `landing.html`, `import.html`, `coding.html`, `agreement.html`, `agreement_results.html`
+- `src/ace/static/css/` — `ace.css` (design tokens + shared), `coding.css` (coding page), `agreement.css` (agreement page)
 - `src/ace/static/js/` — `bridge.js` (client interactivity), vendored `htmx.min.js`, `idiomorph-ext.min.js`, `Sortable.min.js`
 - `src/ace/models/` — SQLite CRUD (annotation, codebook, project+coder, source, assignment)
-- `src/ace/services/` — business logic (undo, importer, exporter, agreement, assigner, packager, coding_render, text_splitter)
+- `src/ace/services/` — business logic (undo, importer, exporter, agreement, coding_render, text_splitter)
 - `src/ace/db/` — schema, migrations, connection management
 - `.ace` files are SQLite databases with application_id `0x41434500`
 - `brand/` — logo SVGs (outside `src/`, not packaged into binary). Source of truth for brand assets
@@ -51,9 +51,6 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Source name + flag button now in text panel nav (`.ace-nav-cluster`), not a header bar
 - Text panel element is `<main>` (not `<div>`), sidebar is `<aside>` with `role="banner"` branding section
 - `__version__` in `src/ace/__init__.py` must match `version` in `pyproject.toml` — keep in sync manually
-- `_require_coder_id(request)` in api.py — use instead of the 3-line `getattr` + `if None` guard
-- `_tk_root()` in api.py — shared tkinter root setup for file picker fallbacks
-- `_build_counts()` / `_observed_agreement()` in agreement_computer.py — shared helpers for kappa functions
 
 ## CSS Design System
 - 33 design tokens in `:root` — see ace.css header block
@@ -83,7 +80,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Coding page swap zones: `#code-sidebar`, `#text-panel`, `#source-grid-overlay`, `#ace-ann-data`, `<style id="code-colours">`
 - Annotation actions use `htmx.ajax()` directly (not hidden trigger buttons) to avoid `hx-sync` queue timing issues
 - Dialogs: native `<dialog>` loaded into `#modal-container` via HTMX, auto-opened by bridge.js `htmx:afterSettle`
-- Toast: `X-ACE-Toast` response header — bridge.js `htmx:afterRequest` handler calls `aceToast()`. Do NOT use `HX-Trigger` with `ace-toast` (dead code pattern)
+- Toast: `X-ACE-Toast` response header — bridge.js `htmx:afterRequest` handler calls `aceToast()`
 - Never use HTTP 302 for HTMX — use `HX-Redirect` header via `HtmxRedirect` exception
 - OOB assembly helpers in api.py: `_render_coding_oob()` (text panel + ann data), `_render_full_coding_oob()` (all zones), `_render_sidebar_and_text()` (sidebar + text + colours + ann data)
 
@@ -92,6 +89,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `_coding_context()` in pages.py assembles all template data — reused by all coding routes
 - Colour values validated with `re.fullmatch(r'#[0-9a-fA-F]{6}', colour)` before storage
 - Escape user-controlled text with `html.escape()` before interpolating into HTML
+- `_require_coder_id(request)` in api.py — use instead of repeating the `getattr` + `if None` guard
+- `_tk_root()` in api.py — shared tkinter root setup for file picker fallbacks
+- `_build_counts()` / `_observed_agreement()` in agreement_computer.py — shared helpers for kappa functions
 
 ## Workflow
 - Conventional commit style (`feat`, `fix`, `style`, `refactor`, `test`, `build`, `docs`). Plain British English.
@@ -107,9 +107,6 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - No coder name step in new project flow — API defaults to `"default"`
 - New project flow: type name → Enter → native folder picker → project created
 - `sips` cannot render SVG — Tauri master icon.png (1024×1024) generated via HTML→browser screenshot, then `sips` resizes to all icon sizes
-
-## Testing
-- `uv run pytest` — 237 tests
 
 ## Agreement
 - Streamlined flow: choose files → auto-compute → results page (no intermediate steps)
