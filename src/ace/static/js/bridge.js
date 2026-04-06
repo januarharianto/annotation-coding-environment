@@ -2247,7 +2247,57 @@
   };
 
   /* ================================================================
-   * 19. DOMContentLoaded init
+   * 19. Import form column-role assignment (delegated)
+   * ================================================================ */
+
+  document.addEventListener("click", function (e) {
+    var btn = e.target.closest(".ace-role-btn");
+    if (!btn) return;
+    var form = btn.closest("#import-form");
+    if (!form) return;
+    var row = btn.closest(".ace-glimpse-row");
+    var role = btn.dataset.role;
+    var wasActive = btn.classList.contains("active");
+
+    if (role === "id") {
+      // Radio: clear all other IDs
+      form.querySelectorAll('.ace-role-btn[data-role="id"].active').forEach(function (b) {
+        b.classList.remove("active");
+        b.closest(".ace-glimpse-row").dataset.role = b.closest(".ace-glimpse-row").querySelector('.ace-role-btn[data-role="text"].active') ? "text" : "";
+      });
+      // Clear text on this row if setting ID
+      var textBtn = row.querySelector('.ace-role-btn[data-role="text"]');
+      if (textBtn) { textBtn.classList.remove("active"); }
+    } else {
+      // Clear ID on this row if setting text
+      var idBtn = row.querySelector('.ace-role-btn[data-role="id"]');
+      if (idBtn) { idBtn.classList.remove("active"); }
+    }
+
+    if (wasActive) {
+      btn.classList.remove("active");
+      row.dataset.role = "";
+    } else {
+      btn.classList.add("active");
+      row.dataset.role = role;
+    }
+
+    // Update hidden inputs
+    var idRow = form.querySelector('.ace-role-btn[data-role="id"].active');
+    document.getElementById("import-id-col").value = idRow ? idRow.closest(".ace-glimpse-row").dataset.col : "";
+
+    var textCols = [];
+    form.querySelectorAll('.ace-role-btn[data-role="text"].active').forEach(function (b) {
+      textCols.push(b.closest(".ace-glimpse-row").dataset.col);
+    });
+    document.getElementById("import-text-cols").value = textCols.join(",");
+
+    // Enable/disable submit
+    document.getElementById("import-submit").disabled = !(idRow && textCols.length);
+  });
+
+  /* ================================================================
+   * 20. DOMContentLoaded init
    * ================================================================ */
 
   document.addEventListener("DOMContentLoaded", function () {

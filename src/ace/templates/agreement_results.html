@@ -1,0 +1,119 @@
+{# Agreement results fragment — rendered by api.py agreement_compute route #}
+
+<div class="ace-agreement-title-bar">
+  <h1 class="ace-agreement-title">Inter-Coder Agreement</h1>
+  <span class="spacer" style="flex:1"></span>
+  <a href="/api/agreement/export/results" class="ace-export-pill"
+     download="agreement_summary.csv" aria-label="Download summary as CSV file">↓ Summary CSV</a>
+  <a href="/api/agreement/export/raw" class="ace-export-pill"
+     download="agreement_raw_data.csv" aria-label="Download raw data as CSV file">↓ Raw data CSV</a>
+</div>
+
+<div class="ace-agreement-context">
+  <span><strong>{{ n_coders }}</strong> coders</span>
+  <span class="dot">·</span>
+  <span><strong>{{ n_sources }}</strong> of {{ total_sources }} sources</span>
+  <span class="dot">·</span>
+  <span><strong>{{ n_codes }}</strong> of {{ total_codes }} codes</span>
+  <a href="#" class="action" onclick="acePickAndCompute();return false">Choose different files</a>
+</div>
+
+{% if warnings %}
+<details class="ace-agreement-warnings">
+  <summary><span aria-hidden="true">⚠</span>
+    <span class="visually-hidden">Warning: </span>
+    {{ warnings | length }} warning{{ "s" if warnings | length != 1 else "" }}</summary>
+  <div class="ace-agreement-warn-body">
+    {% for w in warnings %}
+    <div>{{ w }}</div>
+    {% endfor %}
+  </div>
+</details>
+{% endif %}
+
+<div class="ace-table-scroll">
+<table class="ace-agreement-table">
+  <caption>Per-code agreement metrics</caption>
+  <thead><tr>
+    <th scope="col" class="col-primary">Code</th>
+    <th scope="col" class="col-primary">%<sup class="ace-ref-sup" aria-hidden="true">1</sup></th>
+    <th scope="col" class="col-primary">α<sup class="ace-ref-sup" aria-hidden="true">2</sup></th>
+    <th scope="col" class="col-primary">{{ kappa_header }}<sup class="ace-ref-sup" aria-hidden="true">{{ kappa_ref }}</sup></th>
+    <th scope="col" class="col-muted col-gap">AC1<sup class="ace-ref-sup" aria-hidden="true">6</sup></th>
+    <th scope="col" class="col-muted">Conger<sup class="ace-ref-sup" aria-hidden="true">5</sup></th>
+    <th scope="col" class="col-muted">B-P<sup class="ace-ref-sup" aria-hidden="true">7</sup></th>
+    <th scope="col" class="col-muted">sources</th>
+  </tr></thead>
+  <tbody>
+  {% for code_name, m in per_code_sorted %}
+    {% set kappa_val = m.cohens_kappa if n_coders == 2 else m.fleiss_kappa %}
+    {% set interp = interp_label(m.krippendorffs_alpha) %}
+    <tr>
+      <th scope="row">{{ code_name }}</th>
+      <td class="col-val-primary">{{ fmt(m.percent_agreement, is_pct=True) }}</td>
+      <td class="col-val-primary">{{ fmt(m.krippendorffs_alpha) }}{% if interp %}<span class="interp">{{ interp }}</span>{% endif %}</td>
+      <td class="col-val-primary">{{ fmt(kappa_val) }}</td>
+      <td class="col-val-muted col-gap">{{ fmt(m.gwets_ac1) }}</td>
+      <td class="col-val-muted">{{ fmt(m.congers_kappa) }}</td>
+      <td class="col-val-muted">{{ fmt(m.brennan_prediger) }}</td>
+      <td class="col-val-faint">{{ m.n_sources }}</td>
+    </tr>
+  {% endfor %}
+    {% set om = overall %}
+    {% set kappa_val = om.cohens_kappa if n_coders == 2 else om.fleiss_kappa %}
+    {% set interp = interp_label(om.krippendorffs_alpha) %}
+    <tr class="overall-row">
+      <th scope="row">Overall (pooled)</th>
+      <td class="col-val-primary">{{ fmt(om.percent_agreement, is_pct=True) }}</td>
+      <td class="col-val-primary">{{ fmt(om.krippendorffs_alpha) }}{% if interp %}<span class="interp">{{ interp }}</span>{% endif %}</td>
+      <td class="col-val-primary">{{ fmt(kappa_val) }}</td>
+      <td class="col-val-muted col-gap">{{ fmt(om.gwets_ac1) }}</td>
+      <td class="col-val-muted">{{ fmt(om.congers_kappa) }}</td>
+      <td class="col-val-muted">{{ fmt(om.brennan_prediger) }}</td>
+      <td class="col-val-faint">{{ om.n_sources }}</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+{% if n_coders >= 3 and pairwise %}
+<div class="ace-table-scroll">
+<table class="ace-agreement-table">
+  <caption>Pairwise agreement</caption>
+  <thead><tr>
+    <th scope="col" class="col-primary">Pair</th>
+    <th scope="col" class="col-primary">%<sup class="ace-ref-sup" aria-hidden="true">1</sup></th>
+    <th scope="col" class="col-primary">α<sup class="ace-ref-sup" aria-hidden="true">2</sup></th>
+    <th scope="col" class="col-muted">Cohen κ<sup class="ace-ref-sup" aria-hidden="true">3</sup></th>
+    <th scope="col" class="col-muted">AC1<sup class="ace-ref-sup" aria-hidden="true">6</sup></th>
+  </tr></thead>
+  <tbody>
+  {% for label, pm in pairwise_sorted %}
+    {% set alpha_cls = "col-val-low" if pm.krippendorffs_alpha is not none and pm.krippendorffs_alpha < 0.60 else "col-val-primary" %}
+    {% set interp = interp_label(pm.krippendorffs_alpha) %}
+    <tr>
+      <th scope="row">{{ label }}</th>
+      <td class="col-val-primary">{{ fmt(pm.percent_agreement, is_pct=True) }}</td>
+      <td class="{{ alpha_cls }}">{{ fmt(pm.krippendorffs_alpha) }}{% if interp %}<span class="interp">{{ interp }}</span>{% endif %}</td>
+      <td class="col-val-muted">{{ fmt(pm.cohens_kappa) }}</td>
+      <td class="col-val-muted">{{ fmt(pm.gwets_ac1) }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+
+<div class="ace-agreement-refs">
+  <h2>References</h2>
+  <ol>
+    <li>Holsti, O. R. (1969). <em>Content Analysis for the Social Sciences and Humanities.</em> Addison-Wesley.</li>
+    <li>Krippendorff, K. (2011). Computing Krippendorff's alpha-reliability. <em>Annenberg School for Communication Departmental Papers, 43.</em></li>
+    <li>Cohen, J. (1960). A coefficient of agreement for nominal scales. <em>Educational and Psychological Measurement, 20</em>(1), 37–46.</li>
+    <li>Fleiss, J. L. (1971). Measuring nominal scale agreement among many raters. <em>Psychological Bulletin, 76</em>(5), 378–382.</li>
+    <li>Conger, A. J. (1980). Integration and generalization of kappas for multiple raters. <em>Psychological Bulletin, 88</em>(2), 322–328.</li>
+    <li>Gwet, K. L. (2008). Computing inter-rater reliability and its variance in the presence of high agreement. <em>British Journal of Mathematical and Statistical Psychology, 61</em>(1), 29–48.</li>
+    <li>Brennan, R. L., &amp; Prediger, D. J. (1981). Coefficient kappa: Some uses, misuses, and alternatives. <em>Educational and Psychological Measurement, 41</em>(3), 687–699.</li>
+    <li>Landis, J. R., &amp; Koch, G. G. (1977). The measurement of observer agreement for categorical data. <em>Biometrics, 33</em>(1), 159–174.</li>
+  </ol>
+</div>
