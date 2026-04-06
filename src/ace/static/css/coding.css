@@ -255,10 +255,13 @@
 
 .ace-code-row {
   display: grid;
-  grid-template-columns: 10px 1fr 20px;
+  grid-template-columns: 1fr 20px;
   gap: 6px;
   align-items: center;
-  padding: 3px 10px 3px 20px;
+  height: 28px;
+  padding: 0 8px 0 0;
+  padding-left: 8px;
+  border-left: 3px solid transparent;
   font-size: var(--ace-font-size-sm);
   color: var(--ace-text);
   cursor: pointer;
@@ -331,13 +334,6 @@
   right: var(--ace-space-2);
   top: 50%;
   transform: translateY(-50%);
-}
-
-.ace-code-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  flex-shrink: 0;
 }
 
 .ace-code-name {

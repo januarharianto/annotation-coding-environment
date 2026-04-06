@@ -103,8 +103,8 @@
           {% for code in group_codes %}
           <div role="treeitem" aria-level="2"
                class="ace-code-row" data-code-id="{{ code['id'] }}"
+               style="border-left-color: {{ code['colour'] }}"
                tabindex="-1">
-            <span class="ace-code-dot" style="background: {{ code['colour'] }};"></span>
             <span class="ace-code-name">{{ code['name'] }}</span>
             <span class="ace-keycap" title="Click to apply"></span>
           </div>
@@ -119,8 +119,8 @@
           {% for code in ungrouped_codes %}
           <div role="treeitem" aria-level="2"
                class="ace-code-row" data-code-id="{{ code['id'] }}"
+               style="border-left-color: {{ code['colour'] }}"
                tabindex="-1">
-            <span class="ace-code-dot" style="background: {{ code['colour'] }};"></span>
             <span class="ace-code-name">{{ code['name'] }}</span>
             <span class="ace-keycap" title="Click to apply"></span>
           </div>
