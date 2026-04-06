@@ -10,6 +10,7 @@ from markupsafe import Markup
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import HTMLResponse
 
+from ace import __version__
 from ace.app import HtmxRedirect, get_db
 from ace.models.annotation import get_annotation_counts_by_source, get_annotations_for_source
 from ace.models.assignment import add_assignment, get_assignments_for_coder
@@ -187,6 +188,7 @@ def _coding_context(conn: sqlite3.Connection, coder_id: str, current_index: int)
         "ungrouped_codes": ungrouped_codes,
         "margin_codes": margin_codes,
         "annotation_highlights_json": annotation_highlights_json,
+        "version": __version__,
     }
 
 

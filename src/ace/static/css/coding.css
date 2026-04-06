@@ -14,72 +14,64 @@
   overflow: hidden;
 }
 
-/* ---- Header ---- */
+/* ---- Sidebar branding ---- */
 
-.ace-coding-header {
+.ace-sidebar-brand {
   display: flex;
   align-items: center;
-  padding: var(--ace-space-2) var(--ace-space-4);
-  border-bottom: 1px solid var(--ace-border);
-  background: var(--ace-bg);
-  height: 44px;
+  justify-content: space-between;
+  height: 32px;
+  padding: 0 var(--ace-space-2);
+  border-bottom: 1px solid var(--ace-border-light);
   flex-shrink: 0;
 }
 
-.ace-header-brand {
-  flex: 0 0 var(--ace-sidebar-width);
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  line-height: 1.15;
+.ace-sidebar-brand-link {
+  font-weight: 800;
+  font-size: var(--ace-font-size-sm);
+  letter-spacing: -0.3px;
+  color: var(--ace-text-muted);
   text-decoration: none;
   transition: color var(--ace-transition);
 }
 
-.ace-header-brand-name {
-  font-weight: 800;
-  font-size: 16px;
-  letter-spacing: -0.5px;
-  color: var(--ace-text);
-}
+.ace-sidebar-brand-link:hover { color: var(--ace-text); }
 
-.ace-header-brand-sub {
-  font-size: 8px;
-  color: var(--ace-text-muted);
-  letter-spacing: 0.3px;
-}
-
-.ace-header-brand:hover { color: var(--ace-text); }
-
-.ace-header-brand:focus-visible {
+.ace-sidebar-brand-link:focus-visible {
   outline: 2px solid var(--ace-focus);
   outline-offset: 2px;
   border-radius: var(--ace-radius);
 }
 
-.ace-header-centre {
-  flex: 1;
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
-  align-items: center;
+.ace-sidebar-help-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--ace-text-muted);
+  font-size: var(--ace-font-size-sm);
+  padding: var(--ace-space-1);
+  transition: color var(--ace-transition);
 }
 
-.ace-header-centre .ace-header-source {
-  grid-column: 2;
-  text-align: center;
+.ace-sidebar-help-btn:hover { color: var(--ace-text); }
+
+.ace-sidebar-help-btn:focus-visible {
+  outline: 2px solid var(--ace-focus);
+  outline-offset: 2px;
+  border-radius: var(--ace-radius);
 }
 
-.ace-header-centre .ace-flag-btn {
-  grid-column: 3;
-  justify-self: start;
-  margin-left: var(--ace-space-2);
+/* ---- Nav source + flag ---- */
+
+.ace-nav-sep {
+  color: var(--ace-border);
+  margin: 0 var(--ace-space-1);
 }
 
-.ace-header-source {
-  font-weight: var(--ace-weight-semibold);
-  font-size: var(--ace-font-size-base);
-  color: var(--ace-text);
-  max-width: 30ch;
+.ace-nav-source {
+  font-size: var(--ace-font-size-sm);
+  color: var(--ace-text-muted);
+  max-width: 20ch;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -174,26 +166,6 @@
 }
 
 .ace-flag-btn:hover .ace-flag-chip { background: rgba(191, 54, 12, 0.16); }
-
-/* Help button */
-.ace-header-help {
-  flex: 0 0 auto;
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: var(--ace-text-muted);
-  font-size: var(--ace-font-size-sm);
-  padding: var(--ace-space-1);
-  transition: color var(--ace-transition);
-}
-
-.ace-header-help:hover { color: var(--ace-text); }
-
-.ace-header-help:focus-visible {
-  outline: 2px solid var(--ace-focus);
-  outline-offset: 2px;
-  border-radius: var(--ace-radius);
-}
 
 /* ---- Status badge ---- */
 
@@ -660,6 +632,12 @@
 
 .ace-code-menu-sub:hover .ace-code-submenu {
   display: block;
+}
+
+.ace-code-menu-sep {
+  height: 1px;
+  background: var(--ace-border-light);
+  margin: var(--ace-space-1) 0;
 }
 
 /* ---- Colour swatch popover ---- */

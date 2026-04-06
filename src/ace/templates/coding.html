@@ -52,35 +52,16 @@
             hx-swap="outerHTML">Flag</button>
   </div>
 
-  {# Header #}
-  {% block coding_header %}
-  <header id="coding-header" class="ace-coding-header">
-    <a href="/" class="ace-header-brand">
-      <span class="ace-header-brand-name">ACE</span>
-      <span class="ace-header-brand-sub">Annotation Coding Environment</span>
-    </a>
-    <div class="ace-header-centre">
-      <span class="ace-header-source" title="{{ current_source.display_id if current_source else '' }}">{{ current_source.display_id if current_source else '' }}</span>
-      <button type="button" class="ace-flag-btn{% if current_status == 'flagged' %} ace-flag-btn--active{% endif %}"
-              aria-label="Toggle flag" aria-pressed="{{ 'true' if current_status == 'flagged' else 'false' }}"
-              id="header-flag-btn">
-        {%- if current_status == 'flagged' -%}
-          <span class="ace-flag-chip">&#9873; Flagged</span>
-        {%- else -%}
-          <span class="ace-flag-icon">&#9873;</span>
-        {%- endif -%}
-      </button>
-    </div>
-    <button type="button" class="ace-header-help" aria-label="Keyboard shortcuts" id="header-help-btn">?</button>
-  </header>
-  {% endblock %}
-
   {# Three-column layout #}
   <div class="ace-three-col" id="three-col">
 
     {# Left: code sidebar #}
     {% block code_sidebar %}
-    <div id="code-sidebar" class="ace-sidebar">
+    <aside id="code-sidebar" class="ace-sidebar" aria-label="Codebook">
+      <div class="ace-sidebar-brand" role="banner">
+        <a href="/" class="ace-sidebar-brand-link" title="ACE v{{ version }}">ACE</a>
+        <button type="button" class="ace-sidebar-help-btn" aria-label="Keyboard shortcuts" id="sidebar-help-btn">?</button>
+      </div>
       <div class="ace-sidebar-toolbar">
         <input type="search" class="ace-sidebar-search" placeholder="Filter codes (/)"
                id="code-search-input" autocomplete="off"
@@ -136,7 +117,7 @@
         {% endif %}
       </div>
       <div aria-live="polite" class="ace-sr-only" id="ace-live-region"></div>
-    </div>
+    </aside>
     {% endblock %}
 
     {# Resize handle #}
@@ -147,7 +128,7 @@
 
       {# Centre: text panel #}
       {% block text_panel %}
-      <div id="text-panel" class="ace-text-panel" tabindex="0">
+      <main id="text-panel" class="ace-text-panel" tabindex="0">
         <div class="ace-text-nav">
           <div class="ace-nav-cluster">
             <button class="ace-nav-btn" id="btn-prev"
@@ -161,6 +142,17 @@
             <button class="ace-nav-btn" id="btn-next"
                     {% if current_index >= total_sources - 1 %}disabled{% endif %}
                     onclick="aceNavigateNext()">&#8250;</button>
+            <span class="ace-nav-sep">·</span>
+            <span class="ace-nav-source" title="{{ current_source.display_id if current_source else '' }}">{{ current_source.display_id if current_source else '' }}</span>
+            <button type="button" class="ace-flag-btn{% if current_status == 'flagged' %} ace-flag-btn--active{% endif %}"
+                    aria-label="Toggle flag" aria-pressed="{{ 'true' if current_status == 'flagged' else 'false' }}"
+                    id="nav-flag-btn">
+              {%- if current_status == 'flagged' -%}
+                <span class="ace-flag-chip">&#9873; Flagged</span>
+              {%- else -%}
+                <span class="ace-flag-icon">&#9873;</span>
+              {%- endif -%}
+            </button>
           </div>
         </div>
         {% if sentence_html %}
@@ -175,7 +167,7 @@
           {% for code in margin_codes %}{% if not loop.first %}<span class="ace-code-sep"> · </span>{% endif %}<span class="ace-code-chip" data-code-id="{{ code['code_id'] }}" data-colour="{{ code['colour'] }}" style="color: {{ code['colour'] }};">{{ code['code_name'] }}</span>{% endfor %}
         </div>
         {% endif %}
-      </div>
+      </main>
       {% endblock %}
 
     </div>

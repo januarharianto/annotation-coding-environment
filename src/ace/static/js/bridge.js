@@ -124,17 +124,19 @@
     }
   });
 
-  // Header: ? help button (delegated — survives OOB swaps)
+  // Sidebar: ? help button (delegated — survives OOB swaps)
   document.addEventListener("click", function (e) {
-    if (e.target.closest("#header-help-btn")) {
+    if (e.target.closest("#sidebar-help-btn")) {
       _toggleCheatSheet();
     }
   });
 
-  // Header: flag toggle button (delegated — survives OOB swaps)
+  // Nav: flag toggle button (delegated — survives OOB swaps)
+  var _pendingFlagAnnounce = false;
   document.addEventListener("click", function (e) {
-    if (e.target.closest("#header-flag-btn")) {
+    if (e.target.closest("#nav-flag-btn")) {
       _updateCurrentIndex();
+      _pendingFlagAnnounce = true;
       var triggerFlag = document.getElementById("trigger-flag");
       if (triggerFlag) htmx.trigger(triggerFlag, "click");
     }
@@ -277,7 +279,7 @@
 
     // Only handle keys when text panel (or nothing specific) is focused
     var zone = _activeZone();
-    if (zone === "search" || zone === "tree" || zone === "header") return;
+    if (zone === "search" || zone === "tree") return;
 
     var key = e.key;
     var ctrl = e.ctrlKey || e.metaKey;
@@ -762,7 +764,7 @@
   document.addEventListener("htmx:beforeSwap", function (e) {
     var target = e.detail.target;
     if (!target) return;
-    if (target.id !== "code-sidebar" && target.id !== "coding-workspace" && target.id !== "coding-header") return;
+    if (target.id !== "code-sidebar" && target.id !== "coding-workspace" && target.id !== "text-panel") return;
 
     var zone = _activeZone();
     _sidebarFocusState.zone = zone;
@@ -771,10 +773,6 @@
       var active = _getActiveTreeItem();
       _sidebarFocusState.codeId = active ? active.getAttribute("data-code-id") : null;
       _sidebarFocusState.groupName = active ? active.getAttribute("data-group") : null;
-    }
-
-    if (zone === "header") {
-      _sidebarFocusState.zone = "header";
     }
 
     var search = document.getElementById("code-search-input");
@@ -793,6 +791,25 @@
     if (target.id === "text-panel" || target.id === "coding-workspace") {
       _restoreFocus();
       _paintHighlights();
+
+      // Full OOB responses (flag, navigate) also replace the sidebar —
+      // restore sidebar state here since afterSettle only fires for the
+      // primary target, not OOB targets.
+      if (document.getElementById("code-tree")) {
+        _restoreCollapseState();
+        _updateKeycaps();
+      }
+
+      // Announce flag state and restore focus after flag toggle
+      if (_pendingFlagAnnounce) {
+        _pendingFlagAnnounce = false;
+        var flagBtn = document.getElementById("nav-flag-btn");
+        if (flagBtn) {
+          var pressed = flagBtn.getAttribute("aria-pressed") === "true";
+          _announce(pressed ? "Source flagged" : "Source unflagged");
+          flagBtn.focus();
+        }
+      }
     }
 
     if (target.id === "code-sidebar" || target.id === "coding-workspace") {
@@ -829,24 +846,10 @@
         search.focus();
       }
 
-      // Reset sidebar state (preserve zone for header block below)
-      var savedZone = _sidebarFocusState.zone;
+      // Reset sidebar state
       _sidebarFocusState.codeId = null;
       _sidebarFocusState.groupName = null;
       _sidebarFocusState.searchText = "";
-      if (savedZone !== "header") _sidebarFocusState.zone = null;
-    }
-
-    // Header OOB swap: restore focus and announce flag state
-    if (target.id === "coding-header") {
-      if (_sidebarFocusState.zone === "header") {
-        var flagBtn = document.getElementById("header-flag-btn");
-        if (flagBtn) {
-          var pressed = flagBtn.getAttribute("aria-pressed") === "true";
-          _announce(pressed ? "Source flagged" : "Source unflagged");
-          flagBtn.focus();
-        }
-      }
       _sidebarFocusState.zone = null;
     }
 
@@ -1230,6 +1233,23 @@
       btn.addEventListener("click", function () { _closeCodeMenu(); _moveToGroup(codeId, gn); });
       sub.appendChild(btn);
     });
+
+    // "New Group..." option
+    if (groups.length > 0 || true) {
+      var sep = document.createElement("div");
+      sep.className = "ace-code-menu-sep";
+      sub.appendChild(sep);
+    }
+    var newGroupBtn = document.createElement("button");
+    newGroupBtn.className = "ace-code-menu-item";
+    newGroupBtn.textContent = "New Group\u2026";
+    newGroupBtn.addEventListener("click", function () {
+      _closeCodeMenu();
+      var name = prompt("Group name:");
+      if (!name || !name.trim()) return;
+      _moveToGroup(codeId, name.trim());
+    });
+    sub.appendChild(newGroupBtn);
 
     moveItem.appendChild(sub);
     // Insert after Colour, before Move Up
@@ -1759,13 +1779,11 @@
     }
   }
 
-  /** Determine which zone currently has focus: "text", "header", "search", "tree", or null. */
+  /** Determine which zone currently has focus: "text", "search", "tree", or null. */
   function _activeZone() {
     var el = document.activeElement;
     if (!el) return null;
     if (el.id === "text-panel" || el.closest("#text-panel")) return "text";
-    var header = document.getElementById("coding-header");
-    if (header && header.contains(el)) return "header";
     if (el.id === "code-search-input") return "search";
     var tree = document.getElementById("code-tree");
     if (tree && tree.contains(el)) return "tree";
@@ -1780,24 +1798,15 @@
     if (!zone) return;
 
     if (!e.shiftKey) {
-      if (zone === "text") { e.preventDefault(); _focusHeader(); return; }
-      if (zone === "header") { e.preventDefault(); _focusSearchBar(); return; }
+      if (zone === "text") { e.preventDefault(); _focusSearchBar(); return; }
       if (zone === "search") { e.preventDefault(); _focusCodeTree(); return; }
       if (zone === "tree") { e.preventDefault(); _focusTextPanel(); return; }
     } else {
       if (zone === "text") { e.preventDefault(); _focusCodeTree(); return; }
-      if (zone === "header") { e.preventDefault(); _focusTextPanel(); return; }
-      if (zone === "search") { e.preventDefault(); _focusHeader(); return; }
+      if (zone === "search") { e.preventDefault(); _focusTextPanel(); return; }
       if (zone === "tree") { e.preventDefault(); _focusSearchBar(); return; }
     }
   }, true);  // capture phase to intercept before default Tab behaviour
-
-  function _focusHeader() {
-    var header = document.getElementById("coding-header");
-    if (!header) return;
-    var first = header.querySelector("a, button");
-    if (first) first.focus();
-  }
 
   // --- Roving tabindex ---
 
