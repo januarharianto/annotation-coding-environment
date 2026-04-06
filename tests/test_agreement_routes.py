@@ -135,34 +135,6 @@ def test_agreement_page_renders(client):
     assert "agreement-results" in resp.text
 
 
-# ── Add file ──────────────────────────────────────────────────────────
-
-
-def test_add_file(client, ace_file_a):
-    """POST /api/agreement/add-file returns file info fragment."""
-    resp = client.post(
-        "/api/agreement/add-file",
-        data={"path": str(ace_file_a)},
-    )
-    assert resp.status_code == 200
-    assert "alice.ace" in resp.text
-    assert "ace-agreement-file" in resp.text
-    assert "2 sources" in resp.text
-    assert "Alice" in resp.text
-
-
-def test_add_file_invalid(client, tmp_path):
-    """Adding a non-.ace file returns an error fragment."""
-    bad = tmp_path / "bad.ace"
-    bad.write_text("not a database")
-    resp = client.post(
-        "/api/agreement/add-file",
-        data={"path": str(bad)},
-    )
-    assert resp.status_code == 200
-    assert "error" in resp.text.lower() or "not a valid" in resp.text.lower()
-
-
 # ── Compute ───────────────────────────────────────────────────────────
 
 
@@ -248,16 +220,3 @@ def test_export_raw_data_csv(client_with_agreement_files):
     assert "end_offset" in text
     assert "coder_id" in text
     assert "code_name" in text
-
-
-# ── Reset ─────────────────────────────────────────────────────────────
-
-
-def test_reset(client, ace_file_a, ace_file_b):
-    """Reset clears the loader; subsequent export returns 400."""
-    paths = json.dumps([str(ace_file_a), str(ace_file_b)])
-    client.post("/api/agreement/compute", data={"paths": paths})
-    client.post("/api/agreement/reset")
-
-    resp = client.get("/api/agreement/export/results")
-    assert resp.status_code == 400

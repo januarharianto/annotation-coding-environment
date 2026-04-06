@@ -37,7 +37,9 @@
 
 .ace-sidebar-brand-link:hover { color: var(--ace-text); }
 
-.ace-sidebar-brand-link:focus-visible {
+.ace-sidebar-brand-link:focus-visible,
+.ace-sidebar-help-btn:focus-visible,
+.ace-flag-btn:focus-visible {
   outline: 2px solid var(--ace-focus);
   outline-offset: 2px;
   border-radius: var(--ace-radius);
@@ -54,12 +56,6 @@
 }
 
 .ace-sidebar-help-btn:hover { color: var(--ace-text); }
-
-.ace-sidebar-help-btn:focus-visible {
-  outline: 2px solid var(--ace-focus);
-  outline-offset: 2px;
-  border-radius: var(--ace-radius);
-}
 
 /* ---- Nav source + flag ---- */
 
@@ -139,12 +135,6 @@
   transition: color var(--ace-transition);
 }
 
-.ace-flag-btn:focus-visible {
-  outline: 2px solid var(--ace-focus);
-  outline-offset: 2px;
-  border-radius: var(--ace-radius);
-}
-
 .ace-flag-icon {
   color: var(--ace-text-muted);
   font-size: var(--ace-font-size-sm);
@@ -210,10 +200,6 @@
   user-select: none;
 }
 
-.ace-code-group-header:first-child {
-  margin-top: 0;
-}
-
 /* Collapsed group: hide the role="group" sibling's children */
 .ace-code-group-header[aria-expanded="false"] + [role="group"] .ace-code-row {
   display: none;
@@ -231,8 +217,7 @@
   gap: 6px;
   align-items: center;
   height: 28px;
-  padding: 0 8px 0 0;
-  padding-left: 8px;
+  padding: 0 8px;
   border-left: 3px solid transparent;
   font-size: var(--ace-font-size-sm);
   color: var(--ace-text);
@@ -371,14 +356,6 @@
 
 .ace-create-prompt:hover {
   background: var(--ace-bg-muted);
-}
-
-.ace-create-prompt--code {
-  color: var(--ace-text-muted);
-}
-
-.ace-create-prompt--group {
-  color: var(--ace-text-muted);
 }
 
 /* ---- Resize handle ---- */
@@ -672,18 +649,6 @@
 /* ---- Utility ---- */
 
 .ace-hidden { display: none !important; }
-
-.ace-btn-icon {
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 2px var(--ace-space-1);
-  color: var(--ace-text-muted);
-  font-size: var(--ace-font-size-base);
-  transition: color var(--ace-transition);
-}
-
-.ace-btn-icon:hover { color: var(--ace-text); }
 
 /* ---- Dialog base ---- */
 

@@ -1235,11 +1235,9 @@
     });
 
     // "New Group..." option
-    if (groups.length > 0 || true) {
-      var sep = document.createElement("div");
-      sep.className = "ace-code-menu-sep";
-      sub.appendChild(sep);
-    }
+    var sep = document.createElement("div");
+    sep.className = "ace-code-menu-sep";
+    sub.appendChild(sep);
     var newGroupBtn = document.createElement("button");
     newGroupBtn.className = "ace-code-menu-item";
     newGroupBtn.textContent = "New Group\u2026";
