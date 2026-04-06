@@ -914,9 +914,7 @@
     _closeAllPopovers();
     var row = document.querySelector('.ace-code-row[data-code-id="' + codeId + '"]');
     if (!row) return;
-    var dot = row.querySelector(".ace-code-dot");
-    if (!dot) return;
-    var rect = dot.getBoundingClientRect();
+    var rect = row.getBoundingClientRect();
 
     var popover = document.createElement("div");
     popover.className = "ace-colour-popover";
@@ -953,11 +951,10 @@
     if (e.key === "Escape") _closeColourPopover();
   }
 
-  document.addEventListener("click", function (e) {
-    var dot = e.target.closest(".ace-code-dot");
-    if (!dot) return;
-    var row = dot.closest(".ace-code-row");
+  document.addEventListener("contextmenu", function (e) {
+    var row = e.target.closest(".ace-code-row");
     if (!row) return;
+    e.preventDefault();
     e.stopPropagation();
     var codeId = row.getAttribute("data-code-id");
     if (codeId) _openColourPopover(codeId);
