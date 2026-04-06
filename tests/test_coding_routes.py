@@ -168,20 +168,16 @@ def test_coding_page_includes_idiomorph(client_with_sources):
     assert "idiomorph-ext.min.js" in resp.text
 
 
-def test_header_has_ace_wordmark_and_source_name(client_with_sources):
-    """Header shows ACE wordmark and source display ID."""
+def test_sidebar_has_brand_and_nav_has_source(client_with_sources):
+    """Sidebar shows ACE brand, nav shows source ID and flag button."""
     client, _ = client_with_sources
     resp = client.get("/code")
     assert resp.status_code == 200
     html = resp.text
-    # Extract header element to avoid false positives from text panel
-    start = html.find('<header id="coding-header"')
-    assert start != -1, "Missing <header id='coding-header'>"
-    end = html.find("</header>", start)
-    header = html[start : end + len("</header>")]
-    assert "ACE" in header
-    assert "S001" in header
-    assert 'aria-label="Toggle flag"' in header
+    assert "ace-sidebar-brand" in html
+    assert "ACE" in html
+    assert "S001" in html
+    assert 'aria-label="Toggle flag"' in html
 
 
 def test_sidebar_has_aria_tree_roles(client_with_sources):
@@ -364,7 +360,6 @@ def test_navigate_next(client_with_sources):
     # Should contain the second source's content
     assert "Second document with different text." in resp.text
     # Should contain all OOB swap zones
-    assert "coding-header" in resp.text
     assert "source-grid-overlay" in resp.text
     assert "code-sidebar" in resp.text
     # Should have HX-Trigger header with ace-navigate event
