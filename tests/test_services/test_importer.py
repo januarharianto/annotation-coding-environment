@@ -148,6 +148,25 @@ def test_import_text_files_two(tmp_path):
     conn.close()
 
 
+def test_import_text_files_md(tmp_path):
+    """Markdown files are imported alongside .txt files."""
+    folder = tmp_path / "mixed"
+    folder.mkdir()
+    (folder / "notes.md").write_text("# Markdown content")
+    (folder / "readme.txt").write_text("Plain text")
+    (folder / "data.csv").write_text("id,text\n1,ignore")  # should be skipped
+
+    db_path = tmp_path / "mixed.ace"
+    conn = create_project(db_path, "test")
+    count = import_text_files(conn, folder)
+    assert count == 2
+    sources = list_sources(conn)
+    display_ids = sorted(s["display_id"] for s in sources)
+    assert display_ids == ["notes", "readme"]
+    assert all(s["source_type"] == "file" for s in sources)
+    conn.close()
+
+
 def test_import_csv_latin1(tmp_path):
     """Write bytes with a latin-1 char and verify decoding fallback."""
     csv_path = tmp_path / "latin1.csv"
