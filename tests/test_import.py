@@ -82,8 +82,34 @@ def test_import_commit(client_with_project):
     assert "Start coding" in resp.text
 
 
+def test_import_preview_returns_snippet(client_with_project):
+    """GET /api/import/preview returns a preview HTML fragment."""
+    client, tmp_path = client_with_project
+
+    folder = tmp_path / "prev"
+    folder.mkdir()
+    (folder / "doc.txt").write_text("Preview content here.")
+
+    resp = client.get("/api/import/preview", params={"folder": str(folder)})
+    assert resp.status_code == 200
+    assert "doc.txt" in resp.text
+    assert "Preview content here." in resp.text
+
+
+def test_import_preview_empty_folder(client_with_project):
+    """GET /api/import/preview with empty folder returns fallback."""
+    client, tmp_path = client_with_project
+
+    folder = tmp_path / "empty"
+    folder.mkdir()
+
+    resp = client.get("/api/import/preview", params={"folder": str(folder)})
+    assert resp.status_code == 200
+    assert "No text files" in resp.text
+
+
 def test_import_folder(client_with_project):
-    """Import .txt folder creates sources."""
+    """Import .txt folder creates sources and shows preview."""
     client, tmp_path = client_with_project
 
     folder = tmp_path / "texts"
@@ -99,3 +125,4 @@ def test_import_folder(client_with_project):
     assert resp.status_code == 200
     assert "2 text files" in resp.text
     assert "Start coding" in resp.text
+    assert "Preview" in resp.text
