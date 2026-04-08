@@ -1,6 +1,7 @@
 """Import sources from CSV/Excel files and text file folders."""
 
 import csv
+import random
 import sqlite3
 from datetime import datetime
 from pathlib import Path
@@ -10,6 +11,7 @@ import openpyxl
 from ace.models.source import add_source
 
 _CSV_ENCODINGS = ("utf-8", "latin-1", "cp1252")
+_TEXT_EXTENSIONS = ("*.txt", "*.md")
 
 
 def import_csv(
@@ -55,19 +57,26 @@ def import_csv(
     return count
 
 
+def _list_text_files(folder: Path) -> list[Path]:
+    """Return regular text files (.txt, .md) in folder, sorted by name."""
+    files = []
+    for pattern in _TEXT_EXTENSIONS:
+        files.extend(p for p in folder.glob(pattern) if p.is_file())
+    files.sort(key=lambda p: p.name)
+    return files
+
+
 def import_text_files(
     conn: sqlite3.Connection,
     folder: str | Path,
 ) -> int:
-    """Import all .txt files from a folder as sources.
+    """Import text files (.txt, .md) from a folder as sources.
 
     Each file becomes one source with display_id = filename stem.
     Returns the number of sources created.
     """
-    folder = Path(folder)
     count = 0
-
-    for txt_path in sorted(folder.glob("*.txt")):
+    for txt_path in _list_text_files(Path(folder)):
         content = _read_text_file(txt_path)
         add_source(
             conn,
@@ -79,6 +88,25 @@ def import_text_files(
         count += 1
 
     return count
+
+
+def get_random_preview(
+    folder: str | Path,
+    max_chars: int = 500,
+) -> tuple[str, str] | None:
+    """Pick a random text file from folder and return (filename, snippet).
+
+    Returns None if no text files exist.
+    """
+    files = _list_text_files(Path(folder))
+    if not files:
+        return None
+
+    chosen = random.choice(files)
+    content = _read_text_file(chosen)
+    if len(content) > max_chars:
+        content = content[:max_chars] + "..."
+    return chosen.name, content
 
 
 def _read_tabular(path: Path) -> tuple[list[dict], list[str]]:
