@@ -11,6 +11,7 @@ import sqlite3
 import subprocess
 import tempfile
 from pathlib import Path
+from urllib.parse import quote
 
 from fastapi import APIRouter, Form, Query, Request, UploadFile, File
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
@@ -442,7 +443,7 @@ async def import_preview(folder: str = Query(...)):
     filename, snippet = result
     escaped = html.escape(snippet)
     escaped_filename = html.escape(filename)
-    escaped_folder = html.escape(folder)
+    escaped_folder = html.escape(quote(folder, safe=""))
     return HTMLResponse(
         f'<div id="import-preview">'
         f'<div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:8px;">'
