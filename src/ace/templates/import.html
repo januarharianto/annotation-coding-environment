@@ -25,7 +25,7 @@
       </button>
       <button class="ace-wizard-option" onclick="chooseFolder()">
         <span class="ace-wizard-option-title">Folder of text files</span>
-        <span class="ace-wizard-option-desc">One .txt file per source</span>
+        <span class="ace-wizard-option-desc">One .txt or .md file per source</span>
       </button>
     </div>
   </div>
@@ -51,10 +51,12 @@
   <!-- Step 2b: Folder picker -->
   <div class="ace-wizard-step" id="step-folder">
     <p class="ace-wizard-q">Choose a folder</p>
-    <p class="ace-wizard-hint">All .txt files in the folder will be imported as sources</p>
-    <button class="ace-wizard-option" onclick="pickAndImportFolder()" style="max-width:300px">
-      <span class="ace-wizard-option-title">Browse for folder</span>
-    </button>
+    <p class="ace-wizard-hint">All .txt and .md files will be imported as sources</p>
+    <div class="ace-wizard-options">
+      <button class="ace-wizard-option" onclick="pickAndImportFolder()">
+        <span class="ace-wizard-option-title">Browse for folder</span>
+      </button>
+    </div>
     <div id="folder-result"></div>
     <button class="ace-wizard-back" onclick="showStep('step-choose')">&larr; Back</button>
   </div>

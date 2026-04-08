@@ -109,7 +109,7 @@ def test_import_preview_empty_folder(client_with_project):
 
 
 def test_import_folder(client_with_project):
-    """Import .txt folder creates sources."""
+    """Import .txt folder creates sources and shows preview."""
     client, tmp_path = client_with_project
 
     folder = tmp_path / "texts"
@@ -125,3 +125,4 @@ def test_import_folder(client_with_project):
     assert resp.status_code == 200
     assert "2 text files" in resp.text
     assert "Start coding" in resp.text
+    assert "Preview" in resp.text

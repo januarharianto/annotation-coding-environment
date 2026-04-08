@@ -402,9 +402,9 @@ async def import_folder(
     request: Request,
     path: str = Form(...),
 ):
-    """Import .txt files from a folder."""
+    """Import .txt and .md files from a folder."""
     from ace.app import get_db
-    from ace.services.importer import import_text_files
+    from ace.services.importer import import_text_files, get_random_preview
 
     folder = Path(path)
     if not folder.is_dir():
@@ -420,9 +420,40 @@ async def import_folder(
     finally:
         db_gen.close()
 
+    folder_name = html.escape(folder.name)
+    escaped_path = html.escape(quote(str(folder), safe=""))
+
+    # Build preview panel
+    result = get_random_preview(folder)
+    if result:
+        filename, snippet = result
+        escaped_fn = html.escape(filename)
+        escaped_snippet = html.escape(snippet)
+        preview_html = (
+            f'<div style="border:1px solid var(--ace-border-light);border-radius:8px;padding:16px;'
+            f'margin:0 auto 24px;max-width:400px;background:var(--ace-bg-muted);">'
+            f'<div id="import-preview">'
+            f'<div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:8px;">'
+            f'<span style="font-size:var(--ace-font-size-2xs);color:var(--ace-text-muted);text-transform:uppercase;letter-spacing:0.5px;">Preview — {escaped_fn}</span>'
+            f'<button hx-get="/api/import/preview?folder={escaped_path}" hx-target="#import-preview" hx-swap="outerHTML"'
+            f' style="background:none;border:1px solid var(--ace-border);border-radius:4px;padding:2px 6px;cursor:pointer;font-size:var(--ace-font-size-2xs);color:var(--ace-text-muted);"'
+            f' title="Preview another file">&#x21BB;</button>'
+            f'</div>'
+            f'<p style="text-align:left;font-size:var(--ace-font-size-md);color:var(--ace-text);margin:0;line-height:1.5;'
+            f'display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden;">{escaped_snippet}</p>'
+            f'</div>'
+            f'</div>'
+        )
+    else:
+        preview_html = ""
+
     return HTMLResponse(
         f'<p class="ace-wizard-count">{count} text file{"s" if count != 1 else ""}</p>'
-        f'<p style="color:var(--ace-text-muted);margin:0 0 1.5rem">imported successfully</p>'
+        f'<p style="color:var(--ace-text-muted);margin:0 0 4px">imported successfully</p>'
+        f'<p style="font-size:var(--ace-font-size-md);color:var(--ace-text-muted);margin:0 0 24px">'
+        f'from <span style="font-family:var(--ace-font-mono);font-size:var(--ace-font-size-xs);'
+        f'background:var(--ace-bg-muted);padding:2px 6px;border-radius:4px;">{folder_name}/</span></p>'
+        f'{preview_html}'
         f'<a href="/code" class="ace-wizard-action">Start coding &rarr;</a>'
     )
 
