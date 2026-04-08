@@ -198,6 +198,8 @@ body {
 }
 .ace-home-resume {
   margin-bottom: var(--ace-space-6);
+  display: inline-block;
+  position: relative;
 }
 .ace-home-resume a {
   font-size: var(--ace-font-size-md);
@@ -211,6 +213,10 @@ body {
   color: var(--ace-text);
 }
 .ace-home-resume-close {
+  position: absolute;
+  right: -20px;
+  top: 50%;
+  transform: translateY(-50%);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -223,8 +229,6 @@ body {
   font-size: var(--ace-font-size-xs);
   line-height: 1;
   cursor: pointer;
-  vertical-align: middle;
-  margin-left: var(--ace-space-1);
   transition: background var(--ace-transition), color var(--ace-transition);
 }
 .ace-home-resume:hover .ace-home-resume-close {

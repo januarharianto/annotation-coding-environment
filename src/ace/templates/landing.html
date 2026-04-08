@@ -13,7 +13,7 @@
     </div>
 
     <!-- Resume (conditional, rendered by JS) -->
-    <div id="resume-link" class="ace-home-resume" style="display:none"></div>
+    <div id="resume-link" class="ace-home-resume" hidden></div>
 
     <!-- Actions -->
     <div class="ace-home-actions">
@@ -167,7 +167,7 @@
     var list = getRecent();
     var el = document.getElementById("resume-link");
     if (!list.length) {
-      el.style.display = "none";
+      el.hidden = true;
       return;
     }
     var parts = list[0].path.split("/");
@@ -176,7 +176,7 @@
     el.innerHTML = '<a href="#" onclick="event.preventDefault(); window._aceOpenProject(\'' +
       path.replace(/'/g, "\\'") + '\'); return false;">' + escapeHtml(filename) + '</a>' +
       '<button class="ace-home-resume-close" onclick="window._aceClearResume()" title="Dismiss">\u00d7</button>';
-    el.style.display = "block";
+    el.hidden = false;
   }
 
   window._aceOpenProject = openProject;
