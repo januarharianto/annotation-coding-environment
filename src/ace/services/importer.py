@@ -57,6 +57,15 @@ def import_csv(
     return count
 
 
+def _list_text_files(folder: Path) -> list[Path]:
+    """Return regular text files (.txt, .md) in folder, sorted by name."""
+    files = []
+    for pattern in _TEXT_EXTENSIONS:
+        files.extend(p for p in folder.glob(pattern) if p.is_file())
+    files.sort(key=lambda p: p.name)
+    return files
+
+
 def import_text_files(
     conn: sqlite3.Connection,
     folder: str | Path,
@@ -66,14 +75,8 @@ def import_text_files(
     Each file becomes one source with display_id = filename stem.
     Returns the number of sources created.
     """
-    folder = Path(folder)
-    files = []
-    for pattern in _TEXT_EXTENSIONS:
-        files.extend(folder.glob(pattern))
-    files.sort(key=lambda p: p.name)
     count = 0
-
-    for txt_path in files:
+    for txt_path in _list_text_files(Path(folder)):
         content = _read_text_file(txt_path)
         add_source(
             conn,
@@ -95,10 +98,7 @@ def get_random_preview(
 
     Returns None if no text files exist.
     """
-    folder = Path(folder)
-    files = []
-    for pattern in _TEXT_EXTENSIONS:
-        files.extend(folder.glob(pattern))
+    files = _list_text_files(Path(folder))
     if not files:
         return None
 
