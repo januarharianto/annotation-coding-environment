@@ -408,23 +408,6 @@ body {
 .ace-wizard-option:hover { border-color: var(--ace-text); background: var(--ace-bg-muted); }
 .ace-wizard-option-title { font-size: var(--ace-font-size-lg); font-weight: var(--ace-weight-medium); color: var(--ace-text); }
 .ace-wizard-option-desc { font-size: var(--ace-font-size-md); color: var(--ace-text-muted); }
-.ace-wizard-dropzone {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: var(--ace-space-2);
-  width: 100%;
-  max-width: 320px;
-  margin: 0 auto;
-  padding: 40px var(--ace-space-5);
-  border: 2px dashed var(--ace-border);
-  cursor: pointer;
-  transition: border-color var(--ace-transition), background var(--ace-transition);
-}
-.ace-wizard-dropzone:hover { border-color: var(--ace-text-muted); background: var(--ace-bg-muted); }
-.ace-wizard-dropzone-text { font-size: var(--ace-font-size-lg); font-weight: var(--ace-weight-medium); color: var(--ace-text); }
-.ace-wizard-dropzone-hint { font-size: var(--ace-font-size-md); color: var(--ace-text-muted); }
 .ace-wizard-back {
   display: inline-block;
   margin-top: var(--ace-space-6);
