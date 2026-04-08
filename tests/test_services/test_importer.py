@@ -4,7 +4,38 @@ import openpyxl
 
 from ace.db.connection import create_project
 from ace.models.source import list_sources, get_source_content
-from ace.services.importer import import_csv, import_text_files
+from ace.services.importer import import_csv, import_text_files, get_random_preview
+
+
+def test_get_random_preview(tmp_path):
+    """Returns a (filename, snippet) tuple from a random text file."""
+    folder = tmp_path / "previews"
+    folder.mkdir()
+    (folder / "one.txt").write_text("Content of file one.")
+    (folder / "two.md").write_text("Content of file two.")
+
+    filename, snippet = get_random_preview(folder)
+    assert filename in ("one.txt", "two.md")
+    assert snippet in ("Content of file one.", "Content of file two.")
+
+
+def test_get_random_preview_truncates(tmp_path):
+    """Long files are truncated to 500 chars with ellipsis."""
+    folder = tmp_path / "long"
+    folder.mkdir()
+    (folder / "big.txt").write_text("x" * 1000)
+
+    filename, snippet = get_random_preview(folder)
+    assert filename == "big.txt"
+    assert len(snippet) == 503  # 500 + "..."
+    assert snippet.endswith("...")
+
+
+def test_get_random_preview_empty_folder(tmp_path):
+    """Empty folder returns None."""
+    folder = tmp_path / "empty"
+    folder.mkdir()
+    assert get_random_preview(folder) is None
 
 
 def test_import_csv_creates_sources(tmp_db, sample_csv):

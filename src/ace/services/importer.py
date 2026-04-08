@@ -1,6 +1,7 @@
 """Import sources from CSV/Excel files and text file folders."""
 
 import csv
+import random
 import sqlite3
 from datetime import datetime
 from pathlib import Path
@@ -84,6 +85,28 @@ def import_text_files(
         count += 1
 
     return count
+
+
+def get_random_preview(
+    folder: str | Path,
+    max_chars: int = 500,
+) -> tuple[str, str] | None:
+    """Pick a random text file from folder and return (filename, snippet).
+
+    Returns None if no text files exist.
+    """
+    folder = Path(folder)
+    files = []
+    for pattern in _TEXT_EXTENSIONS:
+        files.extend(folder.glob(pattern))
+    if not files:
+        return None
+
+    chosen = random.choice(files)
+    content = _read_text_file(chosen)
+    if len(content) > max_chars:
+        content = content[:max_chars] + "..."
+    return chosen.name, content
 
 
 def _read_tabular(path: Path) -> tuple[list[dict], list[str]]:
