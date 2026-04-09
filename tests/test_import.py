@@ -108,6 +108,15 @@ def test_import_preview_empty_folder(client_with_project):
     assert "No text files" in resp.text
 
 
+def test_import_page_has_consistent_buttons(client_with_project):
+    """Both import options use ace-wizard-option buttons, no dropzone."""
+    client, _ = client_with_project
+    resp = client.get("/import")
+    assert resp.status_code == 200
+    assert "ace-wizard-dropzone" not in resp.text
+    assert "ace-wizard-option" in resp.text
+
+
 def test_import_folder(client_with_project):
     """Import .txt folder creates sources and shows preview."""
     client, tmp_path = client_with_project

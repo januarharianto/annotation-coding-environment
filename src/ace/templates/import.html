@@ -33,17 +33,19 @@
   <!-- Step 2a: File upload -->
   <div class="ace-wizard-step" id="step-upload">
     <p class="ace-wizard-q">Choose your file</p>
+    <p class="ace-wizard-hint">.csv or .xlsx</p>
     <form hx-post="/api/import/upload"
           hx-target="#step-columns"
           hx-swap="innerHTML"
           hx-encoding="multipart/form-data"
           hx-on::after-request="if(event.detail.successful) showStep('step-columns')">
-      <label class="ace-wizard-dropzone" id="dropzone">
-        <input type="file" name="file" accept=".csv,.xlsx" style="display:none"
-               onchange="this.closest('form').requestSubmit()">
-        <span class="ace-wizard-dropzone-text">Click to choose a file</span>
-        <span class="ace-wizard-dropzone-hint">.csv or .xlsx</span>
-      </label>
+      <div class="ace-wizard-options">
+        <label class="ace-wizard-option">
+          <input type="file" name="file" accept=".csv,.xlsx" style="display:none"
+                 onchange="this.closest('form').requestSubmit()">
+          <span class="ace-wizard-option-title">Browse for file</span>
+        </label>
+      </div>
     </form>
     <button class="ace-wizard-back" onclick="showStep('step-choose')">&larr; Back</button>
   </div>
