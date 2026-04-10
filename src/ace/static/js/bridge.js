@@ -693,15 +693,62 @@
       }
     }
 
-    // Click on code chip to view coded text list
+    // Click on code chip to flash highlights in current source
     var chip = e.target.closest(".ace-code-chip");
     if (chip) {
       var codeId = chip.dataset.codeId;
-      if (!codeId) return;
-      window.__aceExcerptReturnIndex = window.__aceCurrentIndex;
-      htmx.ajax("GET", "/api/code/" + codeId + "/excerpts", {
-        target: "#text-panel", swap: "outerHTML"
+      var colour = chip.dataset.colour || "#ffeb3b";
+      var r = parseInt(colour.slice(1, 3), 16);
+      var g = parseInt(colour.slice(3, 5), 16);
+      var b = parseInt(colour.slice(5, 7), 16);
+
+      if (!CSS.highlights) return;
+      var container = document.getElementById("text-panel");
+      if (!container) return;
+      var dataEl = document.getElementById("ace-ann-data");
+      if (!dataEl) return;
+      var anns = JSON.parse(dataEl.dataset.annotations || "[]");
+      var matching = anns.filter(function (a) { return a.code_id === codeId; });
+      if (!matching.length) return;
+
+      // Build ranges using the same text index as _paintHighlights
+      var textIndex = _buildTextIndex(container);
+      var flashHighlight = new Highlight();
+      var firstRange = null;
+      matching.forEach(function (ann) {
+        var startPos = _findDOMPosition(textIndex, ann.start);
+        var endPos = _findDOMPosition(textIndex, ann.end);
+        if (!startPos || !endPos) return;
+        try {
+          var range = new Range();
+          range.setStart(startPos.node, startPos.offset);
+          range.setEnd(endPos.node, endPos.offset);
+          flashHighlight.add(range);
+          if (!firstRange) firstRange = range;
+        } catch (ex) {}
       });
+
+      // Register flash highlight + inject style
+      CSS.highlights.set("ace-flash", flashHighlight);
+      var style = document.createElement("style");
+      style.id = "ace-flash-style";
+      style.textContent = "::highlight(ace-flash) { background-color: rgba(" + r + "," + g + "," + b + ",0.6); }";
+      var old = document.getElementById("ace-flash-style");
+      if (old) old.remove();
+      document.head.appendChild(style);
+
+      // Scroll first match into view
+      if (firstRange) {
+        var startEl = firstRange.startContainer.parentElement;
+        if (startEl) startEl.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      }
+
+      // Auto-clear after 1.5s
+      setTimeout(function () {
+        CSS.highlights.delete("ace-flash");
+        var s = document.getElementById("ace-flash-style");
+        if (s) s.remove();
+      }, 1500);
       return;
     }
   });
