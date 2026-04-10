@@ -44,6 +44,33 @@ def get_annotations_for_source(
     ).fetchall()
 
 
+def get_annotations_for_code(
+    conn: sqlite3.Connection,
+    code_id: str,
+    coder_id: str | None = None,
+) -> list[sqlite3.Row]:
+    """Return all non-deleted annotations for a code across all sources.
+
+    Results include source.display_id and are ordered by
+    source.sort_order then annotation.start_offset.
+    """
+    if coder_id is not None:
+        return conn.execute(
+            "SELECT a.*, s.display_id, s.sort_order "
+            "FROM annotation a JOIN source s ON a.source_id = s.id "
+            "WHERE a.code_id = ? AND a.coder_id = ? AND a.deleted_at IS NULL "
+            "ORDER BY s.sort_order, a.start_offset",
+            (code_id, coder_id),
+        ).fetchall()
+    return conn.execute(
+        "SELECT a.*, s.display_id, s.sort_order "
+        "FROM annotation a JOIN source s ON a.source_id = s.id "
+        "WHERE a.code_id = ? AND a.deleted_at IS NULL "
+        "ORDER BY s.sort_order, a.start_offset",
+        (code_id,),
+    ).fetchall()
+
+
 def list_annotations(conn: sqlite3.Connection) -> list[sqlite3.Row]:
     return conn.execute(
         "SELECT * FROM annotation WHERE deleted_at IS NULL"

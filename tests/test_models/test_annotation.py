@@ -98,3 +98,60 @@ def test_undelete_annotation(tmp_db):
     rows = get_annotations_for_source(conn, source_id)
     assert len(rows) == 1
     assert rows[0]["id"] == aid
+
+
+# --- get_annotations_for_code ---
+
+from ace.models.annotation import get_annotations_for_code
+from ace.models.project import list_coders
+
+
+def test_get_annotations_for_code(tmp_path):
+    """Returns annotations across sources for a given code."""
+    db_path = tmp_path / "test.ace"
+    conn = create_project(db_path, "test")
+    coder_id = list_coders(conn)[0]["id"]
+
+    s1 = add_source(conn, "Doc1", "First source text here.", "row")
+    s2 = add_source(conn, "Doc2", "Second source text here.", "row")
+    code_a = add_code(conn, "Theme A", "#BF6030")
+    code_b = add_code(conn, "Theme B", "#30A64E")
+
+    add_annotation(conn, s1, coder_id, code_a, 0, 5, "First")
+    add_annotation(conn, s2, coder_id, code_a, 0, 6, "Second")
+    add_annotation(conn, s1, coder_id, code_b, 6, 12, "source")
+
+    rows = get_annotations_for_code(conn, code_a, coder_id)
+    assert len(rows) == 2
+    assert rows[0]["display_id"] == "Doc1"
+    assert rows[1]["display_id"] == "Doc2"
+    assert rows[0]["selected_text"] == "First"
+    conn.close()
+
+
+def test_get_annotations_for_code_excludes_deleted(tmp_path):
+    """Soft-deleted annotations are excluded."""
+    db_path = tmp_path / "test.ace"
+    conn = create_project(db_path, "test")
+    coder_id = list_coders(conn)[0]["id"]
+
+    s1 = add_source(conn, "Doc1", "Text.", "row")
+    code_a = add_code(conn, "Theme A", "#BF6030")
+    ann_id = add_annotation(conn, s1, coder_id, code_a, 0, 4, "Text")
+    delete_annotation(conn, ann_id)
+
+    rows = get_annotations_for_code(conn, code_a, coder_id)
+    assert len(rows) == 0
+    conn.close()
+
+
+def test_get_annotations_for_code_empty(tmp_path):
+    """Returns empty list when code has no annotations."""
+    db_path = tmp_path / "test.ace"
+    conn = create_project(db_path, "test")
+    coder_id = list_coders(conn)[0]["id"]
+    code_a = add_code(conn, "Theme A", "#BF6030")
+
+    rows = get_annotations_for_code(conn, code_a, coder_id)
+    assert len(rows) == 0
+    conn.close()

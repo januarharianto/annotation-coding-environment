@@ -486,6 +486,108 @@ async def import_preview(folder: str = Query(...)):
 
 
 # ---------------------------------------------------------------------------
+# Code excerpts
+# ---------------------------------------------------------------------------
+
+
+@router.get("/code/{code_id}/excerpts")
+async def code_excerpts(request: Request, code_id: str):
+    """Return a text-panel fragment listing all coded text for a code."""
+    from ace.app import get_db
+    from ace.models.annotation import get_annotations_for_code
+    from ace.models.codebook import list_codes
+    from ace.models.assignment import get_assignments_for_coder
+
+    coder_id = _require_coder_id(request)
+    db_gen = get_db(request)
+    conn = next(db_gen)
+    try:
+        # Get code info
+        codes = list_codes(conn)
+        code = next((c for c in codes if c["id"] == code_id), None)
+        if code is None:
+            db_gen.close()
+            return _oob_toast("Code not found.")
+
+        code_name = html.escape(code["name"])
+        code_colour = html.escape(code["colour"])
+
+        # Get annotations
+        annotations = get_annotations_for_code(conn, code_id, coder_id)
+
+        # Build source_id → index map from assignments
+        assignments = get_assignments_for_coder(conn, coder_id)
+        source_index = {a["source_id"]: i for i, a in enumerate(assignments)}
+
+        # Group annotations by source display_id
+        from collections import OrderedDict
+        groups: OrderedDict = OrderedDict()
+        for ann in annotations:
+            did = ann["display_id"]
+            if did not in groups:
+                groups[did] = []
+            groups[did].append(ann)
+
+        total_excerpts = len(annotations)
+        total_sources = len(groups)
+
+        # Build body HTML
+        if total_excerpts == 0:
+            body = (
+                f'<p style="color:var(--ace-text-muted);margin-top:var(--ace-space-8);'
+                f'text-align:center;">No text has been coded with '
+                f'<strong style="color:{code_colour}">{code_name}</strong> yet.</p>'
+            )
+        else:
+            parts = []
+            parts.append(
+                f'<p style="font-size:var(--ace-font-size-xs);color:var(--ace-text-muted);'
+                f'margin-bottom:var(--ace-space-4);">'
+                f'{total_excerpts} excerpt{"s" if total_excerpts != 1 else ""} '
+                f'across {total_sources} source{"s" if total_sources != 1 else ""}</p>'
+            )
+            for display_id, anns in groups.items():
+                escaped_did = html.escape(display_id)
+                parts.append(
+                    f'<div style="margin-bottom:var(--ace-space-5);">'
+                    f'<div style="font-size:var(--ace-font-size-2xs);font-weight:var(--ace-weight-semibold);'
+                    f'color:var(--ace-text-muted);text-transform:uppercase;letter-spacing:0.5px;'
+                    f'margin-bottom:var(--ace-space-2);">{escaped_did}</div>'
+                )
+                for ann in anns:
+                    s_idx = source_index.get(ann["source_id"], 0)
+                    escaped_text = html.escape(ann["selected_text"] or "")
+                    parts.append(
+                        f'<div class="ace-excerpt-card" data-source-index="{s_idx}" '
+                        f'data-start-offset="{ann["start_offset"]}" '
+                        f'style="border-left:3px solid {code_colour};padding:var(--ace-space-2) var(--ace-space-3);'
+                        f'margin-bottom:var(--ace-space-2);cursor:pointer;border-radius:0 4px 4px 0;'
+                        f'background:var(--ace-bg-muted);transition:background var(--ace-transition);">'
+                        f'<div style="font-size:var(--ace-font-size-md);line-height:var(--ace-leading-normal);'
+                        f'color:var(--ace-text);">{escaped_text}</div>'
+                        f'</div>'
+                    )
+                parts.append('</div>')
+            body = "\n".join(parts)
+
+        return HTMLResponse(
+            f'<main id="text-panel" style="padding:var(--ace-space-6) var(--ace-space-8);overflow-y:auto;">'
+            f'<div style="display:flex;align-items:center;gap:var(--ace-space-3);margin-bottom:var(--ace-space-5);">'
+            f'<button class="ace-excerpt-back" style="background:none;border:none;font-size:var(--ace-font-size-md);'
+            f'color:var(--ace-text-muted);cursor:pointer;padding:0;">&larr; Back</button>'
+            f'<div><span style="font-size:var(--ace-font-size-lg);font-weight:var(--ace-weight-semibold);">Coded text</span>'
+            f' <span style="font-size:var(--ace-font-size-lg);font-weight:var(--ace-weight-semibold);'
+            f'color:{code_colour};">{code_name}</span></div>'
+            f'</div>'
+            f'{body}'
+            f'<script>window.__aceExcerptListActive=true;</script>'
+            f'</main>'
+        )
+    finally:
+        db_gen.close()
+
+
+# ---------------------------------------------------------------------------
 # Annotation export
 # ---------------------------------------------------------------------------
 
