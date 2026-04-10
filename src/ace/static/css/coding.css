@@ -829,4 +829,11 @@ dialog::backdrop {
   justify-content: flex-end;
 }
 
+/* ---- Flash sentence highlight ---- */
+
+.ace-flash-sentence {
+  background: rgba(255, 235, 59, 0.3);
+  transition: background 1.5s ease;
+}
+
 /* ---- Touch fallback ---- */

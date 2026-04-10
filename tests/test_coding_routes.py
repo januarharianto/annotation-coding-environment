@@ -463,3 +463,35 @@ def test_flag_source_toggle_roundtrip(client_with_codes):
     ).fetchone()
     assert row["status"] == "in_progress"
     conn.close()
+
+
+def test_excerpts_endpoint(client_with_codes):
+    """GET /api/code/{id}/excerpts returns coded text list."""
+    client, coder_id, code_a, code_b, db_path = client_with_codes
+    import sqlite3
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    from ace.models.source import list_sources
+    from ace.models.annotation import add_annotation
+    sources = list_sources(conn)
+    add_annotation(conn, sources[0]["id"], coder_id, code_a, 0, 5, "First")
+    add_annotation(conn, sources[1]["id"], coder_id, code_a, 0, 6, "Second")
+    conn.close()
+
+    resp = client.get(f"/api/code/{code_a}/excerpts")
+    assert resp.status_code == 200
+    assert "text-panel" in resp.text
+    assert "Theme A" in resp.text
+    assert "First" in resp.text
+    assert "Second" in resp.text
+    assert "ace-excerpt-card" in resp.text
+    assert "data-source-index" in resp.text
+
+
+def test_excerpts_endpoint_empty(client_with_codes):
+    """GET /api/code/{id}/excerpts with no annotations shows empty state."""
+    client, coder_id, code_a, code_b, db_path = client_with_codes
+
+    resp = client.get(f"/api/code/{code_a}/excerpts")
+    assert resp.status_code == 200
+    assert "No text has been coded" in resp.text

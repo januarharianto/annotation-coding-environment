@@ -226,5 +226,27 @@
   window.__aceLastCodeId = null;
   // Save current index for resume on return
   localStorage.setItem("ace-last-index", {{ current_index }});
+  (function() {
+    var params = new URLSearchParams(window.location.search);
+    var hl = params.get("highlight");
+    if (hl !== null) {
+      var offset = parseInt(hl, 10);
+      var sentences = document.querySelectorAll(".ace-sentence");
+      for (var i = 0; i < sentences.length; i++) {
+        var start = parseInt(sentences[i].dataset.start, 10);
+        var end = parseInt(sentences[i].dataset.end, 10);
+        if (offset >= start && offset < end) {
+          sentences[i].scrollIntoView({ behavior: "smooth", block: "center" });
+          sentences[i].classList.add("ace-flash-sentence");
+          setTimeout(function() {
+            sentences[i].classList.remove("ace-flash-sentence");
+          }, 1500);
+          break;
+        }
+      }
+      var clean = window.location.pathname + "?index=" + params.get("index");
+      history.replaceState(null, "", clean);
+    }
+  })();
 </script>
 {% endblock %}

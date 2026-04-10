@@ -201,6 +201,7 @@
   // to avoid issues with hx-sync queuing and param injection timing.
 
   function _applyCodeToSentence(codeId) {
+    if (window.__aceExcerptListActive) return;
     if (window.__aceFocusIndex < 0) return;
 
     htmx.ajax("POST", "/api/code/apply-sentence", {
@@ -692,62 +693,36 @@
       }
     }
 
-    // Click on code chip to flash corresponding text ranges
+    // Click on code chip to view coded text list
     var chip = e.target.closest(".ace-code-chip");
     if (chip) {
       var codeId = chip.dataset.codeId;
-      var colour = chip.dataset.colour || "#ffeb3b";
-      var r = parseInt(colour.slice(1, 3), 16);
-      var g = parseInt(colour.slice(3, 5), 16);
-      var b = parseInt(colour.slice(5, 7), 16);
-
-      if (!CSS.highlights) return;
-      var container = document.getElementById("text-panel");
-      if (!container) return;
-      var dataEl = document.getElementById("ace-ann-data");
-      if (!dataEl) return;
-      var anns = JSON.parse(dataEl.dataset.annotations || "[]");
-      var matching = anns.filter(function (a) { return a.code_id === codeId; });
-      if (!matching.length) return;
-
-      // Build ranges using the same text index as _paintHighlights
-      var textIndex = _buildTextIndex(container);
-      var flashHighlight = new Highlight();
-      var firstRange = null;
-      matching.forEach(function (ann) {
-        var startPos = _findDOMPosition(textIndex, ann.start);
-        var endPos = _findDOMPosition(textIndex, ann.end);
-        if (!startPos || !endPos) return;
-        try {
-          var range = new Range();
-          range.setStart(startPos.node, startPos.offset);
-          range.setEnd(endPos.node, endPos.offset);
-          flashHighlight.add(range);
-          if (!firstRange) firstRange = range;
-        } catch (ex) {}
+      if (!codeId) return;
+      window.__aceExcerptReturnIndex = window.__aceCurrentIndex;
+      htmx.ajax("GET", "/api/code/" + codeId + "/excerpts", {
+        target: "#text-panel", swap: "outerHTML"
       });
+      return;
+    }
+  });
 
-      // Register flash highlight + inject style
-      CSS.highlights.set("ace-flash", flashHighlight);
-      var style = document.createElement("style");
-      style.id = "ace-flash-style";
-      style.textContent = "::highlight(ace-flash) { background-color: rgba(" + r + "," + g + "," + b + ",0.6); }";
-      var old = document.getElementById("ace-flash-style");
-      if (old) old.remove();
-      document.head.appendChild(style);
+  // Click on excerpt card to navigate to that source + highlight
+  document.addEventListener("click", function(e) {
+    var card = e.target.closest(".ace-excerpt-card");
+    if (!card) return;
+    var sourceIndex = card.getAttribute("data-source-index");
+    var startOffset = card.getAttribute("data-start-offset");
+    if (sourceIndex !== null) {
+      window.location.href = "/code?index=" + sourceIndex + "&highlight=" + startOffset;
+    }
+  });
 
-      // Scroll first match into view
-      if (firstRange) {
-        var startEl = firstRange.startContainer.parentElement;
-        if (startEl) startEl.scrollIntoView({ behavior: "smooth", block: "nearest" });
-      }
-
-      // Remove after 1.5s
-      setTimeout(function () {
-        CSS.highlights.delete("ace-flash");
-        var s = document.getElementById("ace-flash-style");
-        if (s) s.remove();
-      }, 1500);
+  // Click on back button to return from excerpt list
+  document.addEventListener("click", function(e) {
+    if (!e.target.closest(".ace-excerpt-back")) return;
+    var idx = window.__aceExcerptReturnIndex;
+    if (idx !== undefined && idx !== null) {
+      window.aceNavigate(idx);
     }
   });
 
@@ -789,6 +764,7 @@
     if (!target) return;
 
     if (target.id === "text-panel" || target.id === "coding-workspace") {
+      window.__aceExcerptListActive = false;
       _restoreFocus();
       _paintHighlights();
 
@@ -1203,6 +1179,14 @@
     var items = [
       { label: "Rename", hint: "F2", action: function () { _closeCodeMenu(); _startInlineRename(codeId); } },
       { label: "Colour", hint: "", action: function () { _closeCodeMenu(); _openColourPopover(codeId); } },
+      { label: "View coded text", action: function () {
+          _closeCodeMenu();
+          window.__aceExcerptReturnIndex = window.__aceCurrentIndex;
+          htmx.ajax("GET", "/api/code/" + codeId + "/excerpts", {
+            target: "#text-panel", swap: "outerHTML"
+          });
+        }
+      },
       { label: "Move Up", hint: "Alt+Shift+\u2191", action: function () { _closeCodeMenu(); _moveCode(codeId, -1); } },
       { label: "Move Down", hint: "Alt+Shift+\u2193", action: function () { _closeCodeMenu(); _moveCode(codeId, 1); } },
       { label: "Delete", hint: "\u232b", danger: true, action: function () { _closeCodeMenu(); _startDeleteConfirm(codeId); } },
@@ -1310,6 +1294,7 @@
 
   /** Unified apply helper used by keycap click, search Enter, and tree Enter. */
   function _applyCode(codeId) {
+    if (window.__aceExcerptListActive) return;
     var codeName = "";
     var row = document.querySelector('.ace-code-row[data-code-id="' + codeId + '"]');
     if (row) {
@@ -1902,6 +1887,7 @@
     if (!tree || !tree.contains(document.activeElement)) return;
     var active = document.activeElement;
     if (!active || active.getAttribute("role") !== "treeitem") return;
+    if (window.__aceExcerptListActive) return;
     if (active.querySelector('[contenteditable="true"]')) return;
 
     var key = e.key;
