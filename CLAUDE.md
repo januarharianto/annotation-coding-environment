@@ -22,7 +22,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Running
 - `uv run ace` — start server on http://127.0.0.1:8080
 - `uv run uvicorn ace.app:create_app --factory --host 127.0.0.1 --port 8080 --reload --reload-dir src/ace` — dev server with hot reload
-- `uv run pytest` — run tests (237 tests)
+- `uv run pytest` — run tests (244 tests)
 - `uv run pytest tests/path/test_file.py::test_name -v` — run a single test
 - `uv build` — build wheel
 
@@ -50,7 +50,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Colour picker opens via right-click (`contextmenu` event) on code row — was dot click, dots removed
 - Source name + flag button now in text panel nav (`.ace-nav-cluster`), not a header bar
 - Text panel element is `<main>` (not `<div>`), sidebar is `<aside>` with `role="banner"` branding section
-- `__version__` in `src/ace/__init__.py` must match `version` in `pyproject.toml` — keep in sync manually
+- Version lives in two files: `src/ace/__init__.py` (Python, source of truth for hatchling) and `desktop/src-tauri/Cargo.toml` (desktop). `pyproject.toml` reads from `__init__.py` via `dynamic = ["version"]`; `tauri.conf.json` has no version (falls back to Cargo.toml)
 
 ## CSS Design System
 - 33 design tokens in `:root` — see ace.css header block
@@ -118,3 +118,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Server auto-kills stale instances on startup via `_kill_stale_server()`
 - TestClient must use context manager (`with TestClient(app) as c:`) for lifespan to run
 - `httpx` in dev dependencies for TestClient
+
+## Desktop Release (Tauri)
+- `desktop/` — Tauri v2 desktop wrapper, sidecar architecture
+- `scripts/build_sidecar.py` — Nuitka onefile compile, called by Tauri's `beforeBuildCommand`
+- Sidecar binary must exist at `desktop/src-tauri/binaries/ace-server-{triple}` before Rust compile — `beforeBuildCommand` (not `beforeBundleCommand`) is critical
+- Release workflow: bump version in `__init__.py` + `desktop/src-tauri/Cargo.toml` → push to main → `git tag v0.x.x && git push origin v0.x.x` → CI builds + creates draft release
+- CI triggers on `v*` tags only (`.github/workflows/release.yml`) — regular pushes to main do NOT build desktop binaries
+- `_preview_fragment()` in api.py — shared HTML builder for import preview (used by both `import_folder` and `import_preview` endpoints)

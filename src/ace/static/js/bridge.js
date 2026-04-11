@@ -2224,10 +2224,17 @@
       return;
     }
 
-    // Export button
+    // Export codebook button
     if (e.target.closest("#codebook-export-btn")) {
       if (dropdown) dropdown.style.display = "none";
       window.location.href = "/api/codes/export";
+      return;
+    }
+
+    // Export all annotations button
+    if (e.target.closest("#export-annotations-btn")) {
+      if (dropdown) dropdown.style.display = "none";
+      window.location.href = "/api/export/annotations";
       return;
     }
 

@@ -746,6 +746,12 @@ dialog::backdrop {
 
 .ace-codebook-dropdown-item:hover { background: var(--ace-bg-muted); }
 
+.ace-codebook-dropdown-sep {
+  border: none;
+  border-top: 1px solid var(--ace-border);
+  margin: 4px 0;
+}
+
 /* Import preview dialog */
 .ace-import-dialog {
   max-width: 380px;

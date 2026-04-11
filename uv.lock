@@ -8,7 +8,6 @@ resolution-markers = [
 
 [[package]]
 name = "ace-coder"
-version = "0.11.0"
 source = { editable = "." }
 dependencies = [
     { name = "fastapi" },
