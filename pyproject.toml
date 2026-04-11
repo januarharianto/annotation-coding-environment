@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ace-coder"
-version = "0.12.0"
+dynamic = ["version"]
 description = "Lightweight qualitative coding tool with inter-coder reliability"
 requires-python = ">=3.11"
 dependencies = [
@@ -20,6 +20,9 @@ dependencies = [
 
 [project.scripts]
 ace = "ace.__main__:main"
+
+[tool.hatch.version]
+path = "src/ace/__init__.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/ace"]
