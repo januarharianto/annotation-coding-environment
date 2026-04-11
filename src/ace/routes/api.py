@@ -342,12 +342,12 @@ async def import_upload(request: Request, file: UploadFile = File(...)):
         return html.escape(", ".join(vals)) + " \u2026"
 
     # Glimpse rows with inline role toggles
-    glimpse_rows = ""
+    glimpse_parts = []
     for col in columns:
         col_type = _infer_type(col)
         sample = _sample_values(col)
         esc_col = html.escape(str(col))
-        glimpse_rows += (
+        glimpse_parts.append(
             f'<div class="ace-glimpse-row" data-col="{esc_col}" data-role="" tabindex="0">'
             f'<span class="ace-glimpse-name">{esc_col}</span>'
             f'<span class="ace-glimpse-type">{col_type}</span>'
@@ -358,6 +358,7 @@ async def import_upload(request: Request, file: UploadFile = File(...)):
             f'</span>'
             f'</div>'
         )
+    glimpse_rows = "".join(glimpse_parts)
 
     fragment = f"""
     <p class="ace-wizard-q">Select columns</p>
@@ -645,8 +646,6 @@ def _get_undo_manager(request: Request):
 
 def _open_project_db(request: Request) -> sqlite3.Connection:
     """Open a direct SQLite connection to the current project."""
-    from ace.db.schema import ACE_APPLICATION_ID
-
     conn = sqlite3.connect(request.app.state.project_path)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
@@ -1313,16 +1312,16 @@ async def import_codebook_preview_path(
         gn = code.get("group_name") or ""
         groups.setdefault(gn, []).append(code)
 
-    preview_rows = ""
+    preview_parts = []
     for group_name, codes in groups.items():
         if group_name:
-            preview_rows += (
+            preview_parts.append(
                 f'<div class="ace-import-group-label">{html.escape(group_name)}</div>'
             )
         for code in codes:
             esc_name = html.escape(code["name"])
             if code["exists"]:
-                preview_rows += (
+                preview_parts.append(
                     f'<div class="ace-import-row ace-import-row--exists">'
                     f'<span style="width:7px;height:7px;border-radius:50%;'
                     f'background:var(--ace-text-muted);display:inline-block"></span>'
@@ -1332,7 +1331,7 @@ async def import_codebook_preview_path(
                 )
             else:
                 esc_colour = html.escape(code["colour"])
-                preview_rows += (
+                preview_parts.append(
                     f'<div class="ace-import-row ace-import-row--new">'
                     f'<span style="width:7px;height:7px;border-radius:50%;'
                     f'background:{esc_colour};display:inline-block"></span>'
@@ -1340,6 +1339,7 @@ async def import_codebook_preview_path(
                     f'<span class="ace-import-badge ace-import-badge--new">new</span>'
                     f'</div>'
                 )
+    preview_rows = "".join(preview_parts)
 
     filename = html.escape(file_path.name)
     new_count = len(new_codes)
@@ -1369,13 +1369,13 @@ async def import_codebook_preview_path(
         )
     else:
         dialog_html += (
-            f'<div class="ace-import-empty">'
-            f'All codes in this file already exist in your codebook.</div>'
+            '<div class="ace-import-empty">'
+            'All codes in this file already exist in your codebook.</div>'
         )
 
     dialog_html += (
-        f'<div class="ace-import-actions">'
-        f'<button type="button" class="ace-btn" onclick="this.closest(\'dialog\').close()">Cancel</button>'
+        '<div class="ace-import-actions">'
+        '<button type="button" class="ace-btn" onclick="this.closest(\'dialog\').close()">Cancel</button>'
     )
 
     if new_count > 0:

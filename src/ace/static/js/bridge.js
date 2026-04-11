@@ -31,9 +31,9 @@
 
   window.aceToast = function (message, duration) {
     duration = duration || 3000;
-    var container = document.getElementById("toast");
+    const container = document.getElementById("toast");
     if (!container) return;
-    var el = document.createElement("div");
+    let el = document.createElement("div");
     el.className = "toast-msg";
     el.textContent = message;
     container.appendChild(el);
@@ -44,12 +44,12 @@
   };
 
   document.addEventListener("htmx:afterRequest", function (e) {
-    var msg = e.detail.xhr && e.detail.xhr.getResponseHeader("X-ACE-Toast");
+    const msg = e.detail.xhr && e.detail.xhr.getResponseHeader("X-ACE-Toast");
     if (msg) window.aceToast(msg);
   });
 
   function _escapeHtml(str) {
-    var div = document.createElement("div");
+    const div = document.createElement("div");
     div.textContent = str;
     return div.innerHTML;
   }
@@ -63,16 +63,16 @@
   }
 
   function _focusSentence(idx) {
-    var sentences = _getSentences();
+    const sentences = _getSentences();
     if (idx < 0 || idx >= sentences.length) return;
 
     // Remove old focus
-    var old = document.querySelector(".ace-sentence--focused");
+    const old = document.querySelector(".ace-sentence--focused");
     if (old) old.classList.remove("ace-sentence--focused");
 
     // Set new focus
     window.__aceFocusIndex = idx;
-    var el = sentences[idx];
+    let el = sentences[idx];
     el.classList.add("ace-sentence--focused");
     el.scrollIntoView({ block: "nearest", behavior: "smooth" });
   }
@@ -80,7 +80,7 @@
   function _restoreFocus() {
     // Delay until after HTMX settling completes (outerHTML swap replaces DOM)
     requestAnimationFrame(function () {
-      var idx = window.__aceFocusIndex;
+      const idx = window.__aceFocusIndex;
       if (idx >= 0) _focusSentence(idx);
       _focusTextPanel();
     });
@@ -90,11 +90,11 @@
    * 3. Group collapse / expand
    * ================================================================ */
 
-  var _collapsedGroups = {};
+  const _collapsedGroups = {};
 
   function _toggleGroupCollapse(header) {
     if (!header) return;
-    var expanded = header.getAttribute("aria-expanded") === "true";
+    const expanded = header.getAttribute("aria-expanded") === "true";
     if (expanded) {
       _collapseGroup(header);
     } else {
@@ -103,9 +103,9 @@
   }
 
   function _restoreCollapseState() {
-    var headers = document.querySelectorAll(".ace-code-group-header");
+    const headers = document.querySelectorAll(".ace-code-group-header");
     headers.forEach(function (header) {
-      var groupName = header.getAttribute("data-group");
+      let groupName = header.getAttribute("data-group");
       if (_collapsedGroups[groupName]) {
         _collapseGroup(header);
       }
@@ -114,13 +114,13 @@
 
   // Click handler for group headers
   document.addEventListener("click", function (e) {
-    var header = e.target.closest(".ace-code-group-header");
+    const header = e.target.closest(".ace-code-group-header");
     if (header && !e.target.closest(".ace-code-menu")) {
       _focusTreeItem(header);
       _toggleGroupCollapse(header);
-      var groupName = header.getAttribute("data-group") || "Ungrouped";
-      var expanded = header.getAttribute("aria-expanded") === "true";
-      _announce("Group " + groupName + (expanded ? " expanded" : " collapsed"));
+      let groupName = header.getAttribute("data-group") || "Ungrouped";
+      const expanded = header.getAttribute("aria-expanded") === "true";
+      _announce(`Group ${groupName}${expanded ? " expanded" : " collapsed"}`);
     }
   });
 
@@ -132,12 +132,12 @@
   });
 
   // Nav: flag toggle button (delegated — survives OOB swaps)
-  var _pendingFlagAnnounce = false;
+  let _pendingFlagAnnounce = false;
   document.addEventListener("click", function (e) {
     if (e.target.closest("#nav-flag-btn")) {
       _updateCurrentIndex();
       _pendingFlagAnnounce = true;
-      var triggerFlag = document.getElementById("trigger-flag");
+      const triggerFlag = document.getElementById("trigger-flag");
       if (triggerFlag) htmx.trigger(triggerFlag, "click");
     }
   });
@@ -146,29 +146,29 @@
    * 4. Keymap — dynamic keycap assignment per tab
    * ================================================================ */
 
-  var _currentKeyMap = []; // array of code IDs in keycap order
+  let _currentKeyMap = []; // array of code IDs in keycap order
 
   function _updateKeycaps() {
-    var tree = document.getElementById("code-tree");
+    const tree = document.getElementById("code-tree");
     if (!tree) return;
-    var rows = tree.querySelectorAll('.ace-code-row');
+    const rows = tree.querySelectorAll('.ace-code-row');
     _currentKeyMap = [];
     rows.forEach(function (row) {
-      var groupDiv = row.closest('[role="group"]');
+      const groupDiv = row.closest('[role="group"]');
       if (groupDiv) {
-        var header = groupDiv.previousElementSibling;
+        const header = groupDiv.previousElementSibling;
         if (header && header.getAttribute("aria-expanded") === "false") return;
       }
       // Also skip rows hidden by search filter
       if (row.style.display === "none") return;
       _currentKeyMap.push(row.getAttribute("data-code-id"));
-      var keycap = row.querySelector(".ace-keycap");
+      const keycap = row.querySelector(".ace-keycap");
       if (keycap) keycap.textContent = _keylabel(_currentKeyMap.length - 1);
       row.setAttribute("aria-keyshortcuts", _keylabel(_currentKeyMap.length - 1));
     });
   }
 
-  var _KEYCAP_LABELS = [
+  const _KEYCAP_LABELS = [
     "1","2","3","4","5","6","7","8","9","0",
     "a","b","c","d","e","f","g","h","i","j","k","l","m","n","o","p",
     "r","s","t","u","v","w","y"
@@ -178,12 +178,12 @@
     return i < _KEYCAP_LABELS.length ? _KEYCAP_LABELS[i] : "";
   }
 
-  var _KEYCAP_POSITIONS = {};
+  const _KEYCAP_POSITIONS = {};
   _KEYCAP_LABELS.forEach(function (label, i) { _KEYCAP_POSITIONS[label] = i; });
 
   function _keyToPosition(key) {
-    var k = key.toLowerCase();
-    var pos = _KEYCAP_POSITIONS[k];
+    const k = key.toLowerCase();
+    const pos = _KEYCAP_POSITIONS[k];
     return pos !== undefined ? pos : -1;
   }
 
@@ -219,7 +219,7 @@
   }
 
   function _applyCodeToSelection(codeId) {
-    var sel = window.__aceLastSelection;
+    const sel = window.__aceLastSelection;
     if (!sel) return;
 
     htmx.ajax("POST", "/api/code/apply", {
@@ -254,7 +254,7 @@
   }
 
   function _flashCodeRow(codeId) {
-    document.querySelectorAll('.ace-code-row[data-code-id="' + codeId + '"]').forEach(function (r) {
+    document.querySelectorAll(`.ace-code-row[data-code-id="${codeId}"]`).forEach(function (r) {
       r.classList.add("ace-code-row--flash");
       setTimeout(function () { r.classList.remove("ace-code-row--flash"); }, 300);
     });
@@ -268,9 +268,9 @@
   window.__aceLastSelection = null;
 
   function _isTyping() {
-    var el = document.activeElement;
+    let el = document.activeElement;
     if (!el) return false;
-    var tag = el.tagName;
+    const tag = el.tagName;
     return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || el.isContentEditable;
   }
 
@@ -279,18 +279,18 @@
     if (_menuOpen) return;
 
     // Only handle keys when text panel (or nothing specific) is focused
-    var zone = _activeZone();
+    let zone = _activeZone();
     if (zone === "search" || zone === "tree") return;
 
-    var key = e.key;
-    var ctrl = e.ctrlKey || e.metaKey;
-    var shift = e.shiftKey;
+    const key = e.key;
+    const ctrl = e.ctrlKey || e.metaKey;
+    const shift = e.shiftKey;
 
     // Ctrl/Cmd+Shift+Z — Redo
     if (ctrl && shift && key === "Z") {
       e.preventDefault();
       _updateCurrentIndex();
-      var redoBtn = document.getElementById("trigger-redo");
+      const redoBtn = document.getElementById("trigger-redo");
       if (redoBtn) htmx.trigger(redoBtn, "click");
       return;
     }
@@ -299,7 +299,7 @@
     if (ctrl && !shift && key === "z") {
       e.preventDefault();
       _updateCurrentIndex();
-      var undoBtn = document.getElementById("trigger-undo");
+      const undoBtn = document.getElementById("trigger-undo");
       if (undoBtn) htmx.trigger(undoBtn, "click");
       return;
     }
@@ -310,7 +310,7 @@
     // ↓ — Navigate to next sentence (or focus first if none focused)
     if (key === "ArrowDown") {
       e.preventDefault();
-      var sentences = _getSentences();
+      const sentences = _getSentences();
       if (sentences.length === 0) return;
       if (window.__aceFocusIndex < 0) {
         _focusSentence(0);
@@ -323,7 +323,7 @@
     // ↑ — Navigate to previous sentence (or focus last if none focused)
     if (key === "ArrowUp") {
       e.preventDefault();
-      var sentencesUp = _getSentences();
+      const sentencesUp = _getSentences();
       if (sentencesUp.length === 0) return;
       if (window.__aceFocusIndex < 0) {
         _focusSentence(sentencesUp.length - 1);
@@ -349,7 +349,7 @@
     if ((key === "z" || key === "Z") && !ctrl) {
       e.preventDefault();
       _updateCurrentIndex();
-      var undoBtn2 = document.getElementById("trigger-undo");
+      const undoBtn2 = document.getElementById("trigger-undo");
       if (undoBtn2) htmx.trigger(undoBtn2, "click");
       return;
     }
@@ -378,7 +378,7 @@
     if (key === "F" && shift) {
       e.preventDefault();
       _updateCurrentIndex();
-      var flagBtn = document.getElementById("trigger-flag");
+      const flagBtn = document.getElementById("trigger-flag");
       if (flagBtn) htmx.trigger(flagBtn, "click");
       return;
     }
@@ -392,13 +392,13 @@
 
     // Escape cascade
     if (key === "Escape") {
-      var cheatSheet = document.getElementById("ace-cheat-sheet");
+      const cheatSheet = document.getElementById("ace-cheat-sheet");
       if (cheatSheet) { cheatSheet.remove(); return; }
 
-      var dialog = document.querySelector("dialog[open]");
+      const dialog = document.querySelector("dialog[open]");
       if (dialog) { dialog.close(); return; }
 
-      var grid = document.getElementById("source-grid-overlay");
+      const grid = document.getElementById("source-grid-overlay");
       if (grid && !grid.classList.contains("ace-hidden")) {
         grid.classList.add("ace-hidden");
         return;
@@ -422,10 +422,10 @@
     // 1-9, 0, a-z — Apply code at keymap position
     // Guard: only single-character keys (skip ArrowLeft, ArrowRight, etc.)
     if (!shift && key.length === 1) {
-      var pos = _keyToPosition(key);
+      const pos = _keyToPosition(key);
       if (pos >= 0 && pos < _currentKeyMap.length) {
         e.preventDefault();
-        var codeId = _currentKeyMap[pos];
+        let codeId = _currentKeyMap[pos];
         if (window.__aceLastSelection) {
           _applyCodeToSelection(codeId);
         } else if (window.__aceFocusIndex >= 0) {
@@ -440,7 +440,7 @@
   });
 
   function _updateCurrentIndex() {
-    var input = document.getElementById("current-index");
+    const input = document.getElementById("current-index");
     if (input) input.value = window.__aceCurrentIndex;
   }
 
@@ -452,7 +452,7 @@
     if (!Number.isFinite(index) || index < 0 || index >= window.__aceTotalSources) return;
     window.__aceCurrentIndex = index;
     window.__aceFocusIndex = -1;
-    window.location.href = "/code?index=" + index;
+    window.location.href = `/code?index=${index}`;
   };
 
   window.aceNavigatePrev = function () {
@@ -468,38 +468,38 @@
    * ================================================================ */
 
   window.aceToggleGrid = function () {
-    var grid = document.getElementById("source-grid-overlay");
+    const grid = document.getElementById("source-grid-overlay");
     if (!grid) return;
-    var wasHidden = grid.classList.contains("ace-hidden");
+    const wasHidden = grid.classList.contains("ace-hidden");
     grid.classList.toggle("ace-hidden");
     if (wasHidden) {
       // Adaptive cell size to fit within 300x300 popover
-      var total = window.__aceTotalSources || 0;
-      var popover = grid.querySelector(".ace-grid-popover");
-      var innerSize = 300 - 12; // 300px minus 6px padding each side
+      const total = window.__aceTotalSources || 0;
+      const popover = grid.querySelector(".ace-grid-popover");
+      const innerSize = 300 - 12; // 300px minus 6px padding each side
       // Calculate cell size that fits all sources in a ~square grid within 288px
-      var cols = Math.ceil(Math.sqrt(total)) || 1;
-      var cellSize = Math.max(4, Math.min(10, Math.floor((innerSize - (cols - 1)) / cols)));
+      const cols = Math.ceil(Math.sqrt(total)) || 1;
+      const cellSize = Math.max(4, Math.min(10, Math.floor((innerSize - (cols - 1)) / cols)));
       if (popover) {
-        popover.style.setProperty("--ace-grid-cell-size", cellSize + "px");
-        var cellsContainer = popover.querySelector(".ace-grid-cells");
+        popover.style.setProperty("--ace-grid-cell-size", `${cellSize}px`);
+        const cellsContainer = popover.querySelector(".ace-grid-cells");
         if (cellsContainer) {
           // Snap width to exact multiple of (cellSize + 1px gap)
-          var cellStep = cellSize + 1;
-          var fitCols = Math.floor(innerSize / cellStep);
-          cellsContainer.style.maxWidth = (fitCols * cellStep - 1) + "px";
+          const cellStep = cellSize + 1;
+          const fitCols = Math.floor(innerSize / cellStep);
+          cellsContainer.style.maxWidth = `${fitCols * cellStep - 1}px`;
         }
       }
-      var maxWidth = 300;
+      let maxWidth = 300;
       // Position anchored below the nav counter, clamped to viewport
-      var counter = document.getElementById("nav-counter");
+      const counter = document.getElementById("nav-counter");
       if (counter) {
-        var rect = counter.getBoundingClientRect();
-        grid.style.top = (rect.bottom + 4) + "px";
-        var idealLeft = rect.left + rect.width / 2 - maxWidth / 2;
+        const rect = counter.getBoundingClientRect();
+        grid.style.top = `${rect.bottom + 4}px`;
+        const idealLeft = rect.left + rect.width / 2 - maxWidth / 2;
         // Clamp so popover doesn't overflow right or left edge
-        var clampedLeft = Math.max(4, Math.min(idealLeft, window.innerWidth - maxWidth - 8));
-        grid.style.left = clampedLeft + "px";
+        const clampedLeft = Math.max(4, Math.min(idealLeft, window.innerWidth - maxWidth - 8));
+        grid.style.left = `${clampedLeft}px`;
       }
       // Close on click outside (next tick)
       setTimeout(function () {
@@ -511,7 +511,7 @@
   };
 
   function _onGridOutsideClick(e) {
-    var grid = document.getElementById("source-grid-overlay");
+    const grid = document.getElementById("source-grid-overlay");
     if (grid && !grid.contains(e.target) && !e.target.closest(".ace-nav-counter")) {
       grid.classList.add("ace-hidden");
       document.removeEventListener("click", _onGridOutsideClick);
@@ -523,20 +523,15 @@
    * ================================================================ */
 
   function _toggleCheatSheet() {
-    var existing = document.getElementById("ace-cheat-sheet");
+    const existing = document.getElementById("ace-cheat-sheet");
     if (existing) { existing.remove(); return; }
 
-    var overlay = document.createElement("div");
+    const overlay = document.createElement("div");
     overlay.id = "ace-cheat-sheet";
-    overlay.style.cssText =
-      "position:fixed;inset:0;z-index:9999;display:flex;align-items:center;" +
-      "justify-content:center;background:rgba(0,0,0,0.45);";
+    overlay.style.cssText = "position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.45);";
 
-    var card = document.createElement("div");
-    card.style.cssText =
-      "background:var(--ace-bg,#fff);border:1px solid var(--ace-border,#bdbdbd);" +
-      "padding:24px 32px;max-width:520px;width:90%;max-height:80vh;overflow-y:auto;" +
-      "font-size:13px;line-height:1.6;";
+    const card = document.createElement("div");
+    card.style.cssText = "background:var(--ace-bg,#fff);border:1px solid var(--ace-border,#bdbdbd);padding:24px 32px;max-width:520px;width:90%;max-height:80vh;overflow-y:auto;font-size:13px;line-height:1.6;";
 
     card.innerHTML =
       '<h3 style="margin:0 0 12px;font-size:15px;font-weight:600;">Keyboard shortcuts</h3>' +
@@ -564,10 +559,7 @@
   }
 
   function _shortcutRow(key, desc) {
-    return '<tr style="border-bottom:1px solid var(--ace-border-light,#e0e0e0);">'
-      + '<td style="padding:4px 12px 4px 0;font-family:\'SF Mono\',Menlo,Consolas,monospace;'
-      + 'font-size:12px;white-space:nowrap;color:var(--ace-text-muted,#777);">' + key + "</td>"
-      + '<td style="padding:4px 0;">' + desc + "</td></tr>";
+    return `<tr style="border-bottom:1px solid var(--ace-border-light,#e0e0e0);"><td style="padding:4px 12px 4px 0;font-family:'SF Mono',Menlo,Consolas,monospace;font-size:12px;white-space:nowrap;color:var(--ace-text-muted,#777);">${key}</td><td style="padding:4px 0;">${desc}</td></tr>`;
   }
 
   /* ================================================================
@@ -575,12 +567,12 @@
    * ================================================================ */
 
   function _initResize() {
-    var handle = document.getElementById("resize-handle");
+    const handle = document.getElementById("resize-handle");
     if (!handle) return;
-    var split = handle.closest(".ace-three-col");
+    const split = handle.closest(".ace-three-col");
     if (!split) return;
 
-    var dragging = false;
+    let dragging = false;
 
     handle.addEventListener("pointerdown", function (e) {
       e.preventDefault();
@@ -592,12 +584,12 @@
 
     document.addEventListener("pointermove", function (e) {
       if (!dragging) return;
-      var rect = split.getBoundingClientRect();
-      var x = e.clientX - rect.left;
-      var min = 150;
-      var max = rect.width * 0.4;
+      const rect = split.getBoundingClientRect();
+      let x = e.clientX - rect.left;
+      const min = 150;
+      const max = rect.width * 0.4;
       x = Math.max(min, Math.min(max, x));
-      document.documentElement.style.setProperty("--ace-sidebar-width", x + "px");
+      document.documentElement.style.setProperty("--ace-sidebar-width", `${x}px`);
     });
 
     document.addEventListener("pointerup", function () {
@@ -605,7 +597,7 @@
       dragging = false;
       document.body.style.cursor = "";
       document.body.style.userSelect = "";
-      var width = parseInt(getComputedStyle(document.documentElement).getPropertyValue("--ace-sidebar-width"), 10);
+      const width = parseInt(getComputedStyle(document.documentElement).getPropertyValue("--ace-sidebar-width"), 10);
       if (width) localStorage.setItem("ace-sidebar-width", width);
     });
   }
@@ -616,7 +608,7 @@
 
   document.addEventListener("close", function (evt) {
     if (evt.target.tagName === "DIALOG") {
-      var container = document.getElementById("modal-container");
+      const container = document.getElementById("modal-container");
       if (container) container.innerHTML = "";
     }
   }, true);
@@ -629,26 +621,26 @@
   // Uses data-start/data-end attributes on sentence spans to compute
   // source-text offsets (DOM offsets differ due to inter-span whitespace).
   document.addEventListener("mouseup", function () {
-    var container = document.querySelector(".ace-text-panel");
+    const container = document.querySelector(".ace-text-panel");
     if (!container) return;
 
-    var sel = window.getSelection();
+    const sel = window.getSelection();
     if (!sel || sel.isCollapsed || sel.rangeCount === 0) {
       window.__aceLastSelection = null;
       return;
     }
 
-    var range = sel.getRangeAt(0);
+    const range = sel.getRangeAt(0);
     if (!container.contains(range.startContainer) || !container.contains(range.endContainer)) {
       return;
     }
 
-    var text = sel.toString();
+    const text = sel.toString();
     if (!text) { window.__aceLastSelection = null; return; }
 
     // Find the sentence spans containing the selection endpoints
-    var startSrc = _sourceOffset(range.startContainer, range.startOffset);
-    var endSrc = _sourceOffset(range.endContainer, range.endOffset);
+    const startSrc = _sourceOffset(range.startContainer, range.startOffset);
+    const endSrc = _sourceOffset(range.endContainer, range.endOffset);
 
     if (startSrc < 0 || endSrc < 0 || startSrc === endSrc) {
       window.__aceLastSelection = null;
@@ -660,17 +652,17 @@
 
   function _sourceOffset(node, domOffset) {
     // Walk up to find the containing .ace-sentence span
-    var el = node.nodeType === Node.TEXT_NODE ? node.parentElement : node;
-    var sentence = el.closest(".ace-sentence");
+    let el = node.nodeType === Node.TEXT_NODE ? node.parentElement : node;
+    let sentence = el.closest(".ace-sentence");
     if (!sentence) return -1;
 
-    var sentStart = parseInt(sentence.dataset.start, 10);
+    const sentStart = parseInt(sentence.dataset.start, 10);
     if (isNaN(sentStart)) return -1;
 
     // Compute character offset within this sentence's text content
-    var walker = document.createTreeWalker(sentence, NodeFilter.SHOW_TEXT, null);
-    var charPos = 0;
-    var current;
+    const walker = document.createTreeWalker(sentence, NodeFilter.SHOW_TEXT, null);
+    let charPos = 0;
+    let current;
     while ((current = walker.nextNode())) {
       if (current === node) return sentStart + charPos + domOffset;
       charPos += current.textContent.length;
@@ -681,9 +673,9 @@
 
   // Click on sentence to focus it
   document.addEventListener("click", function (e) {
-    var sentence = e.target.closest(".ace-sentence");
+    let sentence = e.target.closest(".ace-sentence");
     if (sentence) {
-      var idx = parseInt(sentence.dataset.idx, 10);
+      const idx = parseInt(sentence.dataset.idx, 10);
       if (!isNaN(idx)) {
         _focusSentence(idx);
         // Clear custom selection if this was a simple click (not drag)
@@ -694,33 +686,33 @@
     }
 
     // Click on code chip to flash highlights in current source
-    var chip = e.target.closest(".ace-code-chip");
+    const chip = e.target.closest(".ace-code-chip");
     if (chip) {
-      var codeId = chip.dataset.codeId;
-      var colour = chip.dataset.colour || "#ffeb3b";
-      var r = parseInt(colour.slice(1, 3), 16);
-      var g = parseInt(colour.slice(3, 5), 16);
-      var b = parseInt(colour.slice(5, 7), 16);
+      let codeId = chip.dataset.codeId;
+      let colour = chip.dataset.colour || "#ffeb3b";
+      const r = parseInt(colour.slice(1, 3), 16);
+      const g = parseInt(colour.slice(3, 5), 16);
+      const b = parseInt(colour.slice(5, 7), 16);
 
       if (!CSS.highlights) return;
-      var container = document.getElementById("text-panel");
+      const container = document.getElementById("text-panel");
       if (!container) return;
-      var dataEl = document.getElementById("ace-ann-data");
+      const dataEl = document.getElementById("ace-ann-data");
       if (!dataEl) return;
-      var anns = JSON.parse(dataEl.dataset.annotations || "[]");
-      var matching = anns.filter(function (a) { return a.code_id === codeId; });
+      const anns = JSON.parse(dataEl.dataset.annotations || "[]");
+      const matching = anns.filter(function (a) { return a.code_id === codeId; });
       if (!matching.length) return;
 
       // Build ranges using the same text index as _paintHighlights
-      var textIndex = _buildTextIndex(container);
-      var flashHighlight = new Highlight();
-      var firstRange = null;
+      const textIndex = _buildTextIndex(container);
+      const flashHighlight = new Highlight();
+      let firstRange = null;
       matching.forEach(function (ann) {
-        var startPos = _findDOMPosition(textIndex, ann.start);
-        var endPos = _findDOMPosition(textIndex, ann.end);
+        const startPos = _findDOMPosition(textIndex, ann.start);
+        const endPos = _findDOMPosition(textIndex, ann.end);
         if (!startPos || !endPos) return;
         try {
-          var range = new Range();
+          const range = new Range();
           range.setStart(startPos.node, startPos.offset);
           range.setEnd(endPos.node, endPos.offset);
           flashHighlight.add(range);
@@ -730,23 +722,23 @@
 
       // Register flash highlight + inject style
       CSS.highlights.set("ace-flash", flashHighlight);
-      var style = document.createElement("style");
+      let style = document.createElement("style");
       style.id = "ace-flash-style";
-      style.textContent = "::highlight(ace-flash) { background-color: rgba(" + r + "," + g + "," + b + ",0.6); }";
-      var old = document.getElementById("ace-flash-style");
+      style.textContent = `::highlight(ace-flash) { background-color: rgba(${r},${g},${b},0.6); }`;
+      const old = document.getElementById("ace-flash-style");
       if (old) old.remove();
       document.head.appendChild(style);
 
       // Scroll first match into view
       if (firstRange) {
-        var startEl = firstRange.startContainer.parentElement;
+        const startEl = firstRange.startContainer.parentElement;
         if (startEl) startEl.scrollIntoView({ behavior: "smooth", block: "nearest" });
       }
 
       // Auto-clear after 1.5s
       setTimeout(function () {
         CSS.highlights.delete("ace-flash");
-        var s = document.getElementById("ace-flash-style");
+        const s = document.getElementById("ace-flash-style");
         if (s) s.remove();
       }, 1500);
       return;
@@ -755,19 +747,19 @@
 
   // Click on excerpt card to navigate to that source + highlight
   document.addEventListener("click", function(e) {
-    var card = e.target.closest(".ace-excerpt-card");
+    const card = e.target.closest(".ace-excerpt-card");
     if (!card) return;
-    var sourceIndex = card.getAttribute("data-source-index");
-    var startOffset = card.getAttribute("data-start-offset");
+    const sourceIndex = card.getAttribute("data-source-index");
+    const startOffset = card.getAttribute("data-start-offset");
     if (sourceIndex !== null) {
-      window.location.href = "/code?index=" + sourceIndex + "&highlight=" + startOffset;
+      window.location.href = `/code?index=${sourceIndex}&highlight=${startOffset}`;
     }
   });
 
   // Click on back button to return from excerpt list
   document.addEventListener("click", function(e) {
     if (!e.target.closest(".ace-excerpt-back")) return;
-    var idx = window.__aceExcerptReturnIndex;
+    const idx = window.__aceExcerptReturnIndex;
     if (idx !== undefined && idx !== null) {
       window.aceNavigate(idx);
     }
@@ -775,7 +767,7 @@
 
   // --- Focus restoration across HTMX swaps ---
 
-  var _sidebarFocusState = {
+  const _sidebarFocusState = {
     codeId: null,
     groupName: null,
     searchText: "",
@@ -784,30 +776,30 @@
   };
 
   document.addEventListener("htmx:beforeSwap", function (e) {
-    var target = e.detail.target;
+    const target = e.detail.target;
     if (!target) return;
     if (target.id !== "code-sidebar" && target.id !== "coding-workspace" && target.id !== "text-panel") return;
 
-    var zone = _activeZone();
+    let zone = _activeZone();
     _sidebarFocusState.zone = zone;
 
     if (zone === "tree") {
-      var active = _getActiveTreeItem();
+      const active = _getActiveTreeItem();
       _sidebarFocusState.codeId = active ? active.getAttribute("data-code-id") : null;
       _sidebarFocusState.groupName = active ? active.getAttribute("data-group") : null;
     }
 
-    var search = document.getElementById("code-search-input");
+    let search = document.getElementById("code-search-input");
     _sidebarFocusState.searchText = search ? search.value : "";
 
-    var tree = document.getElementById("code-tree");
+    const tree = document.getElementById("code-tree");
     _sidebarFocusState.scrollTop = tree ? tree.scrollTop : 0;
   });
 
   // After HTMX swap: restore focus, rebuild tabs, update keycaps
   // Use afterSettle (not afterSwap) — fires after HTMX finishes all DOM changes
   document.addEventListener("htmx:afterSettle", function (evt) {
-    var target = evt.detail.target;
+    const target = evt.detail.target;
     if (!target) return;
 
     if (target.id === "text-panel" || target.id === "coding-workspace") {
@@ -826,9 +818,9 @@
       // Announce flag state and restore focus after flag toggle
       if (_pendingFlagAnnounce) {
         _pendingFlagAnnounce = false;
-        var flagBtn = document.getElementById("nav-flag-btn");
+        const flagBtn = document.getElementById("nav-flag-btn");
         if (flagBtn) {
-          var pressed = flagBtn.getAttribute("aria-pressed") === "true";
+          const pressed = flagBtn.getAttribute("aria-pressed") === "true";
           _announce(pressed ? "Source flagged" : "Source unflagged");
           flagBtn.focus();
         }
@@ -841,28 +833,28 @@
       _updateKeycaps();
 
       // Restore focus state
-      var search = document.getElementById("code-search-input");
+      let search = document.getElementById("code-search-input");
       if (_sidebarFocusState.searchText && search) {
         search.value = _sidebarFocusState.searchText;
         search.dispatchEvent(new Event("input", { bubbles: true }));
       }
 
-      var tree = document.getElementById("code-tree");
+      const tree = document.getElementById("code-tree");
       if (tree && _sidebarFocusState.scrollTop) {
         tree.scrollTop = _sidebarFocusState.scrollTop;
       }
 
       if (_sidebarFocusState.zone === "tree") {
-        var item = null;
+        let item = null;
         if (_sidebarFocusState.codeId && tree) {
-          item = tree.querySelector('[data-code-id="' + _sidebarFocusState.codeId + '"]');
+          item = tree.querySelector(`[data-code-id="${_sidebarFocusState.codeId}"]`);
         } else if (_sidebarFocusState.groupName !== null && tree) {
-          item = tree.querySelector('.ace-code-group-header[data-group="' + _sidebarFocusState.groupName + '"]');
+          item = tree.querySelector(`.ace-code-group-header[data-group="${_sidebarFocusState.groupName}"]`);
         }
         if (item) {
           _focusTreeItem(item);
         } else {
-          var items = _getTreeItems();
+          const items = _getTreeItems();
           if (items.length > 0) _focusTreeItem(items[0]);
         }
       } else if (_sidebarFocusState.zone === "search" && search) {
@@ -878,14 +870,14 @@
 
     // Auto-open dialogs
     if (target.id === "modal-container") {
-      var dialog = target.querySelector("dialog");
+      const dialog = target.querySelector("dialog");
       if (dialog && !dialog.open) dialog.showModal();
     }
   });
 
   // Inject current_index into undo/redo/flag hidden trigger requests
   document.addEventListener("htmx:configRequest", function (e) {
-    var elt = e.detail.elt;
+    const elt = e.detail.elt;
     if (!elt || !elt.id) return;
 
     if (["trigger-undo", "trigger-redo", "trigger-flag"].indexOf(elt.id) >= 0) {
@@ -898,7 +890,7 @@
 
   // ace-navigate event from HX-Trigger header
   document.addEventListener("ace-navigate", function (e) {
-    var detail = e.detail || {};
+    const detail = e.detail || {};
     if (detail.index !== undefined) {
       window.__aceCurrentIndex = parseInt(detail.index, 10);
     }
@@ -906,10 +898,10 @@
       window.__aceTotalSources = parseInt(detail.total, 10);
     }
     window.__aceFocusIndex = -1;
-    var input = document.getElementById("current-index");
+    const input = document.getElementById("current-index");
     if (input) input.value = window.__aceCurrentIndex;
     // Reset scroll position for new source
-    var cs = document.getElementById("content-scroll");
+    const cs = document.getElementById("content-scroll");
     if (cs) cs.scrollTop = 0;
   });
 
@@ -917,15 +909,15 @@
    * 13. Code management helpers
    * ================================================================ */
 
-  var _menuOpen = false;
-  var _lastSelectedCodeId = null;
+  let _menuOpen = false;
+  let _lastSelectedCodeId = null;
 
   // No-op stubs — replaced by real implementations in later tasks
   function _closeCodeMenu() {}
 
-  var _COLOUR_PALETTE = ["#A91818","#557FE6","#6DA918","#E655D4","#18A991","#E6A455","#3C18A9","#5BE655","#A91848","#55B0E6","#9DA918","#C855E6","#18A960","#E67355","#1824A9","#8CE655","#A91879","#55E1E6","#A98418","#9755E6","#18A930","#E65567","#1855A9","#BCE655","#A918A9","#55E6BB","#A95418","#6755E6","#30A918","#E65598","#1885A9","#E6E055","#7818A9","#55E68B","#A92318","#5574E6"];
+  const _COLOUR_PALETTE = ["#A91818","#557FE6","#6DA918","#E655D4","#18A991","#E6A455","#3C18A9","#5BE655","#A91848","#55B0E6","#9DA918","#C855E6","#18A960","#E67355","#1824A9","#8CE655","#A91879","#55E1E6","#A98418","#9755E6","#18A930","#E65567","#1855A9","#BCE655","#A918A9","#55E6BB","#A95418","#6755E6","#30A918","#E65598","#1885A9","#E6E055","#7818A9","#55E68B","#A92318","#5574E6"];
 
-  var _activeColourPopover = null;
+  let _activeColourPopover = null;
 
   function _closeColourPopover() {
     if (_activeColourPopover) {
@@ -938,21 +930,21 @@
 
   function _openColourPopover(codeId) {
     _closeAllPopovers();
-    var row = document.querySelector('.ace-code-row[data-code-id="' + codeId + '"]');
+    let row = document.querySelector(`.ace-code-row[data-code-id="${codeId}"]`);
     if (!row) return;
-    var rect = row.getBoundingClientRect();
+    const rect = row.getBoundingClientRect();
 
-    var popover = document.createElement("div");
+    const popover = document.createElement("div");
     popover.className = "ace-colour-popover";
 
     _COLOUR_PALETTE.forEach(function (hex) {
-      var swatch = document.createElement("button");
+      const swatch = document.createElement("button");
       swatch.className = "ace-colour-swatch";
       swatch.style.background = hex;
       swatch.addEventListener("click", function () {
         _closeAllPopovers();
-        _codeAction("PUT", "/api/codes/" + codeId,
-          "colour=" + encodeURIComponent(hex) + "&current_index=" + window.__aceCurrentIndex);
+        _codeAction("PUT", `/api/codes/${codeId}`,
+          `colour=${encodeURIComponent(hex)}&current_index=${window.__aceCurrentIndex}`);
       });
       popover.appendChild(swatch);
     });
@@ -960,7 +952,7 @@
     document.body.appendChild(popover);
     _activeColourPopover = popover;
 
-    popover.style.top = (rect.bottom + 4) + "px";
+    popover.style.top = `${rect.bottom + 4}px`;
     popover.style.left = rect.left + "px";
 
     setTimeout(function () {
@@ -978,11 +970,11 @@
   }
 
   document.addEventListener("contextmenu", function (e) {
-    var row = e.target.closest(".ace-code-row");
+    let row = e.target.closest(".ace-code-row");
     if (!row) return;
     e.preventDefault();
     e.stopPropagation();
-    var codeId = row.getAttribute("data-code-id");
+    let codeId = row.getAttribute("data-code-id");
     if (codeId) _openColourPopover(codeId);
   });
 
@@ -1015,34 +1007,34 @@
   }
 
   function _startInlineRename(codeId) {
-    var row = document.querySelector('.ace-code-row[data-code-id="' + codeId + '"]');
+    let row = document.querySelector(`.ace-code-row[data-code-id="${codeId}"]`);
     if (!row) return;
-    var nameEl = row.querySelector(".ace-code-name");
+    const nameEl = row.querySelector(".ace-code-name");
     if (!nameEl) return;
 
-    var original = nameEl.textContent;
+    const original = nameEl.textContent;
     nameEl.contentEditable = "true";
     nameEl.focus();
 
-    var range = document.createRange();
+    const range = document.createRange();
     range.selectNodeContents(nameEl);
-    var sel = window.getSelection();
+    const sel = window.getSelection();
     sel.removeAllRanges();
     sel.addRange(range);
 
-    var done = false;
+    let done = false;
     function save() {
       if (done) return;
       done = true;
-      var newName = nameEl.textContent.trim();
+      const newName = nameEl.textContent.trim();
       nameEl.contentEditable = "false";
       if (!newName || newName === original) {
         nameEl.textContent = original;
         _focusTreeItem(row);
         return;
       }
-      _codeAction("PUT", "/api/codes/" + codeId,
-        "name=" + encodeURIComponent(newName) + "&current_index=" + window.__aceCurrentIndex
+      _codeAction("PUT", `/api/codes/${codeId}`,
+        `name=${encodeURIComponent(newName)}&current_index=${window.__aceCurrentIndex}`
       ).catch(function () { nameEl.textContent = original; });
       _focusTreeItem(row);
     }
@@ -1059,26 +1051,26 @@
 
     nameEl.addEventListener("paste", function pasteHandler(e) {
       e.preventDefault();
-      var text = (e.clipboardData || window.clipboardData).getData("text/plain");
+      const text = (e.clipboardData || window.clipboardData).getData("text/plain");
       document.execCommand("insertText", false, text.replace(/\n/g, " "));
     });
   }
 
   document.addEventListener("dblclick", function (e) {
-    var nameEl = e.target.closest(".ace-code-name");
+    const nameEl = e.target.closest(".ace-code-name");
     if (!nameEl) return;
-    var row = nameEl.closest(".ace-code-row");
+    let row = nameEl.closest(".ace-code-row");
     if (!row) return;
-    var codeId = row.getAttribute("data-code-id");
+    let codeId = row.getAttribute("data-code-id");
     if (codeId) _startInlineRename(codeId);
   });
 
-  var _deleteTarget = null;
-  var _deleteTimer = null;
+  let _deleteTarget = null;
+  let _deleteTimer = null;
 
   function _startDeleteConfirm(codeId) {
     if (_deleteTimer) { clearTimeout(_deleteTimer); _clearDeleteConfirm(); }
-    var row = document.querySelector('.ace-code-row[data-code-id="' + codeId + '"]');
+    let row = document.querySelector(`.ace-code-row[data-code-id="${codeId}"]`);
     if (!row) return;
     row.classList.add("ace-code-row--confirm-delete");
     _deleteTarget = codeId;
@@ -1087,7 +1079,7 @@
 
   function _clearDeleteConfirm() {
     if (_deleteTarget) {
-      var row = document.querySelector('.ace-code-row[data-code-id="' + _deleteTarget + '"]');
+      let row = document.querySelector(`.ace-code-row[data-code-id="${_deleteTarget}"]`);
       if (row) row.classList.remove("ace-code-row--confirm-delete");
     }
     _deleteTarget = null;
@@ -1097,37 +1089,37 @@
   function _executeDelete(codeId) {
     _clearDeleteConfirm();
     _lastSelectedCodeId = null;
-    _codeAction("DELETE", "/api/codes/" + codeId + "?current_index=" + window.__aceCurrentIndex, null);
+    _codeAction("DELETE", `/api/codes/${codeId}?current_index=${window.__aceCurrentIndex}`, null);
   }
 
   function _moveCode(codeId, direction) {
-    var codes = window.__aceCodes || [];
-    var ids = codes.map(function (c) { return c.id; });
-    var idx = ids.indexOf(codeId);
+    const codes = window.__aceCodes || [];
+    const ids = codes.map(function (c) { return c.id; });
+    const idx = ids.indexOf(codeId);
     if (idx < 0) return;
-    var newIdx = idx + direction;
+    const newIdx = idx + direction;
     if (newIdx < 0 || newIdx >= ids.length) return;
     ids[idx] = ids[newIdx];
     ids[newIdx] = codeId;
     _codeAction("POST", "/api/codes/reorder",
-      "code_ids=" + encodeURIComponent(JSON.stringify(ids)) + "&current_index=" + window.__aceCurrentIndex);
+      `code_ids=${encodeURIComponent(JSON.stringify(ids))}&current_index=${window.__aceCurrentIndex}`);
   }
 
   function _moveToGroup(codeId, groupName) {
-    _codeAction("PUT", "/api/codes/" + codeId,
-      "group_name=" + encodeURIComponent(groupName) + "&current_index=" + window.__aceCurrentIndex);
+    _codeAction("PUT", `/api/codes/${codeId}`,
+      `group_name=${encodeURIComponent(groupName)}&current_index=${window.__aceCurrentIndex}`);
   }
 
-  var _sortableInstances = [];
-  var _isDragging = false;
+  let _sortableInstances = [];
+  let _isDragging = false;
 
   function _initSortable() {
     _sortableInstances.forEach(function (s) { s.destroy(); });
     _sortableInstances = [];
 
-    var containers = document.querySelectorAll('#code-tree [role="group"]');
+    const containers = document.querySelectorAll('#code-tree [role="group"]');
     containers.forEach(function (container) {
-      var instance = new Sortable(container, {
+      const instance = new Sortable(container, {
         group: "codes",
         animation: 150,
         delay: 200,
@@ -1137,17 +1129,17 @@
         onStart: function () { _isDragging = true; },
         onEnd: function (evt) {
           _isDragging = false;
-          var codeId = evt.item.getAttribute("data-code-id");
-          var newHeader = evt.to.previousElementSibling;
-          var newGroup = newHeader ? (newHeader.getAttribute("data-group") || "") : "";
-          var oldHeader = evt.from.previousElementSibling;
-          var oldGroup = oldHeader ? (oldHeader.getAttribute("data-group") || "") : "";
+          let codeId = evt.item.getAttribute("data-code-id");
+          const newHeader = evt.to.previousElementSibling;
+          const newGroup = newHeader ? (newHeader.getAttribute("data-group") || "") : "";
+          const oldHeader = evt.from.previousElementSibling;
+          const oldGroup = oldHeader ? (oldHeader.getAttribute("data-group") || "") : "";
 
           if (newGroup !== oldGroup && codeId) {
-            fetch("/api/codes/" + codeId, {
+            fetch(`/api/codes/${codeId}`, {
               method: "PUT",
               headers: { "Content-Type": "application/x-www-form-urlencoded" },
-              body: "group_name=" + encodeURIComponent(newGroup) + "&current_index=" + window.__aceCurrentIndex,
+              body: `group_name=${encodeURIComponent(newGroup)}&current_index=${window.__aceCurrentIndex}`,
             });
           }
 
@@ -1158,9 +1150,9 @@
     });
 
     // Group-level Sortable: drag group headers to reorder entire groups
-    var tree = document.getElementById("code-tree");
+    const tree = document.getElementById("code-tree");
     if (tree) {
-      var groupSortable = new Sortable(tree, {
+      const groupSortable = new Sortable(tree, {
         animation: 150,
         delay: 200,
         delayOnTouchOnly: true,
@@ -1170,7 +1162,7 @@
         onStart: function (evt) {
           _isDragging = true;
           // Stash the associated group div so we can move it in onEnd
-          var groupDiv = evt.item.nextElementSibling;
+          const groupDiv = evt.item.nextElementSibling;
           if (groupDiv && groupDiv.getAttribute("role") === "group") {
             evt.item._groupDiv = groupDiv;
             groupDiv.style.display = "none"; // hide during drag to avoid visual clutter
@@ -1178,8 +1170,8 @@
         },
         onEnd: function (evt) {
           _isDragging = false;
-          var header = evt.item;
-          var groupDiv = header._groupDiv;
+          const header = evt.item;
+          const groupDiv = header._groupDiv;
           delete header._groupDiv;
 
           // Move the group div to follow the header in its new position
@@ -1202,7 +1194,7 @@
    * 14. Code menu dropdown (right-click context menu)
    * ================================================================ */
 
-  var _activeCodeMenu = null;
+  let _activeCodeMenu = null;
 
   // Override the no-op stub from section 13
   _closeCodeMenu = function () {
@@ -1220,16 +1212,16 @@
     _lastSelectedCodeId = codeId;
     _menuOpen = true;
 
-    var menu = document.createElement("div");
+    const menu = document.createElement("div");
     menu.className = "ace-code-menu";
 
-    var items = [
+    const items = [
       { label: "Rename", hint: "F2", action: function () { _closeCodeMenu(); _startInlineRename(codeId); } },
       { label: "Colour", hint: "", action: function () { _closeCodeMenu(); _openColourPopover(codeId); } },
       { label: "View coded text", action: function () {
           _closeCodeMenu();
           window.__aceExcerptReturnIndex = window.__aceCurrentIndex;
-          htmx.ajax("GET", "/api/code/" + codeId + "/excerpts", {
+          htmx.ajax("GET", `/api/code/${codeId}/excerpts`, {
             target: "#text-panel", swap: "outerHTML"
           });
         }
@@ -1240,25 +1232,25 @@
     ];
 
     // Add "Move to Group" submenu
-    var groups = _getGroupNames();
-    var moveItem = document.createElement("div");
+    const groups = _getGroupNames();
+    const moveItem = document.createElement("div");
     moveItem.className = "ace-code-menu-item ace-code-menu-sub";
     moveItem.textContent = "Move to Group \u25b8";
-    var moveHint = document.createElement("span");
+    const moveHint = document.createElement("span");
     moveHint.className = "ace-code-menu-hint";
     moveHint.textContent = "Alt+\u2192";
     moveItem.appendChild(moveHint);
-    var sub = document.createElement("div");
+    const sub = document.createElement("div");
     sub.className = "ace-code-submenu";
 
-    var ungrouped = document.createElement("button");
+    const ungrouped = document.createElement("button");
     ungrouped.className = "ace-code-menu-item";
     ungrouped.textContent = "Ungrouped";
     ungrouped.addEventListener("click", function () { _closeCodeMenu(); _moveToGroup(codeId, ""); });
     sub.appendChild(ungrouped);
 
     groups.forEach(function (gn) {
-      var btn = document.createElement("button");
+      const btn = document.createElement("button");
       btn.className = "ace-code-menu-item";
       btn.textContent = gn;
       btn.addEventListener("click", function () { _closeCodeMenu(); _moveToGroup(codeId, gn); });
@@ -1266,15 +1258,15 @@
     });
 
     // "New Group..." option
-    var sep = document.createElement("div");
+    const sep = document.createElement("div");
     sep.className = "ace-code-menu-sep";
     sub.appendChild(sep);
-    var newGroupBtn = document.createElement("button");
+    const newGroupBtn = document.createElement("button");
     newGroupBtn.className = "ace-code-menu-item";
     newGroupBtn.textContent = "New Group\u2026";
     newGroupBtn.addEventListener("click", function () {
       _closeCodeMenu();
-      var name = prompt("Group name:");
+      let name = prompt("Group name:");
       if (!name || !name.trim()) return;
       _moveToGroup(codeId, name.trim());
     });
@@ -1286,12 +1278,12 @@
 
     items.forEach(function (item) {
       if (item.element) { menu.appendChild(item.element); return; }
-      var el = document.createElement("button");
+      let el = document.createElement("button");
       el.className = "ace-code-menu-item";
       if (item.danger) el.classList.add("ace-code-menu-item--danger");
       el.textContent = item.label;
       if (item.hint) {
-        var hintEl = document.createElement("span");
+        const hintEl = document.createElement("span");
         hintEl.className = "ace-code-menu-hint";
         hintEl.textContent = item.hint;
         el.appendChild(hintEl);
@@ -1303,9 +1295,9 @@
     document.body.appendChild(menu);
     _activeCodeMenu = menu;
 
-    var mw = menu.offsetWidth, mh = menu.offsetHeight;
-    menu.style.top = (y + mh > window.innerHeight ? Math.max(0, y - mh) : y) + "px";
-    menu.style.left = (x + mw > window.innerWidth ? Math.max(0, x - mw) : x) + "px";
+    const mw = menu.offsetWidth, mh = menu.offsetHeight;
+    menu.style.top = `${y + mh > window.innerHeight ? Math.max(0, y - mh) : y}px`;
+    menu.style.left = `${x + mw > window.innerWidth ? Math.max(0, x - mw) : x}px`;
 
     setTimeout(function () {
       document.addEventListener("click", _onMenuOutsideClick);
@@ -1322,9 +1314,9 @@
   }
 
   function _getGroupNames() {
-    var result = [];
+    const result = [];
     document.querySelectorAll("#code-tree .ace-code-group-header[data-group]").forEach(function (h) {
-      var name = h.getAttribute("data-group");
+      let name = h.getAttribute("data-group");
       if (name) result.push(name);
     });
     return result;
@@ -1332,23 +1324,23 @@
 
   // Right-click context menu delegation
   document.addEventListener("contextmenu", function (e) {
-    var row = e.target.closest(".ace-code-row");
+    let row = e.target.closest(".ace-code-row");
     if (!row) return;
     e.preventDefault();
-    var codeId = row.getAttribute("data-code-id");
+    let codeId = row.getAttribute("data-code-id");
     if (codeId) _openCodeMenu(e.clientX, e.clientY, codeId);
   });
 
   /** Unified apply helper used by keycap click, search Enter, and tree Enter. */
   function _applyCode(codeId) {
     if (window.__aceExcerptListActive) return;
-    var codeName = "";
-    var row = document.querySelector('.ace-code-row[data-code-id="' + codeId + '"]');
+    let codeName = "";
+    let row = document.querySelector(`.ace-code-row[data-code-id="${codeId}"]`);
     if (row) {
-      var nameEl = row.querySelector(".ace-code-name");
+      const nameEl = row.querySelector(".ace-code-name");
       if (nameEl) codeName = nameEl.textContent;
     }
-    var isSelection = !!window.__aceLastSelection;
+    const isSelection = !!window.__aceLastSelection;
     if (isSelection) {
       _applyCodeToSelection(codeId);
     } else if (window.__aceFocusIndex >= 0) {
@@ -1357,20 +1349,20 @@
       return;
     }
     if (codeName) {
-      var target = isSelection ? "selection" : "sentence " + (window.__aceFocusIndex + 1);
-      _announce("'" + codeName + "' applied to " + target);
+      const target = isSelection ? "selection" : "sentence " + (window.__aceFocusIndex + 1);
+      _announce(`'${codeName}' applied to ${target}`);
     }
   }
 
   // Keycap badge click: apply code to focused sentence/selection
   document.addEventListener("click", function (e) {
-    var keycap = e.target.closest(".ace-keycap");
+    const keycap = e.target.closest(".ace-keycap");
     if (!keycap) return;
     e.stopPropagation();
-    var row = keycap.closest(".ace-code-row");
+    let row = keycap.closest(".ace-code-row");
     if (!row) return;
     if (row.querySelector('[contenteditable="true"]')) return;
-    var codeId = row.getAttribute("data-code-id");
+    let codeId = row.getAttribute("data-code-id");
     if (!codeId) return;
     _clearSearchFilter();
     _applyCode(codeId);
@@ -1378,7 +1370,7 @@
 
   // Click on code row (not keycap): focus/select for management
   document.addEventListener("click", function (e) {
-    var row = e.target.closest(".ace-code-row");
+    let row = e.target.closest(".ace-code-row");
     if (!row) return;
     if (e.target.closest(".ace-keycap")) return;
     if (e.target.closest(".ace-code-menu") || _isDragging) return;
@@ -1388,7 +1380,7 @@
 
   /** Clear the search filter input and trigger the input handler to restore all rows. */
   function _clearSearchFilter() {
-    var el = document.getElementById("code-search-input");
+    let el = document.getElementById("code-search-input");
     if (el && el.value) {
       el.value = "";
       el.dispatchEvent(new Event("input", { bubbles: true }));
@@ -1401,34 +1393,34 @@
 
   document.addEventListener("input", function (e) {
     if (e.target.id !== "code-search-input") return;
-    var query = e.target.value.toLowerCase();
-    var tree = document.getElementById("code-tree");
+    const query = e.target.value.toLowerCase();
+    const tree = document.getElementById("code-tree");
     if (!tree) return;
 
     // Remove any existing "create" prompt
-    var oldPrompt = tree.querySelector(".ace-create-prompt");
+    const oldPrompt = tree.querySelector(".ace-create-prompt");
     if (oldPrompt) oldPrompt.remove();
 
     if (query && !query.startsWith("/")) {
       // Filter mode
       _sortableInstances.forEach(function (s) { s.option("disabled", true); });
-      var rows = tree.querySelectorAll(".ace-code-row");
-      var anyMatch = false;
+      const rows = tree.querySelectorAll(".ace-code-row");
+      let anyMatch = false;
       rows.forEach(function (row) {
-        var nameEl = row.querySelector(".ace-code-name");
+        const nameEl = row.querySelector(".ace-code-name");
         if (!nameEl) return;
-        var text = nameEl.textContent;
-        var match = text.toLowerCase().indexOf(query) >= 0;
+        const text = nameEl.textContent;
+        const match = text.toLowerCase().indexOf(query) >= 0;
         if (match) {
           row.style.display = "";
           row.removeAttribute("aria-hidden");
           anyMatch = true;
           // Highlight match
-          var idx = text.toLowerCase().indexOf(query);
-          var before = text.substring(0, idx);
-          var matched = text.substring(idx, idx + query.length);
-          var after = text.substring(idx + query.length);
-          nameEl.innerHTML = _escapeHtml(before) + '<mark>' + _escapeHtml(matched) + '</mark>' + _escapeHtml(after);
+          const idx = text.toLowerCase().indexOf(query);
+          const before = text.substring(0, idx);
+          const matched = text.substring(idx, idx + query.length);
+          const after = text.substring(idx + query.length);
+          nameEl.innerHTML = `${_escapeHtml(before)}<mark>${_escapeHtml(matched)}</mark>${_escapeHtml(after)}`;
         } else {
           row.style.display = "none";
           row.setAttribute("aria-hidden", "true");
@@ -1438,9 +1430,9 @@
 
       // Show/hide group headers based on visible children
       tree.querySelectorAll(".ace-code-group-header").forEach(function (header) {
-        var groupDiv = header.nextElementSibling;
+        const groupDiv = header.nextElementSibling;
         if (!groupDiv || groupDiv.getAttribute("role") !== "group") return;
-        var hasVisible = false;
+        let hasVisible = false;
         groupDiv.querySelectorAll(".ace-code-row").forEach(function (r) {
           if (r.style.display !== "none") hasVisible = true;
         });
@@ -1452,9 +1444,9 @@
 
       // Show "Create" prompt if no matches
       if (!anyMatch) {
-        var prompt = document.createElement("div");
+        let prompt = document.createElement("div");
         prompt.className = "ace-create-prompt ace-create-prompt--code";
-        prompt.innerHTML = '<span>+</span> Create "<strong>' + _escapeHtml(e.target.value.trim()) + '</strong>"';
+        prompt.innerHTML = `<span>+</span> Create "<strong>${_escapeHtml(e.target.value.trim())}</strong>"`;
         prompt.setAttribute("data-action", "create-code");
         prompt.addEventListener("click", function () {
           _createCodeFromSearch();
@@ -1463,13 +1455,13 @@
       }
 
       // Highlight first visible match as search target
-      var prevTarget = tree.querySelector(".ace-code-row--search-target");
+      const prevTarget = tree.querySelector(".ace-code-row--search-target");
       if (prevTarget) {
         prevTarget.classList.remove("ace-code-row--search-target");
         prevTarget.removeAttribute("aria-current");
       }
       if (anyMatch) {
-        var target = Array.from(tree.querySelectorAll(".ace-code-row")).find(function (r) {
+        const target = Array.from(tree.querySelectorAll(".ace-code-row")).find(function (r) {
           return r.style.display !== "none";
         });
         if (target) {
@@ -1480,25 +1472,25 @@
     } else if (query && query.startsWith("/")) {
       // Group creation mode
       _sortableInstances.forEach(function (s) { s.option("disabled", true); });
-      var groupName = query.substring(1).trim();
+      let groupName = query.substring(1).trim();
       // Hide all codes, show group creation prompt
       tree.querySelectorAll(".ace-code-row").forEach(function (r) { r.style.display = "none"; r.setAttribute("aria-hidden", "true"); });
       tree.querySelectorAll(".ace-code-group-header").forEach(function (h) { h.style.display = "none"; h.setAttribute("aria-hidden", "true"); });
       tree.querySelectorAll('[role="group"]').forEach(function (g) { g.style.display = "none"; g.setAttribute("aria-hidden", "true"); });
 
       if (groupName) {
-        var exists = false;
+        let exists = false;
         tree.querySelectorAll(".ace-code-group-header").forEach(function (h) {
           if (h.getAttribute("data-group") === groupName) exists = true;
         });
 
-        var prompt = document.createElement("div");
+        let prompt = document.createElement("div");
         if (exists) {
           prompt.className = "ace-create-prompt";
-          prompt.innerHTML = 'Group "<strong>' + _escapeHtml(groupName) + '</strong>" already exists';
+          prompt.innerHTML = `Group "<strong>${_escapeHtml(groupName)}</strong>" already exists`;
         } else {
           prompt.className = "ace-create-prompt ace-create-prompt--group";
-          prompt.innerHTML = '<span>\u25b8</span> Create group "<strong>' + _escapeHtml(groupName) + '</strong>"';
+          prompt.innerHTML = `<span>\u25b8</span> Create group "<strong>${_escapeHtml(groupName)}</strong>"`;
           prompt.setAttribute("data-action", "create-group");
           prompt.addEventListener("click", function () {
             _createGroupFromSearch();
@@ -1512,7 +1504,7 @@
       tree.querySelectorAll(".ace-code-row").forEach(function (row) {
         row.style.display = "";
         row.removeAttribute("aria-hidden");
-        var nameEl = row.querySelector(".ace-code-name");
+        const nameEl = row.querySelector(".ace-code-name");
         if (nameEl && nameEl.querySelector("mark")) {
           nameEl.textContent = nameEl.textContent; // Strip HTML
         }
@@ -1520,7 +1512,7 @@
       tree.querySelectorAll(".ace-code-group-header").forEach(function (h) { h.style.display = ""; h.removeAttribute("aria-hidden"); });
       tree.querySelectorAll('[role="group"]').forEach(function (g) { g.style.display = ""; g.removeAttribute("aria-hidden"); });
       _restoreCollapseState();
-      var prevTarget = tree.querySelector(".ace-code-row--search-target");
+      const prevTarget = tree.querySelector(".ace-code-row--search-target");
       if (prevTarget) {
         prevTarget.classList.remove("ace-code-row--search-target");
         prevTarget.removeAttribute("aria-current");
@@ -1531,9 +1523,9 @@
   });
 
   function _createCodeFromSearch() {
-    var input = document.getElementById("code-search-input");
+    const input = document.getElementById("code-search-input");
     if (!input) return;
-    var name = input.value.trim();
+    let name = input.value.trim();
     if (!name || name.startsWith("/")) return;
 
     htmx.ajax("POST", "/api/codes", {
@@ -1542,27 +1534,27 @@
       swap: "outerHTML",
     });
     input.value = "";
-    _announce("Code '" + name + "' created");
+    _announce(`Code '${name}' created`);
   }
 
   function _createGroupFromSearch() {
-    var input = document.getElementById("code-search-input");
+    const input = document.getElementById("code-search-input");
     if (!input) return;
-    var groupName = input.value.trim().substring(1).trim(); // remove / prefix
+    let groupName = input.value.trim().substring(1).trim(); // remove / prefix
     if (!groupName) return;
 
-    var tree = document.getElementById("code-tree");
+    const tree = document.getElementById("code-tree");
     if (!tree) return;
 
     // Remove create prompt if present
-    var ref = tree.querySelector(".ace-create-prompt");
+    const ref = tree.querySelector(".ace-create-prompt");
     if (ref) ref.remove();
 
-    var els = _makeGroupElements(groupName);
-    var header = els.header;
-    var groupDiv = els.groupDiv;
+    const els = _makeGroupElements(groupName);
+    const header = els.header;
+    const groupDiv = els.groupDiv;
 
-    var emptyMsg = tree.querySelector(".ace-sidebar-empty");
+    const emptyMsg = tree.querySelector(".ace-sidebar-empty");
     if (emptyMsg) {
       tree.insertBefore(header, emptyMsg);
       tree.insertBefore(groupDiv, emptyMsg);
@@ -1575,7 +1567,7 @@
     input.value = "";
     input.dispatchEvent(new Event("input", { bubbles: true }));
     _initSortable();
-    _announce("Group '" + groupName + "' created");
+    _announce(`Group '${groupName}' created`);
   }
 
   document.addEventListener("keydown", function (e) {
@@ -1600,7 +1592,7 @@
     }
 
     if (e.key !== "Enter") return;
-    var val = e.target.value.trim();
+    const val = e.target.value.trim();
     if (!val) return;
     e.preventDefault();
 
@@ -1608,8 +1600,8 @@
       _createGroupFromSearch();
     } else {
       // Only create if no visible code rows
-      var tree = document.getElementById("code-tree");
-      var count = 0;
+      const tree = document.getElementById("code-tree");
+      let count = 0;
       if (tree) {
         tree.querySelectorAll(".ace-code-row").forEach(function (r) {
           if (r.style.display !== "none") count++;
@@ -1619,12 +1611,12 @@
         _createCodeFromSearch();
       } else {
         // Has matches — find first visible match, clear search, apply
-        var firstMatch = tree
+        const firstMatch = tree
           ? Array.from(tree.querySelectorAll(".ace-code-row")).find(function (r) { return r.style.display !== "none"; })
           : null;
         _clearSearchFilter();
         if (firstMatch) {
-          var codeId = firstMatch.getAttribute("data-code-id");
+          let codeId = firstMatch.getAttribute("data-code-id");
           if (codeId) _applyCode(codeId);
         }
       }
@@ -1633,28 +1625,28 @@
 
   /** Collect all code row IDs from the tree and persist the order via API. */
   function _persistCodeOrder() {
-    var allRows = document.querySelectorAll("#code-tree .ace-code-row");
-    var ids = [];
+    const allRows = document.querySelectorAll("#code-tree .ace-code-row");
+    const ids = [];
     allRows.forEach(function (row) {
-      var id = row.getAttribute("data-code-id");
+      let id = row.getAttribute("data-code-id");
       if (id) ids.push(id);
     });
     _codeAction("POST", "/api/codes/reorder",
-      "code_ids=" + encodeURIComponent(JSON.stringify(ids)) + "&current_index=" + window.__aceCurrentIndex);
+      `code_ids=${encodeURIComponent(JSON.stringify(ids))}&current_index=${window.__aceCurrentIndex}`);
   }
 
   /** Create a group header + group container pair for the ARIA tree. */
   function _makeGroupElements(name) {
-    var header = document.createElement("div");
+    const header = document.createElement("div");
     header.setAttribute("role", "treeitem");
     header.setAttribute("aria-expanded", "true");
     header.setAttribute("aria-level", "1");
     header.className = "ace-code-group-header";
     header.setAttribute("data-group", name);
     header.setAttribute("tabindex", "-1");
-    header.textContent = "\u25be " + name;
+    header.textContent = `\u25be ${name}`;
 
-    var groupDiv = document.createElement("div");
+    const groupDiv = document.createElement("div");
     groupDiv.setAttribute("role", "group");
 
     return { header: header, groupDiv: groupDiv };
@@ -1669,24 +1661,24 @@
    * for all text nodes inside sentence spans in the text panel.
    */
   function _buildTextIndex(container) {
-    var index = [];
-    var walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, null);
-    var node;
+    let index = [];
+    const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, null);
+    let node;
     while ((node = walker.nextNode())) {
-      var sentence = node.parentElement.closest(".ace-sentence");
+      let sentence = node.parentElement.closest(".ace-sentence");
       if (!sentence) continue;
-      var sentStart = parseInt(sentence.dataset.start, 10);
+      const sentStart = parseInt(sentence.dataset.start, 10);
       if (isNaN(sentStart)) continue;
 
-      var charsBefore = 0;
-      var tw = document.createTreeWalker(sentence, NodeFilter.SHOW_TEXT, null);
-      var t;
+      let charsBefore = 0;
+      const tw = document.createTreeWalker(sentence, NodeFilter.SHOW_TEXT, null);
+      let t;
       while ((t = tw.nextNode())) {
         if (t === node) break;
         charsBefore += t.textContent.length;
       }
 
-      var nodeSourceStart = sentStart + charsBefore;
+      const nodeSourceStart = sentStart + charsBefore;
       index.push({
         node: node,
         sourceStart: nodeSourceStart,
@@ -1700,8 +1692,8 @@
    * Find the DOM position (node + offset) for a source character offset.
    */
   function _findDOMPosition(textIndex, sourceOffset) {
-    for (var i = 0; i < textIndex.length; i++) {
-      var entry = textIndex[i];
+    for (let i = 0; i < textIndex.length; i++) {
+      const entry = textIndex[i];
       if (sourceOffset >= entry.sourceStart && sourceOffset <= entry.sourceEnd) {
         return { node: entry.node, offset: sourceOffset - entry.sourceStart };
       }
@@ -1719,41 +1711,41 @@
     CSS.highlights.clear();
 
     // Read annotation data from DOM element (updated by OOB swaps)
-    var dataEl = document.getElementById("ace-ann-data");
+    const dataEl = document.getElementById("ace-ann-data");
     if (!dataEl) return;
-    var annotations = JSON.parse(dataEl.dataset.annotations || "[]");
+    const annotations = JSON.parse(dataEl.dataset.annotations || "[]");
     if (!annotations.length) return;
 
-    var container = document.getElementById("text-panel");
+    const container = document.getElementById("text-panel");
     if (!container) return;
 
-    var textIndex = _buildTextIndex(container);
+    const textIndex = _buildTextIndex(container);
     if (!textIndex.length) return;
 
     // Group ranges by code_id
-    var groups = {};
-    for (var i = 0; i < annotations.length; i++) {
-      var ann = annotations[i];
-      var startPos = _findDOMPosition(textIndex, ann.start);
-      var endPos = _findDOMPosition(textIndex, ann.end);
+    const groups = {};
+    for (let i = 0; i < annotations.length; i++) {
+      const ann = annotations[i];
+      const startPos = _findDOMPosition(textIndex, ann.start);
+      const endPos = _findDOMPosition(textIndex, ann.end);
       if (!startPos || !endPos) continue;
 
       try {
-        var range = new Range();
+        const range = new Range();
         range.setStart(startPos.node, startPos.offset);
         range.setEnd(endPos.node, endPos.offset);
 
         // If the range ends at a sentence boundary, extend to cover
         // the trailing whitespace text node (bridges the gap between spans)
-        var endSentence = endPos.node.parentElement.closest(".ace-sentence");
+        const endSentence = endPos.node.parentElement.closest(".ace-sentence");
         if (endSentence && ann.end >= parseInt(endSentence.dataset.end, 10)) {
-          var next = endSentence.nextSibling;
+          const next = endSentence.nextSibling;
           if (next && next.nodeType === Node.TEXT_NODE) {
             range.setEndAfter(next);
           }
         }
 
-        var codeId = ann.code_id;
+        let codeId = ann.code_id;
         if (!groups[codeId]) groups[codeId] = [];
         groups[codeId].push(range);
       } catch (e) {
@@ -1762,13 +1754,13 @@
     }
 
     // Register highlights
-    for (var codeId in groups) {
+    for (let codeId in groups) {
       if (!groups.hasOwnProperty(codeId)) continue;
-      var highlight = new Highlight();
-      for (var j = 0; j < groups[codeId].length; j++) {
+      let highlight = new Highlight();
+      for (let j = 0; j < groups[codeId].length; j++) {
         highlight.add(groups[codeId][j]);
       }
-      CSS.highlights.set("ace-hl-" + codeId, highlight);
+      CSS.highlights.set(`ace-hl-${codeId}`, highlight);
     }
   }
 
@@ -1778,7 +1770,7 @@
 
   /** Push a message to the aria-live region for screen readers. */
   function _announce(message) {
-    var region = document.getElementById("ace-live-region");
+    const region = document.getElementById("ace-live-region");
     if (!region) return;
     region.textContent = message;
     setTimeout(function () { region.textContent = ""; }, 3000);
@@ -1788,34 +1780,34 @@
 
   /** Move focus to text panel. */
   function _focusTextPanel() {
-    var tp = document.getElementById("text-panel");
+    const tp = document.getElementById("text-panel");
     if (tp) tp.focus();
   }
 
   /** Move focus to search bar. */
   function _focusSearchBar() {
-    var sb = document.getElementById("code-search-input");
+    const sb = document.getElementById("code-search-input");
     if (sb) sb.focus();
   }
 
   /** Move focus into the code tree (last-focused item or first visible item). */
   function _focusCodeTree() {
-    var active = _getActiveTreeItem();
+    const active = _getActiveTreeItem();
     if (active && active.style.display !== "none") {
       active.focus();
     } else {
-      var items = _getTreeItems();
+      const items = _getTreeItems();
       if (items.length > 0) _focusTreeItem(items[0]);
     }
   }
 
   /** Determine which zone currently has focus: "text", "search", "tree", or null. */
   function _activeZone() {
-    var el = document.activeElement;
+    let el = document.activeElement;
     if (!el) return null;
     if (el.id === "text-panel" || el.closest("#text-panel")) return "text";
     if (el.id === "code-search-input") return "search";
-    var tree = document.getElementById("code-tree");
+    const tree = document.getElementById("code-tree");
     if (tree && tree.contains(el)) return "tree";
     return null;
   }
@@ -1824,7 +1816,7 @@
   document.addEventListener("keydown", function (e) {
     if (e.key !== "Tab") return;
 
-    var zone = _activeZone();
+    let zone = _activeZone();
     if (!zone) return;
 
     if (!e.shiftKey) {
@@ -1842,17 +1834,17 @@
 
   /** Return all visible treeitems (group headers + code rows) in DOM order. */
   function _getTreeItems() {
-    var tree = document.getElementById("code-tree");
+    const tree = document.getElementById("code-tree");
     if (!tree) return [];
-    var items = tree.querySelectorAll('[role="treeitem"]');
-    var result = [];
+    const items = tree.querySelectorAll('[role="treeitem"]');
+    const result = [];
     items.forEach(function (item) {
       // Skip items hidden by search filter
       if (item.style.display === "none") return;
       if (item.classList.contains("ace-code-row")) {
-        var groupContainer = item.closest('[role="group"]');
+        const groupContainer = item.closest('[role="group"]');
         if (groupContainer) {
-          var prev = groupContainer.previousElementSibling;
+          const prev = groupContainer.previousElementSibling;
           if (prev && prev.getAttribute("aria-expanded") === "false") return;
         }
       }
@@ -1864,7 +1856,7 @@
   /** Move roving tabindex to the given treeitem. */
   function _focusTreeItem(item) {
     if (!item) return;
-    var prev = _getActiveTreeItem();
+    const prev = _getActiveTreeItem();
     if (prev) prev.setAttribute("tabindex", "-1");
     item.setAttribute("tabindex", "0");
     item.focus();
@@ -1872,7 +1864,7 @@
 
   /** Get the currently focused treeitem (tabindex="0"). */
   function _getActiveTreeItem() {
-    var tree = document.getElementById("code-tree");
+    const tree = document.getElementById("code-tree");
     return tree ? tree.querySelector('[role="treeitem"][tabindex="0"]') : null;
   }
 
@@ -1883,18 +1875,18 @@
 
   /** Move a group (header + group div) up or down by one position. */
   function _moveGroupInDirection(header, direction) {
-    var groupDiv = header.nextElementSibling;
+    const groupDiv = header.nextElementSibling;
     if (!groupDiv || groupDiv.getAttribute("role") !== "group") return;
-    var tree = document.getElementById("code-tree");
+    const tree = document.getElementById("code-tree");
     if (!tree) return;
 
     if (direction === -1) {
       // Move up: find the previous group's header.
       // The element immediately before `header` is either a role="group" div
       // (from the previous group) or directly a group header (empty group).
-      var prevSibling = header.previousElementSibling;
+      const prevSibling = header.previousElementSibling;
       if (!prevSibling) return;
-      var prevHeader;
+      let prevHeader;
       if (prevSibling.getAttribute("role") === "group") {
         prevHeader = prevSibling.previousElementSibling;
       } else if (_isGroupHeader(prevSibling)) {
@@ -1909,13 +1901,13 @@
       tree.insertBefore(groupDiv, prevHeader);
     } else {
       // Move down: find the next group header + its group div.
-      var nextHeader = groupDiv.nextElementSibling;
+      const nextHeader = groupDiv.nextElementSibling;
       if (!nextHeader || !_isGroupHeader(nextHeader)) return;
-      var nextGroupDiv = nextHeader.nextElementSibling;
+      const nextGroupDiv = nextHeader.nextElementSibling;
       if (!nextGroupDiv || nextGroupDiv.getAttribute("role") !== "group") return;
       // Current order: header, groupDiv, nextHeader, nextGroupDiv
       // Target order:  nextHeader, nextGroupDiv, header, groupDiv
-      var ref = nextGroupDiv.nextElementSibling; // null → append at end
+      const ref = nextGroupDiv.nextElementSibling; // null → append at end
       tree.insertBefore(header, ref);
       tree.insertBefore(groupDiv, ref);
     }
@@ -1930,16 +1922,16 @@
   // --- Tree keydown handler ---
 
   document.addEventListener("keydown", function (e) {
-    var tree = document.getElementById("code-tree");
+    const tree = document.getElementById("code-tree");
     if (!tree || !tree.contains(document.activeElement)) return;
-    var active = document.activeElement;
+    const active = document.activeElement;
     if (!active || active.getAttribute("role") !== "treeitem") return;
     if (window.__aceExcerptListActive) return;
     if (active.querySelector('[contenteditable="true"]')) return;
 
-    var key = e.key;
-    var alt = e.altKey;
-    var shift = e.shiftKey;
+    const key = e.key;
+    const alt = e.altKey;
+    const shift = e.shiftKey;
 
     // Alt+Shift+↑ — Move code up (or group up if focused on group header)
     if (key === "ArrowUp" && alt && shift) {
@@ -1950,7 +1942,7 @@
         setTimeout(function () { active.classList.remove("ace-code-row--reordering"); }, 300);
       } else {
         _moveGroupInDirection(active, -1);
-        _announce("Group '" + (active.getAttribute("data-group") || "Ungrouped") + "' moved up");
+        _announce(`Group '${active.getAttribute("data-group") || "Ungrouped"}' moved up`);
       }
       return;
     }
@@ -1964,7 +1956,7 @@
         setTimeout(function () { active.classList.remove("ace-code-row--reordering"); }, 300);
       } else {
         _moveGroupInDirection(active, 1);
-        _announce("Group '" + (active.getAttribute("data-group") || "Ungrouped") + "' moved down");
+        _announce(`Group '${active.getAttribute("data-group") || "Ungrouped"}' moved down`);
       }
       return;
     }
@@ -1973,20 +1965,20 @@
     if (key === "ArrowRight" && alt && !shift) {
       e.preventDefault();
       if (_isGroupHeader(active)) return;
-      var codeId = active.getAttribute("data-code-id");
+      let codeId = active.getAttribute("data-code-id");
       if (!codeId) return;
 
       // Check if already in a group
-      var groupDiv = active.closest('[role="group"]');
+      const groupDiv = active.closest('[role="group"]');
       if (groupDiv) return; // Already in a group — one level only
 
       // Find nearest group header above
-      var el = active;
-      var targetGroup = null;
+      let el = active;
+      let targetGroup = null;
       while (el) {
         el = el.previousElementSibling;
         if (el && el.getAttribute("role") === "group") {
-          var hdr = el.previousElementSibling;
+          const hdr = el.previousElementSibling;
           if (hdr && _isGroupHeader(hdr)) {
             targetGroup = hdr.getAttribute("data-group");
             break;
@@ -2000,7 +1992,7 @@
 
       if (targetGroup !== null) {
         _moveToGroup(codeId, targetGroup);
-        _announce("'" + (active.querySelector(".ace-code-name") || {}).textContent + "' moved into " + (targetGroup || "Ungrouped"));
+        _announce(`'${(active.querySelector(".ace-code-name") || {}).textContent}' moved into ${targetGroup || "Ungrouped"}`);
       } else {
         // No group above — prompt for new group name
         _promptNewGroupForCode(active);
@@ -2012,14 +2004,14 @@
     if (key === "ArrowLeft" && alt && !shift) {
       e.preventDefault();
       if (_isGroupHeader(active)) return;
-      var codeId2 = active.getAttribute("data-code-id");
+      const codeId2 = active.getAttribute("data-code-id");
       if (!codeId2) return;
 
-      var groupDiv2 = active.closest('[role="group"]');
+      const groupDiv2 = active.closest('[role="group"]');
       if (!groupDiv2) return; // Already ungrouped
 
       _moveToGroup(codeId2, "");
-      _announce("'" + (active.querySelector(".ace-code-name") || {}).textContent + "' moved to ungrouped");
+      _announce(`'${(active.querySelector(".ace-code-name") || {}).textContent}' moved to ungrouped`);
       return;
     }
 
@@ -2027,7 +2019,7 @@
     if (key === "Enter" && !alt && !shift) {
       e.preventDefault();
       if (!_isGroupHeader(active)) {
-        var codeId3 = active.getAttribute("data-code-id");
+        const codeId3 = active.getAttribute("data-code-id");
         if (codeId3) {
           _clearSearchFilter();
           _applyCode(codeId3);
@@ -2043,7 +2035,7 @@
     if (key === "F2" && !alt && !shift) {
       e.preventDefault();
       if (!_isGroupHeader(active)) {
-        var codeId4 = active.getAttribute("data-code-id");
+        const codeId4 = active.getAttribute("data-code-id");
         if (codeId4) _startInlineRename(codeId4);
       }
       return;
@@ -2053,7 +2045,7 @@
     if ((key === "Delete" || key === "Backspace") && !alt && !shift) {
       e.preventDefault();
       if (!_isGroupHeader(active)) {
-        var codeId5 = active.getAttribute("data-code-id");
+        const codeId5 = active.getAttribute("data-code-id");
         if (!codeId5) return;
         if (_deleteTarget === codeId5) {
           _executeDelete(codeId5);
@@ -2064,8 +2056,8 @@
       return;
     }
 
-    var items = _getTreeItems();
-    var idx = items.indexOf(active);
+    const items = _getTreeItems();
+    const idx = items.indexOf(active);
 
     // ↓ — Next visible treeitem
     if (key === "ArrowDown" && !alt && !shift) {
@@ -2088,9 +2080,9 @@
         if (active.getAttribute("aria-expanded") === "false") {
           _expandGroup(active);
         } else {
-          var groupDiv3 = active.nextElementSibling;
+          const groupDiv3 = active.nextElementSibling;
           if (groupDiv3 && groupDiv3.getAttribute("role") === "group") {
-            var firstChild = groupDiv3.querySelector('[role="treeitem"]');
+            const firstChild = groupDiv3.querySelector('[role="treeitem"]');
             if (firstChild) _focusTreeItem(firstChild);
           }
         }
@@ -2106,9 +2098,9 @@
           _collapseGroup(active);
         }
       } else {
-        var groupEl = active.closest('[role="group"]');
+        const groupEl = active.closest('[role="group"]');
         if (groupEl) {
-          var header2 = groupEl.previousElementSibling;
+          const header2 = groupEl.previousElementSibling;
           if (header2 && _isGroupHeader(header2)) _focusTreeItem(header2);
         }
       }
@@ -2141,7 +2133,7 @@
   // --- Group expand / collapse ---
 
   function _promptNewGroupForCode(codeRow) {
-    var input = document.createElement("input");
+    const input = document.createElement("input");
     input.type = "text";
     input.placeholder = "Group name\u2026";
     input.className = "ace-sidebar-search";
@@ -2160,12 +2152,12 @@
     input.addEventListener("keydown", function (ev) {
       if (ev.key === "Enter") {
         ev.preventDefault();
-        var name = input.value.trim();
+        let name = input.value.trim();
         if (name) {
-          var codeId = codeRow.getAttribute("data-code-id");
-          var els = _makeGroupElements(name);
-          var header = els.header;
-          var groupDiv = els.groupDiv;
+          let codeId = codeRow.getAttribute("data-code-id");
+          const els = _makeGroupElements(name);
+          const header = els.header;
+          const groupDiv = els.groupDiv;
 
           input.remove();
           codeRow.parentNode.insertBefore(header, codeRow);
@@ -2174,7 +2166,7 @@
 
           _moveToGroup(codeId, name);
           _initSortable();
-          _announce("Group '" + name + "' created with code inside");
+          _announce(`Group '${name}' created with code inside`);
         } else {
           cleanup();
         }
@@ -2192,15 +2184,15 @@
 
   function _expandGroup(header) {
     header.setAttribute("aria-expanded", "true");
-    var groupName = header.getAttribute("data-group");
-    header.textContent = "\u25be " + (groupName || "Ungrouped");
+    let groupName = header.getAttribute("data-group");
+    header.textContent = `\u25be ${groupName || "Ungrouped"}`;
     _collapsedGroups[groupName] = false;
   }
 
   function _collapseGroup(header) {
     header.setAttribute("aria-expanded", "false");
-    var groupName = header.getAttribute("data-group");
-    header.textContent = "\u25b8 " + (groupName || "Ungrouped");
+    let groupName = header.getAttribute("data-group");
+    header.textContent = `\u25b8 ${groupName || "Ungrouped"}`;
     _collapsedGroups[groupName] = true;
   }
 
@@ -2210,7 +2202,7 @@
 
   // Codebook menu: toggle, import, export
   document.addEventListener("click", function (e) {
-    var dropdown = document.getElementById("codebook-dropdown");
+    const dropdown = document.getElementById("codebook-dropdown");
 
     // Import button
     if (e.target.closest("#codebook-menu-import-btn")) {
@@ -2255,7 +2247,7 @@
   // Codebook menu: Escape closes dropdown
   document.addEventListener("keydown", function (e) {
     if (e.key === "Escape") {
-      var dropdown = document.getElementById("codebook-dropdown");
+      const dropdown = document.getElementById("codebook-dropdown");
       if (dropdown && dropdown.style.display !== "none") {
         dropdown.style.display = "none";
         e.stopPropagation();
@@ -2265,9 +2257,9 @@
 
   // Import codes from preview dialog
   window.aceImportFromPreview = function (btn) {
-    var codesJson = btn.getAttribute("data-codes");
-    var currentIndex = btn.getAttribute("data-current-index") || window.__aceCurrentIndex;
-    var dialog = btn.closest("dialog");
+    const codesJson = btn.getAttribute("data-codes");
+    const currentIndex = btn.getAttribute("data-current-index") || window.__aceCurrentIndex;
+    const dialog = btn.closest("dialog");
     if (dialog) dialog.close();
 
     htmx.ajax("POST", "/api/codes/import", {
@@ -2282,13 +2274,13 @@
    * ================================================================ */
 
   document.addEventListener("click", function (e) {
-    var btn = e.target.closest(".ace-role-btn");
+    const btn = e.target.closest(".ace-role-btn");
     if (!btn) return;
-    var form = btn.closest("#import-form");
+    const form = btn.closest("#import-form");
     if (!form) return;
-    var row = btn.closest(".ace-glimpse-row");
-    var role = btn.dataset.role;
-    var wasActive = btn.classList.contains("active");
+    let row = btn.closest(".ace-glimpse-row");
+    let role = btn.dataset.role;
+    const wasActive = btn.classList.contains("active");
 
     if (role === "id") {
       // Radio: clear all other IDs
@@ -2297,11 +2289,11 @@
         b.closest(".ace-glimpse-row").dataset.role = b.closest(".ace-glimpse-row").querySelector('.ace-role-btn[data-role="text"].active') ? "text" : "";
       });
       // Clear text on this row if setting ID
-      var textBtn = row.querySelector('.ace-role-btn[data-role="text"]');
+      const textBtn = row.querySelector('.ace-role-btn[data-role="text"]');
       if (textBtn) { textBtn.classList.remove("active"); }
     } else {
       // Clear ID on this row if setting text
-      var idBtn = row.querySelector('.ace-role-btn[data-role="id"]');
+      const idBtn = row.querySelector('.ace-role-btn[data-role="id"]');
       if (idBtn) { idBtn.classList.remove("active"); }
     }
 
@@ -2314,10 +2306,10 @@
     }
 
     // Update hidden inputs
-    var idRow = form.querySelector('.ace-role-btn[data-role="id"].active');
+    const idRow = form.querySelector('.ace-role-btn[data-role="id"].active');
     document.getElementById("import-id-col").value = idRow ? idRow.closest(".ace-glimpse-row").dataset.col : "";
 
-    var textCols = [];
+    const textCols = [];
     form.querySelectorAll('.ace-role-btn[data-role="text"].active').forEach(function (b) {
       textCols.push(b.closest(".ace-glimpse-row").dataset.col);
     });
@@ -2339,13 +2331,13 @@
     _paintHighlights();
 
     // Set initial roving tabindex — first treeitem gets tabindex="0"
-    var items = _getTreeItems();
+    const items = _getTreeItems();
     if (items.length > 0) {
       items[0].setAttribute("tabindex", "0");
     }
 
     // Auto-focus first sentence so keyboard works immediately
-    var sentences = _getSentences();
+    const sentences = _getSentences();
     if (sentences.length > 0) {
       _focusSentence(0);
     }
