@@ -89,6 +89,25 @@ def update_code(
     conn.commit()
 
 
+def rename_group(
+    conn: sqlite3.Connection,
+    old_name: str,
+    new_name: str,
+) -> int:
+    """Rename a group by updating group_name on all codes in that group.
+
+    Returns the number of codes affected.
+    """
+    new_val = new_name.strip() if new_name.strip() else None
+    old_val = old_name if old_name else None
+    cur = conn.execute(
+        "UPDATE codebook_code SET group_name = ? WHERE group_name IS ?",
+        (new_val, old_val),
+    )
+    conn.commit()
+    return cur.rowcount
+
+
 def reorder_codes(conn: sqlite3.Connection, code_ids: list[str]) -> None:
     for i, code_id in enumerate(code_ids):
         conn.execute(

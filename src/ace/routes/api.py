@@ -1431,6 +1431,33 @@ async def import_codebook(
 # ---------------------------------------------------------------------------
 
 
+@router.put("/codes/rename-group")
+async def rename_group_route(
+    request: Request,
+    old_name: str = Form(...),
+    new_name: str = Form(...),
+    current_index: int = Form(default=0),
+):
+    """Rename a code group and return updated sidebar + text panel."""
+    from ace.models.codebook import rename_group
+
+    coder_id = _require_coder_id(request)
+    if coder_id is None:
+        return HTMLResponse("", status_code=400)
+
+    new_name = new_name.strip()
+    if not new_name:
+        return _oob_toast("Group name cannot be empty.")
+
+    conn = _open_project_db(request)
+    try:
+        rename_group(conn, old_name, new_name)
+        content = _render_sidebar_and_text(request, conn, coder_id, current_index)
+        return HTMLResponse(content)
+    finally:
+        conn.close()
+
+
 @router.put("/codes/{code_id}")
 async def update_code_route(
     request: Request,

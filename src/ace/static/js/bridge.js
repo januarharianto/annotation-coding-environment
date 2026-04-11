@@ -112,16 +112,36 @@
     });
   }
 
-  // Click handler for group headers
+  // Click handler for group headers — toggle only on the triangle
   document.addEventListener("click", function (e) {
+    const toggle = e.target.closest(".ace-group-toggle");
+    if (toggle) {
+      const header = toggle.closest(".ace-code-group-header");
+      if (header) {
+        _focusTreeItem(header);
+        _toggleGroupCollapse(header);
+        const groupName = header.getAttribute("data-group") || "Ungrouped";
+        const expanded = header.getAttribute("aria-expanded") === "true";
+        _announce(`Group ${groupName}${expanded ? " expanded" : " collapsed"}`);
+      }
+      return;
+    }
+    // Click on the label or header (not toggle) — just focus
     const header = e.target.closest(".ace-code-group-header");
     if (header && !e.target.closest(".ace-code-menu")) {
       _focusTreeItem(header);
-      _toggleGroupCollapse(header);
-      let groupName = header.getAttribute("data-group") || "Ungrouped";
-      const expanded = header.getAttribute("aria-expanded") === "true";
-      _announce(`Group ${groupName}${expanded ? " expanded" : " collapsed"}`);
     }
+  });
+
+  // Double-click on group label — inline rename
+  document.addEventListener("dblclick", function (e) {
+    const label = e.target.closest(".ace-group-label");
+    if (!label) return;
+    const header = label.closest(".ace-code-group-header");
+    if (!header) return;
+    const groupName = header.getAttribute("data-group");
+    if (groupName === "") return; // Can't rename "Ungrouped"
+    _startGroupRename(header);
   });
 
   // Sidebar: ? help button (delegated — survives OOB swaps)
@@ -1056,6 +1076,55 @@
     });
   }
 
+  function _startGroupRename(header) {
+    const label = header.querySelector(".ace-group-label");
+    if (!label) return;
+    const original = label.textContent;
+    const oldGroup = header.getAttribute("data-group");
+
+    label.contentEditable = "true";
+    label.focus();
+
+    const range = document.createRange();
+    range.selectNodeContents(label);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+
+    let done = false;
+    function save() {
+      if (done) return;
+      done = true;
+      const newName = label.textContent.trim();
+      label.contentEditable = "false";
+      if (!newName || newName === original) {
+        label.textContent = original;
+        _focusTreeItem(header);
+        return;
+      }
+      _codeAction("PUT", "/api/codes/rename-group",
+        `old_name=${encodeURIComponent(oldGroup)}&new_name=${encodeURIComponent(newName)}&current_index=${window.__aceCurrentIndex}`
+      ).catch(function () { label.textContent = original; });
+      _focusTreeItem(header);
+    }
+
+    label.addEventListener("keydown", function handler(e) {
+      if (e.key === "Enter") { e.preventDefault(); label.removeEventListener("keydown", handler); save(); }
+      if (e.key === "Escape") { e.preventDefault(); label.removeEventListener("keydown", handler); done = true; label.textContent = original; label.contentEditable = "false"; _focusTreeItem(header); }
+    });
+
+    label.addEventListener("blur", function blurHandler() {
+      label.removeEventListener("blur", blurHandler);
+      setTimeout(function () { save(); }, 50);
+    });
+
+    label.addEventListener("paste", function pasteHandler(e) {
+      e.preventDefault();
+      const text = (e.clipboardData || window.clipboardData).getData("text/plain");
+      document.execCommand("insertText", false, text.replace(/\n/g, " "));
+    });
+  }
+
   document.addEventListener("dblclick", function (e) {
     const nameEl = e.target.closest(".ace-code-name");
     if (!nameEl) return;
@@ -1644,7 +1713,15 @@
     header.className = "ace-code-group-header";
     header.setAttribute("data-group", name);
     header.setAttribute("tabindex", "-1");
-    header.textContent = `\u25be ${name}`;
+    const toggle = document.createElement("span");
+    toggle.className = "ace-group-toggle";
+    toggle.innerHTML = _chevronDown;
+    const label = document.createElement("span");
+    label.className = "ace-group-label";
+    label.textContent = name;
+    header.appendChild(toggle);
+    header.append(" ");
+    header.appendChild(label);
 
     const groupDiv = document.createElement("div");
     groupDiv.setAttribute("role", "group");
@@ -2034,7 +2111,10 @@
     // F2 — Inline rename
     if (key === "F2" && !alt && !shift) {
       e.preventDefault();
-      if (!_isGroupHeader(active)) {
+      if (_isGroupHeader(active)) {
+        const groupName = active.getAttribute("data-group");
+        if (groupName !== "") _startGroupRename(active);
+      } else {
         const codeId4 = active.getAttribute("data-code-id");
         if (codeId4) _startInlineRename(codeId4);
       }
@@ -2182,17 +2262,22 @@
     });
   }
 
+  const _chevronDown = '<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5l4 4 4-4"/></svg>';
+  const _chevronRight = '<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3l4 4-4 4"/></svg>';
+
   function _expandGroup(header) {
     header.setAttribute("aria-expanded", "true");
-    let groupName = header.getAttribute("data-group");
-    header.textContent = `\u25be ${groupName || "Ungrouped"}`;
+    const toggle = header.querySelector(".ace-group-toggle");
+    if (toggle) toggle.innerHTML = _chevronDown;
+    const groupName = header.getAttribute("data-group");
     _collapsedGroups[groupName] = false;
   }
 
   function _collapseGroup(header) {
     header.setAttribute("aria-expanded", "false");
-    let groupName = header.getAttribute("data-group");
-    header.textContent = `\u25b8 ${groupName || "Ungrouped"}`;
+    const toggle = header.querySelector(".ace-group-toggle");
+    if (toggle) toggle.innerHTML = _chevronRight;
+    const groupName = header.getAttribute("data-group");
     _collapsedGroups[groupName] = true;
   }
 

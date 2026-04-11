@@ -184,11 +184,30 @@
 
 .ace-code-group-header {
   padding: 3px 8px;
-  font-size: var(--ace-font-size-2xs);
+  font-size: var(--ace-font-size-sm);
   color: var(--ace-text-muted);
-  cursor: pointer;
-  letter-spacing: 0.3px;
+  cursor: default;
   user-select: none;
+}
+
+.ace-group-toggle {
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  vertical-align: middle;
+  color: var(--ace-text-muted);
+  transition: color var(--ace-transition);
+}
+
+.ace-group-toggle:hover {
+  color: var(--ace-text);
+}
+
+.ace-group-label {
+  cursor: default;
 }
 
 /* Collapsed group: hide the role="group" sibling's children */

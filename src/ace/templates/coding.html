@@ -81,7 +81,7 @@
         {% for group_name, group_codes in grouped_codes %}
         <div role="treeitem" aria-expanded="true" aria-level="1"
              class="ace-code-group-header" data-group="{{ group_name }}"
-             tabindex="-1">&#9662; {{ group_name }}</div>
+             tabindex="-1"><span class="ace-group-toggle"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5l4 4 4-4"/></svg></span> <span class="ace-group-label">{{ group_name }}</span></div>
         <div role="group">
           {% for code in group_codes %}
           <div role="treeitem" aria-level="2"
@@ -97,7 +97,7 @@
         {% if ungrouped_codes %}
         <div role="treeitem" aria-expanded="true" aria-level="1"
              class="ace-code-group-header" data-group=""
-             tabindex="-1">&#9662; Ungrouped</div>
+             tabindex="-1"><span class="ace-group-toggle"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5l4 4 4-4"/></svg></span> <span class="ace-group-label">Ungrouped</span></div>
         <div role="group">
           {% for code in ungrouped_codes %}
           <div role="treeitem" aria-level="2"
