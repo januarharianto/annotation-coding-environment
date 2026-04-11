@@ -14,7 +14,6 @@ from typing import Annotated
 
 import uvicorn
 from fastapi import Depends, FastAPI, Request, Response
-from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from jinja2_fragments.fastapi import Jinja2Blocks
 from starlette.middleware.sessions import SessionMiddleware
