@@ -169,14 +169,13 @@ def test_coding_page_includes_idiomorph(client_with_sources):
 
 
 def test_sidebar_has_brand_and_nav_has_source(client_with_sources):
-    """Sidebar shows ACE brand, nav shows source ID and flag button."""
+    """Sidebar shows ACE brand, nav shows flag button."""
     client, _ = client_with_sources
     resp = client.get("/code")
     assert resp.status_code == 200
     html = resp.text
     assert "ace-sidebar-brand" in html
     assert "ACE" in html
-    assert "S001" in html
     assert 'aria-label="Toggle flag"' in html
 
 

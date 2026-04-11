@@ -57,20 +57,11 @@
 
 .ace-sidebar-help-btn:hover { color: var(--ace-text); }
 
-/* ---- Nav source + flag ---- */
+/* ---- Flag row ---- */
 
-.ace-nav-sep {
-  color: var(--ace-border);
-  margin: 0 var(--ace-space-1);
-}
-
-.ace-nav-source {
-  font-size: var(--ace-font-size-sm);
-  color: var(--ace-text-muted);
-  max-width: 20ch;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.ace-flag-row {
+  text-align: center;
+  padding: var(--ace-space-1) 0 var(--ace-space-2);
 }
 
 .ace-nav-cluster {
@@ -137,7 +128,7 @@
 
 .ace-flag-icon {
   color: var(--ace-text-muted);
-  font-size: var(--ace-font-size-sm);
+  font-size: var(--ace-font-size-base);
 }
 
 .ace-flag-btn:hover .ace-flag-icon { color: var(--ace-text); }
@@ -150,9 +141,9 @@
   color: #bf360c;
   border: 1px solid rgba(191, 54, 12, 0.25);
   border-radius: var(--ace-radius);
-  font-size: var(--ace-font-size-2xs);
+  font-size: var(--ace-font-size-sm);
   font-weight: 600;
-  padding: 1px 6px;
+  padding: 2px 8px;
 }
 
 .ace-flag-btn:hover .ace-flag-chip { background: rgba(191, 54, 12, 0.16); }
