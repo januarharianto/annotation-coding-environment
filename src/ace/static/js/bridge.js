@@ -2323,6 +2323,13 @@
       return;
     }
 
+    // Fullscreen toggle button
+    if (e.target.closest("#fullscreen-btn")) {
+      if (dropdown) dropdown.style.display = "none";
+      _toggleFullscreen();
+      return;
+    }
+
     // Toggle button
     if (e.target.closest("#codebook-menu-btn")) {
       if (dropdown) dropdown.style.display = dropdown.style.display === "none" ? "" : "none";
@@ -2344,6 +2351,31 @@
         dropdown.style.display = "none";
         e.stopPropagation();
       }
+    }
+  });
+
+  // Fullscreen toggle
+  function _toggleFullscreen() {
+    if (document.fullscreenElement) {
+      document.exitFullscreen();
+    } else {
+      document.documentElement.requestFullscreen().catch(function (err) {
+        window.aceToast(`Fullscreen failed: ${err.message}`);
+      });
+    }
+  }
+
+  // Update menu item label when fullscreen state changes
+  document.addEventListener("fullscreenchange", function () {
+    const btn = document.getElementById("fullscreen-btn");
+    if (btn) btn.textContent = document.fullscreenElement ? "Exit fullscreen" : "Fullscreen";
+  });
+
+  // Cmd/Ctrl+Shift+F — toggle fullscreen
+  document.addEventListener("keydown", function (e) {
+    if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === "F" || e.key === "f")) {
+      e.preventDefault();
+      _toggleFullscreen();
     }
   });
 
