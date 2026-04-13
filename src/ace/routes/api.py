@@ -24,6 +24,17 @@ def _require_coder_id(request: Request) -> str | None:
     return getattr(request.app.state, "coder_id", None)
 
 
+def _safe_filename(name: str) -> str:
+    """Sanitise a string for use in HTTP Content-Disposition filename.
+
+    HTTP header values are ASCII/latin-1 only, and the filename attribute
+    is vulnerable to header injection via CR/LF and parsing ambiguity from
+    quotes/semicolons/backslashes. Collapses everything except alphanum,
+    dot, dash, underscore, and space into underscores.
+    """
+    return re.sub(r"[^A-Za-z0-9._\- ]", "_", name)
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -610,16 +621,16 @@ async def export_annotations(request: Request):
 
     try:
         project = get_project(conn)
-        tmp = tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False)
+        tmp = tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False, encoding="utf-8")
         tmp.close()
         count = export_annotations_csv(conn, tmp.name)
-        content = Path(tmp.name).read_text()
+        content = Path(tmp.name).read_text(encoding="utf-8")
         Path(tmp.name).unlink(missing_ok=True)
     finally:
         conn.close()
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M")
-    filename = f"{project['name']}_annotations_{timestamp}.csv"
+    filename = _safe_filename(f"{project['name']}_annotations_{timestamp}.csv")
 
     return Response(
         content=content,
@@ -990,6 +1001,117 @@ async def flag_route(
         return response
     finally:
         conn.close()
+
+
+# ---------------------------------------------------------------------------
+# Source note routes
+# ---------------------------------------------------------------------------
+
+
+@router.get("/source-note/{source_id}")
+async def get_source_note(request: Request, source_id: str):
+    """Return the current coder's note text for this source (empty if none)."""
+    from ace.models.source_note import get_note
+
+    coder_id = _require_coder_id(request)
+    if coder_id is None:
+        return JSONResponse({"error": "no coder"}, status_code=400)
+
+    conn = _open_project_db(request)
+    try:
+        row = conn.execute("SELECT id FROM source WHERE id = ?", (source_id,)).fetchone()
+        if row is None:
+            return JSONResponse({"error": "source not found"}, status_code=404)
+        text = get_note(conn, source_id, coder_id) or ""
+        return JSONResponse({"note_text": text})
+    finally:
+        conn.close()
+
+
+@router.put("/source-note/{source_id}")
+async def put_source_note(
+    request: Request,
+    source_id: str,
+    note_text: str = Form(default=""),
+):
+    """Upsert (or delete via empty text) the current coder's note for a source.
+
+    Returns the same full OOB refresh payload as flag_route so the pill state,
+    grid amber strip, and status badge update in a single swap. Promotes a
+    pending source to in_progress when the first non-empty note is saved
+    (Decision 15). Does not set the X-ACE-Toast header (Decision 14).
+    """
+    from ace.models.assignment import get_assignments_for_coder, update_assignment_status
+    from ace.models.source_note import upsert_note
+
+    coder_id = _require_coder_id(request)
+    if coder_id is None:
+        return HTMLResponse("", status_code=400)
+
+    conn = _open_project_db(request)
+    try:
+        # Find the assignment index so we can re-render with the same source focused
+        assignments = get_assignments_for_coder(conn, coder_id)
+        source_index = None
+        current_status = None
+        for i, a in enumerate(assignments):
+            if a["source_id"] == source_id:
+                source_index = i
+                current_status = a["status"]
+                break
+        if source_index is None:
+            return HTMLResponse("", status_code=404)
+
+        upsert_note(conn, source_id, coder_id, note_text)
+
+        # Status promotion (Decision 15): only on first non-empty save
+        if note_text.strip() and current_status == "pending":
+            update_assignment_status(conn, source_id, coder_id, "in_progress")
+
+        content = _render_full_coding_oob(request, conn, coder_id, source_index)
+        return HTMLResponse(content)
+    finally:
+        conn.close()
+
+
+@router.get("/export/notes")
+async def export_notes_route(request: Request):
+    """Export all source notes for the current coder as a CSV download."""
+    from datetime import datetime
+
+    from ace.models.project import get_project
+    from ace.services.notes_exporter import export_notes_csv
+
+    coder_id = _require_coder_id(request)
+    if coder_id is None:
+        return HTMLResponse("No coder", status_code=400)
+
+    project_path = getattr(request.app.state, "project_path", None)
+    if not project_path:
+        return HTMLResponse("No project open", status_code=400)
+
+    conn = sqlite3.connect(project_path, check_same_thread=False)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys = ON")
+
+    try:
+        project = get_project(conn)
+        tmp = tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False, encoding="utf-8")
+        tmp.close()
+        export_notes_csv(conn, coder_id, tmp.name)
+        content = Path(tmp.name).read_text(encoding="utf-8")
+        Path(tmp.name).unlink(missing_ok=True)
+    finally:
+        conn.close()
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M")
+    filename = _safe_filename(f"{project['name']}_notes_{timestamp}.csv")
+
+    return Response(
+        content=content,
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.post("/code/apply-sentence")

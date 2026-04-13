@@ -75,6 +75,12 @@ def test_coding_page_renders(client_with_sources):
     assert "code-sidebar" in resp.text
     assert "text-panel" in resp.text
     assert "hint-bar" in resp.text
+    # Source notes UI (Task R1 — drawer pattern)
+    assert 'id="note-pill"' in resp.text
+    assert 'id="note-drawer"' in resp.text
+    assert 'id="note-textarea"' in resp.text
+    assert 'id="note-rail"' in resp.text
+    assert 'role="complementary"' in resp.text
 
 
 def test_coding_page_redirects_without_project():
@@ -494,3 +500,48 @@ def test_excerpts_endpoint_empty(client_with_codes):
     resp = client.get(f"/api/code/{code_a}/excerpts")
     assert resp.status_code == 200
     assert "No text has been coded" in resp.text
+
+
+def test_coding_context_includes_note_state(client_with_codes):
+    """_coding_context exposes note text, has_note flag, and notes presence set."""
+    import sqlite3
+    from ace.models.assignment import get_assignments_for_coder
+    from ace.models.source_note import upsert_note
+    from ace.routes.pages import _coding_context
+
+    client, coder_id, code_a, code_b, db_path = client_with_codes
+
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys = ON")
+    try:
+        assignments = get_assignments_for_coder(conn, coder_id)
+        s1 = assignments[0]["source_id"]
+        s2 = assignments[1]["source_id"]
+
+        # No notes initially
+        ctx0 = _coding_context(conn, coder_id, 0)
+        assert ctx0["current_note_text"] == ""
+        assert ctx0["has_note"] is False
+        assert ctx0["source_ids_with_notes"] == set()
+
+        # Add a note on source 1, view source 1
+        upsert_note(conn, s1, coder_id, "Hello note")
+        ctx1 = _coding_context(conn, coder_id, 0)
+        assert ctx1["current_note_text"] == "Hello note"
+        assert ctx1["has_note"] is True
+        assert ctx1["source_ids_with_notes"] == {s1}
+
+        # View source 2 — different has_note state, same presence set
+        ctx2 = _coding_context(conn, coder_id, 1)
+        assert ctx2["current_note_text"] == ""
+        assert ctx2["has_note"] is False
+        assert ctx2["source_ids_with_notes"] == {s1}
+
+        # Add a second note
+        upsert_note(conn, s2, coder_id, "Another")
+        ctx3 = _coding_context(conn, coder_id, 1)
+        assert ctx3["has_note"] is True
+        assert ctx3["source_ids_with_notes"] == {s1, s2}
+    finally:
+        conn.close()

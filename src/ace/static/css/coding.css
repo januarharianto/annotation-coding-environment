@@ -59,7 +59,10 @@
 /* ---- Flag row ---- */
 
 .ace-flag-row {
-  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--ace-space-2);
   padding: var(--ace-space-1) 0 var(--ace-space-2);
 }
 
@@ -851,3 +854,238 @@ dialog::backdrop {
 }
 
 /* ---- Touch fallback ---- */
+
+/* ================================================================
+ * Source notes (Task 4)
+ * ================================================================ */
+
+:root {
+  --ace-note-bg: #fffef5;
+  --ace-note-border: #e6e2c8;
+  --ace-note-accent: #d4a017;
+}
+
+.ace-note-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border: 1px solid var(--ace-border);
+  border-radius: 3px;
+  background: #ffffff;
+  color: #555;
+  font-size: 11px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: var(--ace-transition);
+}
+
+.ace-note-pill:hover {
+  border-color: var(--ace-note-border);
+}
+
+.ace-note-pill--has-note {
+  background: var(--ace-note-bg);
+  border-color: var(--ace-note-border);
+  color: #212121;
+}
+
+.ace-note-icon {
+  font-size: 12px;
+  line-height: 1;
+}
+
+/* ---- Note drawer (right-edge overlay) ---- */
+
+.ace-note-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 360px;
+  max-width: 100vw;
+  background: var(--ace-note-bg);
+  border-left: 1px solid var(--ace-note-border);
+  box-shadow: -4px 0 16px rgba(0, 0, 0, 0.06);
+  display: flex;
+  flex-direction: column;
+  transform: translateX(100%);
+  visibility: hidden;
+  transition: transform 180ms cubic-bezier(0.2, 0, 0, 1), visibility 0s linear 180ms;
+  z-index: 50;
+  contain: layout paint;
+}
+
+html[data-ace-note-open="1"] .ace-note-drawer {
+  transform: translateX(0);
+  visibility: visible;
+  transition: transform 180ms cubic-bezier(0.2, 0, 0, 1), visibility 0s;
+}
+
+body:has(#note-textarea:focus) .ace-note-drawer {
+  box-shadow: -4px 0 16px rgba(212, 160, 23, 0.28), inset 0 0 0 2px var(--ace-note-accent);
+}
+
+body:has(#note-textarea:focus) #text-panel {
+  opacity: 0.55;
+  transition: opacity 180ms;
+}
+
+.ace-note-drawer-header {
+  display: flex;
+  align-items: baseline;
+  gap: var(--ace-space-2);
+  padding: var(--ace-space-2) var(--ace-space-4);
+  border-bottom: 1px solid var(--ace-note-border);
+  flex-shrink: 0;
+}
+
+.ace-note-drawer #note-drawer-title {
+  margin: 0;
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #888;
+  flex-shrink: 0;
+}
+
+.ace-note-mode-indicator {
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+html[data-ace-note-open="1"] .ace-note-mode-indicator::before {
+  content: "Viewing · press N to edit";
+  background: #e3f2fd;
+  color: #1976d2;
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+
+body:has(#note-textarea:focus) .ace-note-mode-indicator::before {
+  content: "Editing · Esc to stop";
+  background: #fff3e0;
+  color: #e65100;
+}
+
+.ace-note-drawer-status {
+  font-size: 9px;
+  color: #888;
+  font-style: normal;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+/* READ mode: subtle cue that the textarea isn't active yet */
+html[data-ace-note-open="1"] .ace-note-drawer .ace-note-textarea {
+  background: transparent;
+  caret-color: transparent;
+}
+
+body:has(#note-textarea:focus) .ace-note-drawer .ace-note-textarea {
+  background: #ffffff;
+  caret-color: var(--ace-text, #212121);
+}
+
+.ace-note-drawer .ace-note-textarea {
+  flex: 1;
+  width: 100%;
+  padding: var(--ace-space-3) var(--ace-space-4);
+  margin: 0;
+  background: transparent;
+  border: none;
+  outline: none;
+  resize: none;
+  font-family: inherit;
+  font-size: var(--ace-font-size-sm, 13px);
+  line-height: 1.6;
+  color: var(--ace-text, #212121);
+}
+
+.ace-note-drawer .ace-note-textarea:focus {
+  outline: none;  /* amber ring is drawn on the parent .ace-note-drawer via .editing */
+}
+
+/* ---- Note rail (persistent right-edge affordance) ---- */
+
+.ace-note-rail {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 8px;
+  padding: 0;
+  border: none;
+  border-left: 1px solid #e6e2c8;
+  background: linear-gradient(
+    to bottom,
+    transparent 0%,
+    #fdf6d8 15%,
+    #fdf6d8 85%,
+    transparent 100%
+  );
+  cursor: pointer;
+  z-index: 40;
+  transition: width 150ms ease;
+}
+
+.ace-note-rail:hover {
+  width: 14px;
+}
+
+.ace-note-rail:focus-visible {
+  outline: 2px solid var(--ace-note-accent);
+  outline-offset: -2px;
+}
+
+.ace-note-rail-dot {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: transparent;
+  transition: background 150ms;
+}
+
+html[data-ace-has-note="1"] .ace-note-rail-dot {
+  background: var(--ace-note-accent);
+}
+
+/* Hide rail when drawer is open (drawer covers the right edge) */
+html[data-ace-note-open="1"] .ace-note-rail {
+  display: none;
+}
+
+/* ---- Reduced motion ---- */
+@media (prefers-reduced-motion: reduce) {
+  .ace-note-drawer {
+    transition: transform 0.01ms, visibility 0s;
+  }
+  body:has(#note-textarea:focus) #text-panel {
+    transition: none;
+  }
+  .ace-note-rail {
+    transition: none;
+  }
+}
+
+/* Grid amber bottom strip — composes with outlines because it lives
+ * inside the cell edge via inset box-shadow. Two-pixel strip. */
+.ace-grid-cell--has-note {
+  box-shadow: inset 0 -2px 0 var(--ace-note-accent);
+}
+.ace-grid-cell--active.ace-grid-cell--has-note {
+  box-shadow: inset 0 -2px 0 var(--ace-note-accent);
+}
+.ace-grid-cell--active.ace-grid-cell--flagged.ace-grid-cell--has-note {
+  box-shadow: inset 0 0 0 1px #d84315, inset 0 -2px 0 var(--ace-note-accent);
+}

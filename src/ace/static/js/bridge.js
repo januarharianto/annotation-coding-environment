@@ -80,6 +80,9 @@
   function _restoreFocus() {
     // Delay until after HTMX settling completes (outerHTML swap replaces DOM)
     requestAnimationFrame(function () {
+      // Don't steal focus from the note drawer textarea during autosave —
+      // the save response swaps #text-panel but the textarea lives outside it.
+      if (document.activeElement && document.activeElement.id === "note-textarea") return;
       const idx = window.__aceFocusIndex;
       if (idx >= 0) _focusSentence(idx);
       _focusTextPanel();
@@ -188,9 +191,10 @@
     });
   }
 
+  // Reserved letters: q (repeat), x (delete), z (undo), n (open note panel)
   const _KEYCAP_LABELS = [
     "1","2","3","4","5","6","7","8","9","0",
-    "a","b","c","d","e","f","g","h","i","j","k","l","m","n","o","p",
+    "a","b","c","d","e","f","g","h","i","j","k","l","m","o","p",
     "r","s","t","u","v","w","y"
   ];
 
@@ -403,6 +407,17 @@
       return;
     }
 
+    // N — open note drawer (read mode) or enter edit mode if already open
+    if ((key === "n" || key === "N") && !shift) {
+      e.preventDefault();
+      if (!_isDrawerOpen()) {
+        aceOpenNoteRead();
+      } else {
+        aceEnterEditMode();
+      }
+      return;
+    }
+
     // ? — Toggle cheat sheet
     if (key === "?" || (shift && key === "/")) {
       e.preventDefault();
@@ -468,8 +483,13 @@
    * 7. Navigation
    * ================================================================ */
 
-  window.aceNavigate = function (index) {
+  window.aceNavigate = async function (index) {
     if (!Number.isFinite(index) || index < 0 || index >= window.__aceTotalSources) return;
+    // Flush any pending or in-flight note save before tearing down the page.
+    // Without this, debounced saves get cancelled by the navigation.
+    if (typeof aceFlushNoteIfDirty === "function") {
+      try { await aceFlushNoteIfDirty(); } catch (_) {}
+    }
     window.__aceCurrentIndex = index;
     window.__aceFocusIndex = -1;
     window.location.href = `/code?index=${index}`;
@@ -558,13 +578,14 @@
       '<table style="width:100%;border-collapse:collapse;">' +
       _shortcutRow("↑ / ↓", "Navigate sentences") +
       _shortcutRow("Shift + ← / →", "Previous / next source") +
-      _shortcutRow("1 – 9, 0, a–y (not q x z)", "Apply code") +
+      _shortcutRow("1 – 9, 0, a–y (not q x z n)", "Apply code") +
       _shortcutRow("Q", "Repeat last code") +
       _shortcutRow("X", "Remove code from sentence") +
       _shortcutRow("Z", "Undo") +
       _shortcutRow("Ctrl/⌘ + Z", "Undo") +
       _shortcutRow("Ctrl/⌘ + Shift + Z", "Redo") +
       _shortcutRow("Shift + F", "Flag/unflag source") +
+      _shortcutRow("N", "Open / close note panel") +
       _shortcutRow("F2", "Rename code (in sidebar)") +
       _shortcutRow("Delete", "Delete code (in sidebar, press twice)") +
       _shortcutRow("?", "Toggle this cheat sheet") +
@@ -2323,6 +2344,13 @@
       return;
     }
 
+    // Export source notes button
+    if (e.target.closest("#export-notes-btn")) {
+      if (dropdown) dropdown.style.display = "none";
+      window.location.href = "/api/export/notes";
+      return;
+    }
+
     // Fullscreen toggle button
     if (e.target.closest("#fullscreen-btn")) {
       if (dropdown) dropdown.style.display = "none";
@@ -2466,5 +2494,236 @@
       _focusSentence(0);
     }
     _focusTextPanel();
+  });
+
+  /* ================================================================
+   * 21. Source note drawer (READ / EDIT / closed)
+   * ================================================================ */
+
+  // Three implicit states derived from the DOM:
+  //   closed — drawer hidden
+  //   READ   — drawer open, textarea unfocused, shortcuts live
+  //   EDIT   — drawer open, textarea focused, _isTyping() suppresses shortcuts
+  //
+  // html[data-ace-note-open="1"] — drawer open (persisted to localStorage so
+  //   an inline <head> script can restore it before CSS loads — no flash)
+  // html[data-ace-has-note="1"]  — rail dot amber (current source has a note)
+  //
+  // The EDIT mode visuals (amber ring, dimmed text) come from CSS
+  // `:has(#note-textarea:focus)` — no JS mode flag. Focus IS the state.
+
+  let _noteSaveTimer = null;
+  let _noteInFlight = null;
+  let _noteStatusClearTimer = null;
+  let _previouslyFocused = null;
+
+  function _noteEls() {
+    return {
+      drawer: document.getElementById("note-drawer"),
+      textarea: document.getElementById("note-textarea"),
+      status: document.getElementById("note-status"),
+      pill: document.getElementById("note-pill"),
+      rail: document.getElementById("note-rail"),
+    };
+  }
+
+  function _isDrawerOpen() {
+    return document.documentElement.dataset.aceNoteOpen === "1";
+  }
+
+  function _isEditing() {
+    return document.activeElement?.id === "note-textarea";
+  }
+
+  function _setNoteStatus(text, sticky) {
+    const { status } = _noteEls();
+    if (!status) return;
+    status.textContent = text;
+    if (_noteStatusClearTimer) {
+      clearTimeout(_noteStatusClearTimer);
+      _noteStatusClearTimer = null;
+    }
+    if (!sticky && text) {
+      _noteStatusClearTimer = setTimeout(function () {
+        status.textContent = "";
+      }, 1500);
+    }
+  }
+
+  function _syncHasNoteAttribute() {
+    const { pill } = _noteEls();
+    if (pill && pill.classList.contains("ace-note-pill--has-note")) {
+      document.documentElement.dataset.aceHasNote = "1";
+    } else {
+      delete document.documentElement.dataset.aceHasNote;
+    }
+  }
+
+  function _flushAndBlurTextarea() {
+    if (_noteSaveTimer) {
+      clearTimeout(_noteSaveTimer);
+      _noteSaveTimer = null;
+      _doSaveNote();
+    }
+    const { textarea } = _noteEls();
+    if (!textarea) return;
+    if (document.activeElement === textarea) textarea.blur();
+    textarea.setAttribute("tabindex", "-1");
+  }
+
+  function _restoreDrawerFocus() {
+    if (_previouslyFocused && document.contains(_previouslyFocused) &&
+        typeof _previouslyFocused.focus === "function") {
+      _previouslyFocused.focus();
+    } else {
+      _focusTextPanel();
+    }
+  }
+
+  function aceOpenNoteRead() {
+    const { drawer, pill, rail } = _noteEls();
+    if (!drawer) return;
+    if (!_previouslyFocused) _previouslyFocused = document.activeElement;
+    document.documentElement.dataset.aceNoteOpen = "1";
+    drawer.setAttribute("aria-hidden", "false");
+    if (pill) pill.setAttribute("aria-expanded", "true");
+    if (rail) rail.setAttribute("aria-expanded", "true");
+    try { localStorage.setItem("ace-note-open", "1"); } catch (_) {}
+    // No focus change — READ mode leaves focus where it was so shortcuts stay live.
+  }
+
+  function aceEnterEditMode() {
+    const { drawer, textarea } = _noteEls();
+    if (!drawer || !textarea) return;
+    if (!_isDrawerOpen()) aceOpenNoteRead();
+    textarea.setAttribute("tabindex", "0");
+    // Deferred so competing afterSettle/navigation handlers don't steal focus back.
+    setTimeout(function () { textarea.focus(); }, 0);
+  }
+
+  function aceExitEditMode() {
+    _flushAndBlurTextarea();
+    _restoreDrawerFocus();
+  }
+  window.aceExitEditMode = aceExitEditMode;
+
+  function aceCloseNote() {
+    const { drawer, pill, rail } = _noteEls();
+    if (!drawer) return;
+    _flushAndBlurTextarea();
+    delete document.documentElement.dataset.aceNoteOpen;
+    drawer.setAttribute("aria-hidden", "true");
+    if (pill) pill.setAttribute("aria-expanded", "false");
+    if (rail) rail.setAttribute("aria-expanded", "false");
+    try { localStorage.removeItem("ace-note-open"); } catch (_) {}
+    _restoreDrawerFocus();
+    _previouslyFocused = null;
+  }
+  window.aceCloseNote = aceCloseNote;
+
+  function _scheduleNoteSave() {
+    if (_noteSaveTimer) clearTimeout(_noteSaveTimer);
+    _noteSaveTimer = setTimeout(_doSaveNote, 500);
+  }
+
+  function _doSaveNote() {
+    _noteSaveTimer = null;
+    const { textarea } = _noteEls();
+    if (!textarea) return Promise.resolve();
+    const sourceId = textarea.getAttribute("data-source-id");
+    if (!sourceId) return Promise.resolve();
+    const text = textarea.value;
+    // Returns the same OOB payload as flag_route — pill, grid strip, and
+    // status badge all refresh together.
+    const promise = htmx.ajax("PUT", "/api/source-note/" + encodeURIComponent(sourceId), {
+      values: { note_text: text },
+      target: "#text-panel",
+      swap: "outerHTML",
+    }).then(function () {
+      _setNoteStatus("Saved \u2713", false);
+    }).catch(function () {
+      _setNoteStatus("Save failed — retry?", true);
+    });
+    _noteInFlight = promise;
+    return promise;
+  }
+
+  // Resolves once any pending or in-flight save is finished. Awaited by
+  // aceNavigate so a full-page reload can't cancel a debounced save.
+  function aceFlushNoteIfDirty() {
+    if (_noteSaveTimer) {
+      clearTimeout(_noteSaveTimer);
+      _noteSaveTimer = null;
+      return _doSaveNote();
+    }
+    if (_noteInFlight) return _noteInFlight;
+    return Promise.resolve();
+  }
+  window.aceFlushNoteIfDirty = aceFlushNoteIfDirty;
+
+  document.addEventListener("click", function (e) {
+    if (e.target.closest("#note-pill")) {
+      e.preventDefault();
+      if (!_isDrawerOpen()) {
+        aceOpenNoteRead();
+      } else if (!_isEditing()) {
+        aceEnterEditMode();
+      }
+      return;
+    }
+    if (e.target.closest("#note-rail")) {
+      e.preventDefault();
+      aceOpenNoteRead();
+      return;
+    }
+  });
+
+  document.addEventListener("input", function (e) {
+    if (e.target.id === "note-textarea") {
+      _scheduleNoteSave();
+      if (e.target.value.length > 5000) {
+        _setNoteStatus("Long note (over 5,000 characters)", true);
+      }
+    }
+  });
+
+  // Double-Esc pattern: first Esc exits EDIT back to READ, second closes
+  // the drawer. Separate listener so it runs even when the textarea has
+  // focus (the main keydown handler returns early via _isTyping()).
+  // Defers to higher-priority Escape targets (cheat sheet, open dialog,
+  // source grid overlay) so closing those doesn't also close the drawer.
+  document.addEventListener("keydown", function (e) {
+    if (e.key !== "Escape") return;
+    if (!_isDrawerOpen()) return;
+    if (document.getElementById("ace-cheat-sheet")) return;
+    if (document.querySelector("dialog[open]")) return;
+    const grid = document.getElementById("source-grid-overlay");
+    if (grid && !grid.classList.contains("ace-hidden")) return;
+    e.preventDefault();
+    if (_isEditing()) {
+      aceExitEditMode();
+    } else {
+      aceCloseNote();
+    }
+  });
+
+  document.body.addEventListener("htmx:afterSettle", function (evt) {
+    const target = evt.detail && evt.detail.target;
+    if (!target) return;
+    if (target.id === "text-panel" || target.id === "coding-workspace") {
+      if (_noteSaveTimer) { clearTimeout(_noteSaveTimer); _noteSaveTimer = null; }
+      _noteInFlight = null;
+      _syncHasNoteAttribute();
+    }
+  });
+
+  document.addEventListener("DOMContentLoaded", function () {
+    _syncHasNoteAttribute();
+    if (_isDrawerOpen()) {
+      const { drawer, pill, rail } = _noteEls();
+      if (drawer) drawer.setAttribute("aria-hidden", "false");
+      if (pill) pill.setAttribute("aria-expanded", "true");
+      if (rail) rail.setAttribute("aria-expanded", "true");
+    }
   });
 })();
