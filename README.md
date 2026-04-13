@@ -10,6 +10,7 @@ Thus, I started working on a simple text highlight tool that ended up becoming A
 
 I may add more features in the near future, but right now I am hyper focused on making sure that ACE does the above in an extremely minimalist yet intuitive way. If I can get you to say "WOW!" while using ACE, then I am happy.
 
+**Note: I use Anthropic's Claude as a copilot, but all code is audited and verified before they are pushed.** Just putting this here so that it can be part of your decision making process of whether to use ACE or not.
 
 ## Install
 
