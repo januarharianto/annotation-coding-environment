@@ -17,6 +17,14 @@
   var _sw = localStorage.getItem("ace-sidebar-width");
   if (_sw) document.documentElement.style.setProperty("--ace-sidebar-width", _sw + "px");
 </script>
+<script>
+  // Restore note drawer state before CSS loads to prevent flash on reload
+  try {
+    if (localStorage.getItem("ace-note-open") === "1") {
+      document.documentElement.dataset.aceNoteOpen = "1";
+    }
+  } catch (_) {}
+</script>
 <link rel="stylesheet" href="/static/css/coding.css">
 <style id="code-colours">
 {% for code in codes %}
@@ -74,6 +82,7 @@
             <button type="button" class="ace-codebook-dropdown-item" id="codebook-export-btn">Export codebook (CSV)</button>
             <hr class="ace-codebook-dropdown-sep">
             <button type="button" class="ace-codebook-dropdown-item" id="export-annotations-btn">Export all annotations (CSV)</button>
+            <button type="button" class="ace-codebook-dropdown-item" id="export-notes-btn">Export source notes (CSV)</button>
             <hr class="ace-codebook-dropdown-sep">
             <button type="button" class="ace-codebook-dropdown-item" id="fullscreen-btn">Fullscreen</button>
           </div>
@@ -158,6 +167,16 @@
               <span class="ace-flag-icon">&#9873;</span>
             {%- endif -%}
           </button>
+          <button type="button"
+                  id="note-pill"
+                  class="ace-note-pill{% if has_note %} ace-note-pill--has-note{% endif %}"
+                  aria-label="Open source note"
+                  aria-controls="note-drawer"
+                  aria-expanded="false"
+                  title="Open source note (n)">
+            <span class="ace-note-icon">&#9998;</span>
+            <span class="ace-note-label">Note</span>
+          </button>
         </div>
         {% if sentence_html %}
         {{ sentence_html | safe }}
@@ -187,9 +206,39 @@
     <kbd>Q</kbd> repeat &nbsp;&nbsp;
     <kbd>Z</kbd> undo &nbsp;&nbsp;
     <kbd>X</kbd> remove &nbsp;&nbsp;
+    <kbd>N</kbd> note &nbsp;&nbsp;
     <kbd>?</kbd> help
   </div>
   {% endblock %}
+
+  {# Source note drawer (fixed right edge) #}
+  <aside id="note-drawer"
+         class="ace-note-drawer"
+         role="complementary"
+         aria-labelledby="note-drawer-title"
+         aria-hidden="true">
+    <header class="ace-note-drawer-header">
+      <h2 id="note-drawer-title">Source note</h2>
+      <span id="note-mode" class="ace-note-mode-indicator" aria-hidden="true"></span>
+      <span id="note-status" aria-live="polite" class="ace-note-drawer-status"></span>
+    </header>
+    <textarea id="note-textarea"
+              class="ace-note-textarea"
+              placeholder="Write anything about this source…"
+              data-source-id="{{ current_source['id'] if current_source else '' }}"
+              tabindex="-1">{{ current_note_text }}</textarea>
+  </aside>
+
+  {# Right-edge rail affordance #}
+  <button type="button"
+          id="note-rail"
+          class="ace-note-rail"
+          aria-label="Open source note"
+          aria-controls="note-drawer"
+          aria-expanded="false"
+          title="Open source note (n)">
+    <span class="ace-note-rail-dot" aria-hidden="true"></span>
+  </button>
 
   {# Source grid overlay (hidden) #}
   {% block source_grid %}
@@ -199,7 +248,7 @@
       <div class="ace-grid-cells">
         {% for assignment in assignments %}
         {% set ann_count = annotation_counts.get(assignment['source_id'], 0) %}
-        <div class="ace-grid-cell{% if loop.index0 == current_index %} ace-grid-cell--active{% endif %}{% if assignment['status'] == 'complete' %} ace-grid-cell--complete{% elif ann_count >= 10 %} ace-grid-cell--ann-10{% elif ann_count >= 8 %} ace-grid-cell--ann-8{% elif ann_count >= 5 %} ace-grid-cell--ann-5{% elif ann_count >= 3 %} ace-grid-cell--ann-3{% elif ann_count >= 2 %} ace-grid-cell--ann-2{% elif ann_count >= 1 %} ace-grid-cell--ann-1{% endif %}{% if assignment['status'] == 'flagged' %} ace-grid-cell--flagged{% endif %}"
+        <div class="ace-grid-cell{% if loop.index0 == current_index %} ace-grid-cell--active{% endif %}{% if assignment['status'] == 'complete' %} ace-grid-cell--complete{% elif ann_count >= 10 %} ace-grid-cell--ann-10{% elif ann_count >= 8 %} ace-grid-cell--ann-8{% elif ann_count >= 5 %} ace-grid-cell--ann-5{% elif ann_count >= 3 %} ace-grid-cell--ann-3{% elif ann_count >= 2 %} ace-grid-cell--ann-2{% elif ann_count >= 1 %} ace-grid-cell--ann-1{% endif %}{% if assignment['status'] == 'flagged' %} ace-grid-cell--flagged{% endif %}{% if assignment['source_id'] in source_ids_with_notes %} ace-grid-cell--has-note{% endif %}"
              title="{{ loop.index }} · {{ ann_count }} annotation{{ 's' if ann_count != 1 else '' }}"
              onclick="aceNavigate({{ loop.index0 }})">
         </div>

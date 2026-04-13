@@ -17,6 +17,7 @@ from ace.models.assignment import add_assignment, get_assignments_for_coder
 from ace.models.codebook import list_codes
 from ace.models.project import get_project
 from ace.models.source import get_source_content, list_sources
+from ace.models.source_note import get_note, source_ids_with_notes
 
 router = APIRouter()
 
@@ -94,6 +95,12 @@ def _coding_context(conn: sqlite3.Connection, coder_id: str, current_index: int)
         content_row = get_source_content(conn, sources[current_index]["id"])
         if content_row:
             source_text = content_row["content_text"]
+
+    # Source note state for the current source + presence set for the grid
+    current_note_text = ""
+    if current_source:
+        current_note_text = get_note(conn, current_source["id"], coder_id) or ""
+    notes_present = source_ids_with_notes(conn, coder_id)
 
     # Codes
     codes = list_codes(conn)
@@ -182,6 +189,9 @@ def _coding_context(conn: sqlite3.Connection, coder_id: str, current_index: int)
         "complete_count": complete_count,
         "complete_pct": complete_pct,
         "coder_name": coder_name,
+        "current_note_text": current_note_text,
+        "has_note": bool(current_note_text),
+        "source_ids_with_notes": notes_present,
         "assignments": [dict(a) for a in assignments],
         "sentence_html": sentence_html,
         "grouped_codes": grouped_codes,
