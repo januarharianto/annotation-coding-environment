@@ -2,9 +2,9 @@
 
 ACE is a qualitative coding tool that I developed for use with my research group at The University of Sydney. We wanted a way to select sections of text and assign qualitative codes and annotations to them but found existing tools to be unintuitive. Most importantly, I realised that we were using perhaps 5% of the features of expensive commercial software. 
 
-Thus, I started working on a simple text highlight tool that ended up becoming ACE. ACE does only a few things right now. I do not intend to add anything more than the current feature set. These are what ACE does:
+I am both a research software engineer and data scientist, so I "naturally" started working on a simple text highlight tool that ended up becoming ACE. ACE does only a few things right now. I do not intend to add anything more than the current feature set. These are what ACE does:
 
-- Import your texts, build a codebook, highlight passages and assign codes
+- Import your texts, build a codebook, highlight passages and assign codes and notes to sources
 - Export your annotations and codebook for further analysis
 - Compare coding across team members with built-in inter-coder reliability metrics
 
