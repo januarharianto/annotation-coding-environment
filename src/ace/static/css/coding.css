@@ -128,27 +128,30 @@
   transition: color var(--ace-transition);
 }
 
-.ace-flag-icon {
-  color: var(--ace-text-muted);
-  font-size: var(--ace-font-size-base);
-}
-
-.ace-flag-btn:hover .ace-flag-icon { color: var(--ace-text); }
-
 .ace-flag-chip {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
-  background: rgba(191, 54, 12, 0.1);
-  color: #bf360c;
-  border: 1px solid rgba(191, 54, 12, 0.25);
+  gap: 4px;
+  background: transparent;
+  color: var(--ace-text-muted);
+  border: 1px solid transparent;
   border-radius: var(--ace-radius);
   font-size: var(--ace-font-size-sm);
-  font-weight: 600;
+  font-weight: 500;
   padding: 2px 8px;
+  transition: color var(--ace-transition);
 }
 
-.ace-flag-btn:hover .ace-flag-chip { background: rgba(191, 54, 12, 0.16); }
+.ace-flag-btn:hover .ace-flag-chip { color: var(--ace-text); }
+
+.ace-flag-chip--active {
+  background: rgba(191, 54, 12, 0.1);
+  color: #bf360c;
+  border-color: rgba(191, 54, 12, 0.25);
+  font-weight: 600;
+}
+
+.ace-flag-btn:hover .ace-flag-chip--active { background: rgba(191, 54, 12, 0.16); }
 
 /* ---- Status badge ---- */
 
@@ -870,10 +873,10 @@ dialog::backdrop {
   align-items: center;
   gap: 4px;
   padding: 2px 8px;
-  border: 1px solid var(--ace-border);
+  border: 1px solid transparent;
   border-radius: 3px;
-  background: #ffffff;
-  color: #555;
+  background: transparent;
+  color: var(--ace-text-muted);
   font-size: 11px;
   font-family: inherit;
   cursor: pointer;
@@ -881,7 +884,7 @@ dialog::backdrop {
 }
 
 .ace-note-pill:hover {
-  border-color: var(--ace-note-border);
+  color: var(--ace-text);
 }
 
 .ace-note-pill--has-note {

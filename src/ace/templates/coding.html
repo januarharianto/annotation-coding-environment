@@ -161,11 +161,7 @@
           <button type="button" class="ace-flag-btn{% if current_status == 'flagged' %} ace-flag-btn--active{% endif %}"
                   aria-label="Toggle flag" aria-pressed="{{ 'true' if current_status == 'flagged' else 'false' }}"
                   id="nav-flag-btn">
-            {%- if current_status == 'flagged' -%}
-              <span class="ace-flag-chip">&#9873; Flagged</span>
-            {%- else -%}
-              <span class="ace-flag-icon">&#9873;</span>
-            {%- endif -%}
+            <span class="ace-flag-chip{% if current_status == 'flagged' %} ace-flag-chip--active{% endif %}">&#9873; {{ 'Flagged' if current_status == 'flagged' else 'Flag' }}</span>
           </button>
           <button type="button"
                   id="note-pill"
