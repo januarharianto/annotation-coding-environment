@@ -12,7 +12,16 @@ I may add more features in the near future, but right now I am hyper focused on 
 
 **Note: I use Anthropic's Claude as a copilot, but all code is audited and verified before they are pushed.** Just putting this here so that it can be part of your decision making process of whether to use ACE or not.
 
-## Install
+## Download
+
+Pre-built installers are on the [Releases page](https://github.com/januarharianto/annotation-coding-environment/releases/latest):
+
+- **macOS (Apple Silicon)** — `ACE_*_aarch64.dmg`. Open, drag ACE to Applications. First launch: right-click → Open to bypass Gatekeeper.
+- **Windows** — `ACE_*_x64-setup.exe`. Run the installer. SmartScreen may warn — click "More info" → "Run anyway".
+
+Intel Macs are not currently supported. Neither build is code-signed yet.
+
+## Install from source
 
 You need some experience with using the command line on eithr macOS or Windows. In the Terminal or PowerShell, first install uv. On the macOS and Linux:
 
