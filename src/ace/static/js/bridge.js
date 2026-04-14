@@ -2598,7 +2598,11 @@
     if (!_isDrawerOpen()) aceOpenNoteRead();
     textarea.setAttribute("tabindex", "0");
     // Deferred so competing afterSettle/navigation handlers don't steal focus back.
-    setTimeout(function () { textarea.focus(); }, 0);
+    setTimeout(function () {
+      textarea.focus();
+      const n = textarea.value.length;
+      textarea.setSelectionRange(n, n);
+    }, 0);
   }
 
   function aceExitEditMode() {
