@@ -673,7 +673,8 @@ def _inject_oob(html: str, element_id: str) -> str:
 
 
 def _render_colour_style_oob(codes: list[dict]) -> str:
-    """Generate <style> block with per-code CSS classes and ::highlight() rules."""
+    """Generate <style> block with per-code CSS classes, ::highlight() rules (legacy),
+    and SVG rect fill rules (new SVG overlay path)."""
     parts = []
     for code in codes:
         r, g, b = _hex_to_rgb(code["colour"])
@@ -685,6 +686,14 @@ def _render_colour_style_oob(codes: list[dict]) -> str:
         parts.append(
             f"::highlight(ace-hl-{cid}) {{"
             f" background-color: rgba({r},{g},{b},0.3); }}"
+        )
+        parts.append(
+            f"rect.ace-hl-{cid} {{"
+            f" fill: rgba({r},{g},{b},0.30); }}"
+        )
+        parts.append(
+            f"rect.ace-flash-{cid} {{"
+            f" fill: rgba({r},{g},{b},0.70); }}"
         )
     return f'<style id="code-colours" hx-swap-oob="outerHTML">{chr(10).join(parts)}</style>'
 
