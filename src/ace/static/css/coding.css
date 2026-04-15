@@ -425,6 +425,37 @@
   min-height: 0;
 }
 
+/* ---- SVG highlight overlay ---- */
+
+.ace-text-body {
+  position: relative;
+}
+
+.ace-text-body > svg#ace-hl-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.ace-text-body > .ace-sentence {
+  position: relative;
+  z-index: 1;
+}
+
+rect.ace-flash {
+  opacity: 0;
+  animation: ace-flash 800ms ease-out;
+}
+
+@keyframes ace-flash {
+  0%   { opacity: 0; }
+  15%  { opacity: 1; }
+  100% { opacity: 0; }
+}
+
 /* ---- Sentences ---- */
 
 .ace-sentence {

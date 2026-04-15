@@ -175,9 +175,15 @@
           </button>
         </div>
         {% if sentence_html %}
-        {{ sentence_html | safe }}
+        <div class="ace-text-body">
+          <svg id="ace-hl-overlay" aria-hidden="true"></svg>
+          {{ sentence_html | safe }}
+        </div>
         {% elif source_text %}
-        <p>{{ source_text }}</p>
+        <div class="ace-text-body">
+          <svg id="ace-hl-overlay" aria-hidden="true"></svg>
+          <p>{{ source_text }}</p>
+        </div>
         {% else %}
         <p class="ace-text-empty">No source content.</p>
         {% endif %}
