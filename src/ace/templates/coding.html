@@ -31,9 +31,6 @@
 .ace-code-{{ code["id"] }} {
   background-color: rgba({{ code["colour"][1:3] | int(base=16) }}, {{ code["colour"][3:5] | int(base=16) }}, {{ code["colour"][5:7] | int(base=16) }}, var(--ace-annotation-alpha));
 }
-::highlight(ace-hl-{{ code["id"] }}) {
-  background-color: rgba({{ code["colour"][1:3] | int(base=16) }}, {{ code["colour"][3:5] | int(base=16) }}, {{ code["colour"][5:7] | int(base=16) }}, 0.3);
-}
 rect.ace-hl-{{ code["id"] }} {
   fill: rgba({{ code["colour"][1:3] | int(base=16) }}, {{ code["colour"][3:5] | int(base=16) }}, {{ code["colour"][5:7] | int(base=16) }}, 0.30);
 }
@@ -266,7 +263,7 @@ rect.ace-flash-{{ code["id"] }} {
   </div>
   {% endblock %}
 
-  {# Annotation data for CSS Highlight API (updated via OOB swap) #}
+  {# Annotation data for SVG highlight overlay (updated via OOB swap) #}
   <div id="ace-ann-data" class="ace-hidden"
        data-annotations="{{ annotation_highlights_json }}"></div>
 
