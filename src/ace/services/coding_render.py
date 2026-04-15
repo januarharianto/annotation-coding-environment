@@ -10,9 +10,9 @@ def render_sentence_text(
 ) -> str:
     """Render source text as sentence spans (navigation only).
 
-    Highlights are painted client-side via the CSS Custom Highlight API.
-    This function only adds the ``ace-sentence--coded`` class when at
-    least one annotation overlaps the sentence.
+    Highlights are painted client-side via the SVG overlay (``_paintSvg`` in
+    ``bridge.js``). This function only adds the ``ace-sentence--coded`` class
+    when at least one annotation overlaps the sentence.
     """
     if not units:
         return ""
