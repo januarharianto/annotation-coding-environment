@@ -17,7 +17,7 @@
  * 13. Code management helpers
  * 14. Code menu dropdown (with shortcut hints)
  * 15. Code search / filter / create / group
- * 16. CSS Custom Highlight API — annotation rendering
+ * 16. SVG overlay — annotation rendering
  * 17. Sidebar keyboard navigation (ARIA treeview)
  * 18. DOMContentLoaded init
  */
@@ -729,58 +729,72 @@
     // Click on code chip to flash highlights in current source
     const chip = e.target.closest(".ace-code-chip");
     if (chip) {
-      let codeId = chip.dataset.codeId;
-      let colour = chip.dataset.colour || "#ffeb3b";
-      const r = parseInt(colour.slice(1, 3), 16);
-      const g = parseInt(colour.slice(3, 5), 16);
-      const b = parseInt(colour.slice(5, 7), 16);
-
-      if (!CSS.highlights) return;
-      const container = document.getElementById("text-panel");
-      if (!container) return;
+      const codeId = chip.dataset.codeId;
+      const body = document.querySelector(".ace-text-body");
+      const svg = document.getElementById("ace-hl-overlay");
+      if (!body || !svg) return;
       const dataEl = document.getElementById("ace-ann-data");
       if (!dataEl) return;
-      const anns = JSON.parse(dataEl.dataset.annotations || "[]");
-      const matching = anns.filter(function (a) { return a.code_id === codeId; });
+      const matching = JSON.parse(dataEl.dataset.annotations || "[]")
+        .filter(function (a) { return a.code_id === codeId; });
       if (!matching.length) return;
 
-      // Build ranges using the same text index as _paintHighlights
-      const textIndex = _buildTextIndex(container);
-      const flashHighlight = new Highlight();
+      // Cancel any pending flash cleanup from a previous click so rapid
+      // chip clicks don't wipe the newest flash rects prematurely.
+      if (_flashTimeout) {
+        clearTimeout(_flashTimeout);
+        _flashTimeout = null;
+      }
+
+      // Clear any previous flash rects
+      svg.querySelectorAll("rect.ace-flash").forEach(function (el) { el.remove(); });
+
+      const overlayRect = svg.getBoundingClientRect();
       let firstRange = null;
-      matching.forEach(function (ann) {
+
+      // Build the text index ONCE for all matching annotations — O(N+M).
+      const textIndex = _buildTextIndex(body);
+      if (!textIndex.length) return;
+
+      for (const ann of matching) {
         const startPos = _findDOMPosition(textIndex, ann.start);
         const endPos = _findDOMPosition(textIndex, ann.end);
-        if (!startPos || !endPos) return;
+        if (!startPos || !endPos) continue;
+        let range;
         try {
-          const range = new Range();
+          range = new Range();
           range.setStart(startPos.node, startPos.offset);
           range.setEnd(endPos.node, endPos.offset);
-          flashHighlight.add(range);
-          if (!firstRange) firstRange = range;
-        } catch (ex) {}
-      });
+        } catch (e) {
+          continue;
+        }
+        if (!firstRange) firstRange = range;
+        for (const line of _mergeRectsByLine(range.getClientRects())) {
+          const x = Math.floor(line.left - overlayRect.left);
+          const y = Math.floor(line.top - overlayRect.top);
+          const right = Math.ceil(line.right - overlayRect.left);
+          const bottom = Math.ceil(line.bottom - overlayRect.top);
+          const el = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+          el.setAttribute("class", "ace-flash ace-flash-" + codeId);
+          el.setAttribute("x", x);
+          el.setAttribute("y", y);
+          el.setAttribute("width", right - x);
+          el.setAttribute("height", bottom - y);
+          svg.appendChild(el);
+        }
+      }
 
-      // Register flash highlight + inject style
-      CSS.highlights.set("ace-flash", flashHighlight);
-      let style = document.createElement("style");
-      style.id = "ace-flash-style";
-      style.textContent = `::highlight(ace-flash) { background-color: rgba(${r},${g},${b},0.6); }`;
-      const old = document.getElementById("ace-flash-style");
-      if (old) old.remove();
-      document.head.appendChild(style);
-
-      // Scroll first match into view
+      // Preserve existing scroll-into-view behaviour
       if (firstRange) {
         const startEl = firstRange.startContainer.parentElement;
         if (startEl) startEl.scrollIntoView({ behavior: "smooth", block: "nearest" });
       }
 
-      // Auto-clear after 1.5s
-      setTimeout(function () {
-        CSS.highlights.delete("ace-flash");
-        const s = document.getElementById("ace-flash-style");
-        if (s) s.remove();
+      // Auto-clear all flash rects after 1500ms. Timeout handle is module-level
+      // so the next click can cancel it before scheduling a new cleanup.
+      _flashTimeout = setTimeout(function () {
+        svg.querySelectorAll("rect.ace-flash").forEach(function (el) { el.remove(); });
+        _flashTimeout = null;
       }, 1500);
       return;
     }
@@ -846,7 +860,7 @@
     if (target.id === "text-panel" || target.id === "coding-workspace") {
       window.__aceExcerptListActive = false;
       _restoreFocus();
-      _paintHighlights();
+      _paintSvg();
 
       // Full OOB responses (flag, navigate) also replace the sidebar —
       // restore sidebar state here since afterSettle only fires for the
@@ -1751,7 +1765,7 @@
   }
 
   /* ================================================================
-   * 16. CSS Custom Highlight API — annotation rendering
+   * 16. SVG overlay — annotation rendering
    * ================================================================ */
 
   /**
@@ -1799,67 +1813,195 @@
     return null;
   }
 
-  /**
-   * Paint all annotation highlights using the CSS Custom Highlight API.
-   * Reads annotation data from the hidden #ace-ann-data element,
-   * groups by code_id, and registers CSS highlights.
-   */
-  function _paintHighlights() {
-    if (!CSS.highlights) return;
-    CSS.highlights.clear();
+  // Rect-merge tuning.
+  // CONTAIN_SLOP is in pixels — the tolerance for "rect A strictly contains rect B"
+  // when deduplicating block-element and inline-text rects that overlap.
+  // LINE_OVERLAP_RATIO is a proportion — two rects are considered to be on the
+  // same visual line when their vertical extents overlap by at least this much
+  // of the smaller rect's height.
+  const CONTAIN_SLOP = 0.5;
+  const LINE_OVERLAP_RATIO = 0.5;
 
-    // Read annotation data from DOM element (updated by OOB swaps)
+  /**
+   * Merge DOMRectList entries from a Range into per-visual-line rects.
+   * Two steps:
+   *   1. Drop any rect that strictly contains another rect — kills duplicate
+   *      `display: block` element rects when a Range fully contains a list item.
+   *   2. Per-line union — sort by top, group rects whose vertical extents
+   *      overlap by at least LINE_OVERLAP_RATIO of the smaller height, union
+   *      left/right/top/bottom per group. This collapses sub-pixel gaps at
+   *      sentence boundaries.
+   */
+  function _mergeRectsByLine(rects) {
+    const valid = Array.from(rects).filter(function (r) {
+      return r.width >= 1 && r.height >= 1;
+    });
+
+    // Step 1: drop any rect that strictly contains another
+    const nonContaining = valid.filter(function (r, i) {
+      return !valid.some(function (other, j) {
+        if (i === j) return false;
+        const contains =
+          r.left <= other.left + CONTAIN_SLOP &&
+          r.top <= other.top + CONTAIN_SLOP &&
+          r.right >= other.right - CONTAIN_SLOP &&
+          r.bottom >= other.bottom - CONTAIN_SLOP;
+        const sameRect =
+          Math.abs(r.left - other.left) <= CONTAIN_SLOP &&
+          Math.abs(r.top - other.top) <= CONTAIN_SLOP &&
+          Math.abs(r.right - other.right) <= CONTAIN_SLOP &&
+          Math.abs(r.bottom - other.bottom) <= CONTAIN_SLOP;
+        return contains && !sameRect;
+      });
+    });
+
+    // Step 2: per-line union via Y-overlap
+    const sorted = nonContaining.sort(function (a, b) {
+      return a.top - b.top || a.left - b.left;
+    });
+    const lines = [];
+    for (const r of sorted) {
+      let line = null;
+      for (const ln of lines) {
+        const overlap = Math.min(ln.bottom, r.bottom) - Math.max(ln.top, r.top);
+        const minH = Math.min(ln.bottom - ln.top, r.bottom - r.top);
+        if (overlap >= minH * LINE_OVERLAP_RATIO) {
+          line = ln;
+          break;
+        }
+      }
+      if (line) {
+        line.left = Math.min(line.left, r.left);
+        line.right = Math.max(line.right, r.right);
+        line.top = Math.min(line.top, r.top);
+        line.bottom = Math.max(line.bottom, r.bottom);
+      } else {
+        lines.push({ top: r.top, bottom: r.bottom, left: r.left, right: r.right });
+      }
+    }
+    return lines;
+  }
+
+  // ResizeObserver state — single observer re-attached after each paint.
+  let _resizeObserver = null;
+  let _paintRaf = null;
+  let _observedBody = null;
+
+  // Chip-click flash cleanup timeout — stored module-level so rapid clicks
+  // can cancel any pending cleanup before scheduling a new one.
+  let _flashTimeout = null;
+
+  /**
+   * Attach the (lazy) ResizeObserver to the current .ace-text-body element.
+   * After OOB swaps replace #text-panel, this is called with the new body;
+   * the reference comparison detects the swap, unobserves the detached old
+   * body, and observes the new one. Paints are debounced to one per
+   * animation frame via requestAnimationFrame.
+   */
+  function _attachResizeObserver(body) {
+    if (_observedBody === body) return;
+    if (!_resizeObserver) {
+      _resizeObserver = new ResizeObserver(function () {
+        if (_paintRaf) cancelAnimationFrame(_paintRaf);
+        _paintRaf = requestAnimationFrame(function () {
+          _paintSvg();
+          _paintRaf = null;
+        });
+      });
+    } else if (_observedBody) {
+      _resizeObserver.unobserve(_observedBody);
+    }
+    _resizeObserver.observe(body);
+    _observedBody = body;
+  }
+
+  /**
+   * Detach the ResizeObserver from any previously-observed body and clear
+   * all paint state. Called on the early-return paths in _paintSvg when the
+   * text body is gone (e.g., after a swap to the excerpt-list view) so we
+   * don't retain a reference to a detached DOM node.
+   */
+  function _detachResizeObserver() {
+    if (_resizeObserver && _observedBody) {
+      _resizeObserver.unobserve(_observedBody);
+    }
+    _observedBody = null;
+    if (_paintRaf) {
+      cancelAnimationFrame(_paintRaf);
+      _paintRaf = null;
+    }
+  }
+
+  /**
+   * Paint all annotation highlights as SVG <rect> elements inside
+   * #ace-hl-overlay. Reads annotation data from #ace-ann-data, builds a
+   * Range per annotation, normalises getClientRects() into per-line rects,
+   * and emits one <rect class="ace-hl-{cid}"> element per visual line.
+   */
+  function _paintSvg() {
+    const body = document.querySelector(".ace-text-body");
+    if (!body) { _detachResizeObserver(); return; }
+    const svg = document.getElementById("ace-hl-overlay");
+    if (!svg) { _detachResizeObserver(); return; }
+
+    // Clear existing highlight rects (preserve any in-flight flash rects)
+    svg.querySelectorAll('rect[data-ace-hl="1"]').forEach(function (el) { el.remove(); });
+
     const dataEl = document.getElementById("ace-ann-data");
     if (!dataEl) return;
     const annotations = JSON.parse(dataEl.dataset.annotations || "[]");
-    if (!annotations.length) return;
+    if (!annotations.length) {
+      _attachResizeObserver(body);
+      return;
+    }
 
-    const container = document.getElementById("text-panel");
-    if (!container) return;
+    // Size the SVG to match its containing block so coordinates are correct.
+    const bodyBox = body.getBoundingClientRect();
+    svg.setAttribute("width", bodyBox.width);
+    svg.setAttribute("height", bodyBox.height);
 
-    const textIndex = _buildTextIndex(container);
-    if (!textIndex.length) return;
+    const overlayRect = svg.getBoundingClientRect();
 
-    // Group ranges by code_id
-    const groups = {};
-    for (let i = 0; i < annotations.length; i++) {
-      const ann = annotations[i];
+    // Build the text index ONCE for all annotations — O(N+M) instead of O(N*M).
+    // ResizeObserver re-fires this on every layout change, so per-annotation
+    // tree walks compound quickly on large sources.
+    const textIndex = _buildTextIndex(body);
+    if (!textIndex.length) {
+      _attachResizeObserver(body);
+      return;
+    }
+
+    for (const ann of annotations) {
       const startPos = _findDOMPosition(textIndex, ann.start);
       const endPos = _findDOMPosition(textIndex, ann.end);
       if (!startPos || !endPos) continue;
-
+      let range;
       try {
-        const range = new Range();
+        range = new Range();
         range.setStart(startPos.node, startPos.offset);
         range.setEnd(endPos.node, endPos.offset);
-
-        // If the range ends at a sentence boundary, extend to cover
-        // the trailing whitespace text node (bridges the gap between spans)
-        const endSentence = endPos.node.parentElement.closest(".ace-sentence");
-        if (endSentence && ann.end >= parseInt(endSentence.dataset.end, 10)) {
-          const next = endSentence.nextSibling;
-          if (next && next.nodeType === Node.TEXT_NODE) {
-            range.setEndAfter(next);
-          }
-        }
-
-        let codeId = ann.code_id;
-        if (!groups[codeId]) groups[codeId] = [];
-        groups[codeId].push(range);
       } catch (e) {
-        // Invalid range (e.g. end before start) — skip
+        continue;
+      }
+      const lines = _mergeRectsByLine(range.getClientRects());
+      for (const line of lines) {
+        const x = Math.floor(line.left - overlayRect.left);
+        const y = Math.floor(line.top - overlayRect.top);
+        const right = Math.ceil(line.right - overlayRect.left);
+        const bottom = Math.ceil(line.bottom - overlayRect.top);
+        const el = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+        el.setAttribute("class", "ace-hl-" + ann.code_id);
+        el.dataset.aceHl = "1";
+        el.dataset.annId = ann.id;
+        el.setAttribute("x", x);
+        el.setAttribute("y", y);
+        el.setAttribute("width", right - x);
+        el.setAttribute("height", bottom - y);
+        svg.appendChild(el);
       }
     }
 
-    // Register highlights
-    for (let codeId in groups) {
-      if (!groups.hasOwnProperty(codeId)) continue;
-      let highlight = new Highlight();
-      for (let j = 0; j < groups[codeId].length; j++) {
-        highlight.add(groups[codeId][j]);
-      }
-      CSS.highlights.set(`ace-hl-${codeId}`, highlight);
-    }
+    _attachResizeObserver(body);
   }
 
   /* ================================================================
@@ -2480,7 +2622,7 @@
     _restoreCollapseState();
     _updateKeycaps();
     _initSortable();
-    _paintHighlights();
+    _paintSvg();
 
     // Set initial roving tabindex — first treeitem gets tabindex="0"
     const items = _getTreeItems();

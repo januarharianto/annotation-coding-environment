@@ -673,7 +673,13 @@ def _inject_oob(html: str, element_id: str) -> str:
 
 
 def _render_colour_style_oob(codes: list[dict]) -> str:
-    """Generate <style> block with per-code CSS classes and ::highlight() rules."""
+    """Generate <style> block with per-code CSS classes and SVG rect fill rules.
+
+    Emits three rules per code:
+    - .ace-code-{cid}: background-color for sidebar dots and bottom chip colours
+    - rect.ace-hl-{cid}: fill for annotation highlight rects in the SVG overlay
+    - rect.ace-flash-{cid}: fill for temporary chip-click flash rects
+    """
     parts = []
     for code in codes:
         r, g, b = _hex_to_rgb(code["colour"])
@@ -683,14 +689,18 @@ def _render_colour_style_oob(codes: list[dict]) -> str:
             f" background-color: rgba({r},{g},{b},var(--ace-annotation-alpha)); }}"
         )
         parts.append(
-            f"::highlight(ace-hl-{cid}) {{"
-            f" background-color: rgba({r},{g},{b},0.3); }}"
+            f"rect.ace-hl-{cid} {{"
+            f" fill: rgba({r},{g},{b},0.30); }}"
+        )
+        parts.append(
+            f"rect.ace-flash-{cid} {{"
+            f" fill: rgba({r},{g},{b},0.70); }}"
         )
     return f'<style id="code-colours" hx-swap-oob="outerHTML">{chr(10).join(parts)}</style>'
 
 
 def _render_ann_data_oob(ctx: dict) -> str:
-    """Generate OOB div with annotation data for CSS Highlight API."""
+    """Generate OOB div with annotation data for the SVG highlight overlay."""
     ann_json = ctx.get("annotation_highlights_json", "[]")
     return f'<div id="ace-ann-data" class="ace-hidden" data-annotations="{ann_json}" hx-swap-oob="outerHTML"></div>'
 

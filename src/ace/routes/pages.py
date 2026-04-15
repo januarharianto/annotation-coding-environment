@@ -155,8 +155,8 @@ def _coding_context(conn: sqlite3.Connection, coder_id: str, current_index: int)
         cid = ann["code_id"]
         code_counts[cid] = code_counts.get(cid, 0) + 1
 
-    # Annotation data for CSS Highlight API (client-side rendering)
-    # Only id/code_id/start/end — colour comes from ::highlight() CSS rules
+    # Annotation data for the SVG overlay (client-side rendering via _paintSvg).
+    # Only id/code_id/start/end — colour comes from rect.ace-hl-{cid} CSS rules.
     annotation_highlights_json = Markup(html.escape(json.dumps([
         {"id": ann["id"], "code_id": ann["code_id"],
          "start": ann["start_offset"], "end": ann["end_offset"]}
