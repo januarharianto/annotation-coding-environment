@@ -739,6 +739,13 @@
         .filter(function (a) { return a.code_id === codeId; });
       if (!matching.length) return;
 
+      // Cancel any pending flash cleanup from a previous click so rapid
+      // chip clicks don't wipe the newest flash rects prematurely.
+      if (_flashTimeout) {
+        clearTimeout(_flashTimeout);
+        _flashTimeout = null;
+      }
+
       // Clear any previous flash rects
       svg.querySelectorAll("rect.ace-flash").forEach(function (el) { el.remove(); });
 
@@ -783,9 +790,11 @@
         if (startEl) startEl.scrollIntoView({ behavior: "smooth", block: "nearest" });
       }
 
-      // Auto-clear all flash rects after 1500ms
-      setTimeout(function () {
+      // Auto-clear all flash rects after 1500ms. Timeout handle is module-level
+      // so the next click can cancel it before scheduling a new cleanup.
+      _flashTimeout = setTimeout(function () {
         svg.querySelectorAll("rect.ace-flash").forEach(function (el) { el.remove(); });
+        _flashTimeout = null;
       }, 1500);
       return;
     }
@@ -1804,46 +1813,59 @@
     return null;
   }
 
+  // Rect-merge tuning.
+  // CONTAIN_SLOP is in pixels — the tolerance for "rect A strictly contains rect B"
+  // when deduplicating block-element and inline-text rects that overlap.
+  // LINE_OVERLAP_RATIO is a proportion — two rects are considered to be on the
+  // same visual line when their vertical extents overlap by at least this much
+  // of the smaller rect's height.
+  const CONTAIN_SLOP = 0.5;
+  const LINE_OVERLAP_RATIO = 0.5;
+
   /**
    * Merge DOMRectList entries from a Range into per-visual-line rects.
    * Two steps:
    *   1. Drop any rect that strictly contains another rect — kills duplicate
    *      `display: block` element rects when a Range fully contains a list item.
    *   2. Per-line union — sort by top, group rects whose vertical extents
-   *      overlap by >= 50% of the smaller height, union left/right/top/bottom
-   *      per group. This collapses sub-pixel gaps at sentence boundaries.
+   *      overlap by at least LINE_OVERLAP_RATIO of the smaller height, union
+   *      left/right/top/bottom per group. This collapses sub-pixel gaps at
+   *      sentence boundaries.
    */
   function _mergeRectsByLine(rects) {
-    const valid = Array.from(rects).filter(r => r.width >= 1 && r.height >= 1);
-    const slop = 0.5;
+    const valid = Array.from(rects).filter(function (r) {
+      return r.width >= 1 && r.height >= 1;
+    });
 
     // Step 1: drop any rect that strictly contains another
-    const nonContaining = valid.filter((r, i) =>
-      !valid.some((other, j) => {
+    const nonContaining = valid.filter(function (r, i) {
+      return !valid.some(function (other, j) {
         if (i === j) return false;
         const contains =
-          r.left <= other.left + slop &&
-          r.top <= other.top + slop &&
-          r.right >= other.right - slop &&
-          r.bottom >= other.bottom - slop;
+          r.left <= other.left + CONTAIN_SLOP &&
+          r.top <= other.top + CONTAIN_SLOP &&
+          r.right >= other.right - CONTAIN_SLOP &&
+          r.bottom >= other.bottom - CONTAIN_SLOP;
         const sameRect =
-          Math.abs(r.left - other.left) <= slop &&
-          Math.abs(r.top - other.top) <= slop &&
-          Math.abs(r.right - other.right) <= slop &&
-          Math.abs(r.bottom - other.bottom) <= slop;
+          Math.abs(r.left - other.left) <= CONTAIN_SLOP &&
+          Math.abs(r.top - other.top) <= CONTAIN_SLOP &&
+          Math.abs(r.right - other.right) <= CONTAIN_SLOP &&
+          Math.abs(r.bottom - other.bottom) <= CONTAIN_SLOP;
         return contains && !sameRect;
-      })
-    );
+      });
+    });
 
     // Step 2: per-line union via Y-overlap
-    const sorted = nonContaining.sort((a, b) => a.top - b.top || a.left - b.left);
+    const sorted = nonContaining.sort(function (a, b) {
+      return a.top - b.top || a.left - b.left;
+    });
     const lines = [];
     for (const r of sorted) {
       let line = null;
       for (const ln of lines) {
         const overlap = Math.min(ln.bottom, r.bottom) - Math.max(ln.top, r.top);
         const minH = Math.min(ln.bottom - ln.top, r.bottom - r.top);
-        if (overlap >= minH * 0.5) {
+        if (overlap >= minH * LINE_OVERLAP_RATIO) {
           line = ln;
           break;
         }
@@ -1864,6 +1886,10 @@
   let _resizeObserver = null;
   let _paintRaf = null;
   let _observedBody = null;
+
+  // Chip-click flash cleanup timeout — stored module-level so rapid clicks
+  // can cancel any pending cleanup before scheduling a new one.
+  let _flashTimeout = null;
 
   /**
    * Attach the (lazy) ResizeObserver to the current .ace-text-body element.
@@ -1890,6 +1916,23 @@
   }
 
   /**
+   * Detach the ResizeObserver from any previously-observed body and clear
+   * all paint state. Called on the early-return paths in _paintSvg when the
+   * text body is gone (e.g., after a swap to the excerpt-list view) so we
+   * don't retain a reference to a detached DOM node.
+   */
+  function _detachResizeObserver() {
+    if (_resizeObserver && _observedBody) {
+      _resizeObserver.unobserve(_observedBody);
+    }
+    _observedBody = null;
+    if (_paintRaf) {
+      cancelAnimationFrame(_paintRaf);
+      _paintRaf = null;
+    }
+  }
+
+  /**
    * Paint all annotation highlights as SVG <rect> elements inside
    * #ace-hl-overlay. Reads annotation data from #ace-ann-data, builds a
    * Range per annotation, normalises getClientRects() into per-line rects,
@@ -1897,9 +1940,9 @@
    */
   function _paintSvg() {
     const body = document.querySelector(".ace-text-body");
-    if (!body) return;
+    if (!body) { _detachResizeObserver(); return; }
     const svg = document.getElementById("ace-hl-overlay");
-    if (!svg) return;
+    if (!svg) { _detachResizeObserver(); return; }
 
     // Clear existing highlight rects (preserve any in-flight flash rects)
     svg.querySelectorAll('rect[data-ace-hl="1"]').forEach(function (el) { el.remove(); });

@@ -440,7 +440,10 @@
   z-index: 0;
 }
 
-.ace-text-body > .ace-sentence {
+/* Elevate every non-overlay direct child above the SVG so non-sentence
+   siblings (source_text fallback <p>, .ace-para-break spans, etc.) aren't
+   obscured by the absolutely-positioned overlay. */
+.ace-text-body > :not(svg#ace-hl-overlay) {
   position: relative;
   z-index: 1;
 }
