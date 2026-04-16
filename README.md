@@ -1,14 +1,16 @@
 # ACE — Annotation Coding Environment
 
+![](https://raw.githubusercontent.com/januarharianto/annotation-coding-environment/9519aeabe20780f8fdb1ba8d3288a52a3e4d42e6/brand/logo-light.svg)
+
 ACE is a qualitative coding tool that I developed for use with my research group at The University of Sydney. We wanted a way to select sections of text and assign qualitative codes and annotations to them but found existing tools to be unintuitive. Most importantly, I realised that we were using perhaps 5% of the features of expensive commercial software. 
 
-I am both a research software engineer and data scientist, so I "naturally" started working on a simple text highlight tool that ended up becoming ACE. ACE does only a few things right now. I do not intend to add anything more than the current feature set. These are what ACE does:
+As both a research software engineer and data scientist I "naturally" started working on a simple text highlight tool that ended up becoming ACE. ACE does only a few things right now. I do not intend to add anything more than the current feature set. These are what ACE does:
 
 - Import your texts, build a codebook, highlight passages and assign codes and notes to sources
 - Export your annotations and codebook for further analysis
 - Compare coding across team members with built-in inter-coder reliability metrics
 
-I may add more features in the near future, but right now I am hyper focused on making sure that ACE does the above in an extremely minimalist yet intuitive way. If I can get you to say "WOW!" while using ACE, then I am happy.
+I may add more features in the near future, but right now I am hyper focused on making sure that ACE does the above in an extremely minimalist yet intuitive way. I built ACE for myself and my colleagues, so it will probably be nothing like any qualitative coding tool you have used. Importantly I have designed it to be keyboard-centric - it is possible, once source documents have been added, to use only the keyboard to do all required coding.
 
 **Note: I use Anthropic's Claude as a copilot, but all code is audited and verified before they are pushed.** Just putting this here so that it can be part of your decision making process of whether to use ACE or not.
 
