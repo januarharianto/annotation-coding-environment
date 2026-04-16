@@ -105,7 +105,7 @@ class AgreementLoader:
 
         # Codes
         codes = conn.execute(
-            "SELECT id, name FROM codebook_code ORDER BY sort_order"
+            "SELECT id, name, group_name, sort_order FROM codebook_code ORDER BY sort_order"
         ).fetchall()
 
         # Coders
@@ -119,7 +119,10 @@ class AgreementLoader:
 
         # Build lookup maps
         source_map = {s["id"]: dict(s) for s in sources}
-        code_map = {c["id"]: c["name"] for c in codes}
+        code_map = {
+            c["id"]: {"name": c["name"], "group_name": c["group_name"], "sort_order": c["sort_order"]}
+            for c in codes
+        }
         coder_map = {c["id"]: c["name"] for c in coders}
 
         return {
@@ -173,9 +176,9 @@ class AgreementLoader:
 
         if fast_path:
             # All codebooks identical — use names from first file
-            common_code_names = set(self._file_data[0]["codes"].values())
+            common_code_names = {info["name"] for info in self._file_data[0]["codes"].values()}
         else:
-            name_sets = [set(fd["codes"].values()) for fd in self._file_data]
+            name_sets = [{info["name"] for info in fd["codes"].values()} for fd in self._file_data]
             common_code_names = name_sets[0].intersection(*name_sets[1:])
 
             all_code_names = set()
@@ -270,12 +273,28 @@ class AgreementLoader:
         fast_path = all(h == codebook_hashes[0] and h is not None for h in codebook_hashes)
 
         if fast_path:
-            common_code_names = set(self._file_data[0]["codes"].values())
+            common_code_names = {info["name"] for info in self._file_data[0]["codes"].values()}
         else:
-            name_sets = [set(fd["codes"].values()) for fd in self._file_data]
+            name_sets = [{info["name"] for info in fd["codes"].values()} for fd in self._file_data]
             common_code_names = name_sets[0].intersection(*name_sets[1:])
 
-        codes = [MatchedCode(name=n) for n in sorted(common_code_names)]
+        code_meta: dict[str, tuple[str | None, int]] = {}
+        for fd in self._file_data:
+            for info in fd["codes"].values():
+                if info["name"] not in code_meta:
+                    code_meta[info["name"]] = (info["group_name"], info["sort_order"])
+
+        codes = sorted(
+            [
+                MatchedCode(
+                    name=n,
+                    group_name=code_meta.get(n, (None, 0))[0],
+                    sort_order=code_meta.get(n, (None, 0))[1],
+                )
+                for n in common_code_names
+            ],
+            key=lambda c: c.sort_order,
+        )
         code_name_set = common_code_names
 
         # Build annotations
@@ -285,11 +304,12 @@ class AgreementLoader:
             source_id_to_hash = {
                 sid: s["content_hash"] for sid, s in fd["sources"].items()
             }
-            code_id_to_name = fd["codes"]
+            code_id_to_info = fd["codes"]
 
             for ann in fd["annotations"]:
                 source_hash = source_id_to_hash.get(ann["source_id"])
-                code_name = code_id_to_name.get(ann["code_id"])
+                code_info = code_id_to_info.get(ann["code_id"])
+                code_name = code_info["name"] if code_info is not None else None
 
                 # Skip if source not in common set or code not matched
                 if source_hash not in common_hashes:

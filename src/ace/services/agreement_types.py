@@ -21,6 +21,8 @@ class CoderInfo:
 class MatchedCode:
     name: str
     present_in: set[str] = field(default_factory=set)  # set of coder IDs
+    group_name: str | None = None
+    sort_order: int = 0
 
 
 @dataclass

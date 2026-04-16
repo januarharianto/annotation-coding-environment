@@ -1685,7 +1685,7 @@ def _render_agreement_results(result, dataset, loader, jinja_env) -> str:
         all_source_hashes |= {s["content_hash"] for s in fd["sources"].values()}
     all_code_names = set()
     for fd in loader._file_data:
-        all_code_names |= set(fd["codes"].values())
+        all_code_names |= {info["name"] for info in fd["codes"].values()}
 
     # Prepare pairwise data
     pairwise_sorted = []
