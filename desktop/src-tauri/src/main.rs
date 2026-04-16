@@ -1,7 +1,7 @@
 use std::net::TcpStream;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
-use tauri::{Manager, RunEvent};
+use tauri::{Manager, RunEvent, WindowEvent};
 use tauri_plugin_shell::{process::CommandChild, ShellExt};
 
 const PORT: u16 = 18080;
@@ -72,13 +72,30 @@ fn main() {
         .build(tauri::generate_context!())
         .expect("error building tauri app");
 
-    // Safety net: kill sidecar on exit
+    // Kill the sidecar on every quit path — RunEvent::Exit alone is
+    // unreliable on macOS (Cmd+Q, dock quit, window close).  Calling kill
+    // multiple times is safe: after the first .take() the Mutex holds None.
     let child_exit = child.clone();
     app.run(move |_app, event| {
-        if let RunEvent::Exit = event {
-            if let Some(c) = child_exit.lock().unwrap().take() {
-                let _ = c.kill();
+        match event {
+            RunEvent::ExitRequested { .. } | RunEvent::Exit => {
+                kill_sidecar(&child_exit);
             }
+            RunEvent::WindowEvent {
+                event: WindowEvent::CloseRequested { .. },
+                ..
+            } => {
+                kill_sidecar(&child_exit);
+            }
+            _ => {}
         }
     });
+}
+
+fn kill_sidecar(child: &Arc<Mutex<Option<CommandChild>>>) {
+    if let Ok(mut guard) = child.lock() {
+        if let Some(c) = guard.take() {
+            let _ = c.kill();
+        }
+    }
 }

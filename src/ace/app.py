@@ -217,6 +217,13 @@ def run(port: int | None = None) -> None:
     global _ALLOWED_ORIGINS
     _ALLOWED_ORIGINS = _build_allowed_origins(port)
     _kill_stale_server(port)
+    # Nuitka's onefile bootloader may not forward SIGTERM to the Python
+    # process cleanly. Explicitly convert SIGTERM to KeyboardInterrupt so
+    # uvicorn runs its graceful shutdown path (close connections, run
+    # lifespan shutdown, release the SQLite database).
+    def _sigterm_handler(signum, frame):
+        raise KeyboardInterrupt
+    signal.signal(signal.SIGTERM, _sigterm_handler)
     uvicorn.run(
         create_app,
         factory=True,
