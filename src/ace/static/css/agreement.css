@@ -7,7 +7,7 @@
 }
 
 .ace-agreement-title {
-  font-size: 18px;
+  font-size: var(--ace-font-size-xl);
   font-weight: 700;
   margin: 0;
 }
@@ -28,7 +28,7 @@
   align-items: center;
   gap: 4px;
   padding: 4px 12px;
-  font-size: 11px;
+  font-size: var(--ace-font-size-2xs);
   font-weight: 500;
   color: var(--ace-text);
   background: var(--ace-bg-muted);
@@ -134,7 +134,7 @@
 
 .ace-agreement-table .interp {
   display: block;
-  font-size: 9px;
+  font-size: var(--ace-font-size-2xs);
   color: var(--ace-text-muted);
   line-height: 1;
   margin-top: 1px;
@@ -152,7 +152,7 @@
 
 /* Reference superscripts */
 .ace-ref-sup {
-  font-size: 9px;
+  font-size: var(--ace-font-size-2xs);
   color: #b0b8c4;
   vertical-align: super;
   margin-left: 1px;

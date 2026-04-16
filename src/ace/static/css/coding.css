@@ -798,7 +798,7 @@ dialog::backdrop {
 }
 
 .ace-import-dialog-title {
-  font-size: 15px;
+  font-size: var(--ace-font-size-lg);
   font-weight: 600;
   color: var(--ace-text);
   margin-bottom: 2px;
@@ -832,7 +832,7 @@ dialog::backdrop {
 
 .ace-import-group-label {
   padding: 1px 8px;
-  font-size: 9px;
+  font-size: var(--ace-font-size-2xs);
   color: var(--ace-text-muted);
   letter-spacing: 0.3px;
   margin-top: 4px;
@@ -852,7 +852,7 @@ dialog::backdrop {
 
 .ace-import-badge {
   margin-left: auto;
-  font-size: 9px;
+  font-size: var(--ace-font-size-2xs);
 }
 
 .ace-import-badge--new { color: #22c55e; }
@@ -897,7 +897,7 @@ dialog::backdrop {
   border-radius: 3px;
   background: transparent;
   color: var(--ace-text-muted);
-  font-size: 11px;
+  font-size: var(--ace-font-size-2xs);
   font-family: inherit;
   cursor: pointer;
   transition: var(--ace-transition);
@@ -914,7 +914,7 @@ dialog::backdrop {
 }
 
 .ace-note-icon {
-  font-size: 12px;
+  font-size: var(--ace-font-size-xs);
   line-height: 1;
 }
 
@@ -965,7 +965,7 @@ body:has(#note-textarea:focus) #text-panel {
 
 .ace-note-drawer #note-drawer-title {
   margin: 0;
-  font-size: 9px;
+  font-size: var(--ace-font-size-2xs);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -974,7 +974,7 @@ body:has(#note-textarea:focus) #text-panel {
 }
 
 .ace-note-mode-indicator {
-  font-size: 9px;
+  font-size: var(--ace-font-size-2xs);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -998,7 +998,7 @@ body:has(#note-textarea:focus) .ace-note-mode-indicator::before {
 }
 
 .ace-note-drawer-status {
-  font-size: 9px;
+  font-size: var(--ace-font-size-2xs);
   color: #888;
   font-style: normal;
   margin-left: auto;
