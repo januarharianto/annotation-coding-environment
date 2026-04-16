@@ -320,7 +320,7 @@
     }
 
     // Ctrl/Cmd+Z — Undo
-    if (ctrl && !shift && key === "z") {
+    if (ctrl && !shift && (key === "z" || key === "Z")) {
       e.preventDefault();
       _updateCurrentIndex();
       const undoBtn = document.getElementById("trigger-undo");
