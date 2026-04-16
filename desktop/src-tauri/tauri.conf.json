@@ -20,7 +20,7 @@
         "title": "ACE — Starting...",
         "width": 1280,
         "height": 800,
-        "minWidth": 800,
+        "minWidth": 1000,
         "minHeight": 600,
         "visible": false,
         "center": true
