@@ -2,7 +2,7 @@
 
 :root {
   --ace-annotation-alpha: 0.3;
-  --ace-sidebar-width: 240px;
+  --ace-sidebar-width: 360px;
 }
 
 /* ---- Workspace (full viewport flex column) ---- */

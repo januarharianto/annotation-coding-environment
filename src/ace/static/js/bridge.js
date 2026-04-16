@@ -643,8 +643,8 @@
     });
 
     handle.addEventListener("dblclick", function () {
-      document.documentElement.style.setProperty("--ace-sidebar-width", "240px");
-      localStorage.setItem("ace-sidebar-width", 240);
+      document.documentElement.style.setProperty("--ace-sidebar-width", "360px");
+      localStorage.setItem("ace-sidebar-width", 360);
     });
   }
 
