@@ -294,7 +294,7 @@ _MAX_UPLOAD_BYTES = 50 * 1024 * 1024  # 50 MB
 @router.post("/import/upload")
 async def import_upload(request: Request, file: UploadFile = File(...)):
     """Accept a CSV/Excel upload, parse it, return a preview table fragment."""
-    from ace.services.importer import _read_tabular
+    from ace.services.importer import read_tabular
 
     # Read the uploaded file into a temp file
     data = await file.read()
@@ -307,7 +307,7 @@ async def import_upload(request: Request, file: UploadFile = File(...)):
         tmp.write(data)
         tmp.close()
 
-        rows, columns = _read_tabular(Path(tmp.name))
+        rows, columns = read_tabular(Path(tmp.name))
     except Exception as e:
         Path(tmp.name).unlink(missing_ok=True)
         return _oob_toast(f"Could not parse file: {e}")
@@ -611,14 +611,7 @@ async def export_annotations(request: Request):
     from ace.models.project import get_project
     from datetime import datetime
 
-    project_path = getattr(request.app.state, "project_path", None)
-    if not project_path:
-        return HTMLResponse("No project open", status_code=400)
-
-    conn = sqlite3.connect(project_path, check_same_thread=False)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA foreign_keys = ON")
-
+    conn = _open_project_db(request)
     try:
         project = get_project(conn)
         tmp = tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False, encoding="utf-8")
@@ -938,8 +931,6 @@ async def navigate_route(
     target_index: int = Form(default=0),
 ):
     """Navigate between sources, auto-completing/starting assignments."""
-    import json
-
     from ace.models.assignment import get_assignments_for_coder, update_assignment_status
 
     coder_id = _require_coder_id(request)
@@ -1096,14 +1087,7 @@ async def export_notes_route(request: Request):
     if coder_id is None:
         return HTMLResponse("No coder", status_code=400)
 
-    project_path = getattr(request.app.state, "project_path", None)
-    if not project_path:
-        return HTMLResponse("No project open", status_code=400)
-
-    conn = sqlite3.connect(project_path, check_same_thread=False)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA foreign_keys = ON")
-
+    conn = _open_project_db(request)
     try:
         project = get_project(conn)
         tmp = tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False, encoding="utf-8")
@@ -1773,7 +1757,7 @@ async def agreement_compute(
 
     try:
         dataset = loader.build_dataset()
-    except Exception as e:
+    except Exception:
         return HTMLResponse(_agreement_error("Cannot compute agreement. Check that the files have shared sources and codes."), status_code=400)
 
     if not dataset.sources:

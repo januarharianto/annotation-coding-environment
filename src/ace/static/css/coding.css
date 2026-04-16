@@ -281,19 +281,6 @@
   background: var(--ace-bg-muted);
 }
 
-/* Screen reader only (visually hidden, accessible) */
-.ace-sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
-}
-
 .ace-code-row--confirm-delete {
   background: rgba(198, 40, 40, 0.08);
 }
@@ -554,10 +541,6 @@ rect.ace-flash {
 .ace-grid-overlay {
   position: fixed;
   z-index: 50;
-}
-
-.ace-grid-backdrop {
-  display: none;
 }
 
 .ace-grid-popover {
@@ -890,8 +873,6 @@ dialog::backdrop {
   transition: background 1.5s ease;
 }
 
-/* ---- Touch fallback ---- */
-
 /* ================================================================
  * Source notes (Task 4)
  * ================================================================ */
@@ -1118,9 +1099,6 @@ html[data-ace-note-open="1"] .ace-note-rail {
 /* Grid amber bottom strip — composes with outlines because it lives
  * inside the cell edge via inset box-shadow. Two-pixel strip. */
 .ace-grid-cell--has-note {
-  box-shadow: inset 0 -2px 0 var(--ace-note-accent);
-}
-.ace-grid-cell--active.ace-grid-cell--has-note {
   box-shadow: inset 0 -2px 0 var(--ace-note-accent);
 }
 .ace-grid-cell--active.ace-grid-cell--flagged.ace-grid-cell--has-note {

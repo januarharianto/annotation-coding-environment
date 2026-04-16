@@ -27,7 +27,7 @@ def import_csv(
     Returns the number of sources created.
     """
     path = Path(path)
-    rows, columns = _read_tabular(path)
+    rows, columns = read_tabular(path)
 
     meta_columns = [c for c in columns if c != id_column and c not in text_columns]
     multi = len(text_columns) > 1
@@ -109,7 +109,7 @@ def get_random_preview(
     return chosen.name, content
 
 
-def _read_tabular(path: Path) -> tuple[list[dict], list[str]]:
+def read_tabular(path: Path) -> tuple[list[dict], list[str]]:
     """Read a CSV or Excel file, returning (rows as dicts, column names)."""
     suffix = path.suffix.lower()
     if suffix == ".xlsx":

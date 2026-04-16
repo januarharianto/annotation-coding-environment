@@ -28,16 +28,12 @@
   --ace-font-size-base: 14px;
   --ace-font-size-lg: 15px;
   --ace-font-size-xl: 20px;
-  --ace-font-size-2xl: 24px;
 
-  --ace-weight-normal: 400;
   --ace-weight-medium: 500;
   --ace-weight-semibold: 600;
-  --ace-weight-bold: 700;
 
   --ace-leading-tight: 1;
   --ace-leading-normal: 1.5;
-  --ace-leading-relaxed: 1.75;
 
   /* ── Spacing (4px grid) ── */
   --ace-space-1: 4px;
@@ -120,12 +116,6 @@ body {
 
 #toast .toast-msg.fade-out {
   opacity: 0;
-}
-
-/* Toast variants */
-.ace-toast--error {
-  border-color: var(--ace-danger);
-  color: var(--ace-danger);
 }
 
 /* Buttons */
@@ -506,4 +496,17 @@ body {
 .ace-role-btn:hover:not(.active) { border-color: var(--ace-text-muted); color: var(--ace-text); }
 .ace-role-btn.active[data-role="id"] { background: var(--ace-text); color: var(--ace-bg); border-color: var(--ace-text); }
 .ace-role-btn.active[data-role="text"] { background: var(--ace-focus); color: #fff; border-color: var(--ace-focus); }
+
+/* Screen reader only (visually hidden, accessible) — shared across all pages */
+.ace-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
 

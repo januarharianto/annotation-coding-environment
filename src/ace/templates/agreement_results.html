@@ -2,7 +2,7 @@
 
 <div class="ace-agreement-title-bar">
   <h1 class="ace-agreement-title">Inter-Coder Agreement</h1>
-  <span class="spacer" style="flex:1"></span>
+  <span class="spacer"></span>
   <a href="/api/agreement/export/results" class="ace-export-pill"
      download="agreement_summary.csv" aria-label="Download summary as CSV file">↓ Summary CSV</a>
   <a href="/api/agreement/export/raw" class="ace-export-pill"
@@ -21,7 +21,7 @@
 {% if warnings %}
 <details class="ace-agreement-warnings">
   <summary><span aria-hidden="true">⚠</span>
-    <span class="visually-hidden">Warning: </span>
+    <span class="ace-sr-only">Warning: </span>
     {{ warnings | length }} warning{{ "s" if warnings | length != 1 else "" }}</summary>
   <div class="ace-agreement-warn-body">
     {% for w in warnings %}

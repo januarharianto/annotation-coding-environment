@@ -8,6 +8,11 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
+_INSERT_CODE_SQL = (
+    "INSERT INTO codebook_code (id, name, colour, sort_order, group_name, created_at) "
+    "VALUES (?, ?, ?, ?, ?, ?)"
+)
+
 
 # ---------------------------------------------------------------------------
 # Colour palette — golden-angle hue spacing with alternating lightness bands
@@ -49,8 +54,7 @@ def add_code(
     sort_order = max_order + 1
 
     conn.execute(
-        "INSERT INTO codebook_code (id, name, colour, sort_order, group_name, created_at) "
-        "VALUES (?, ?, ?, ?, ?, ?)",
+        _INSERT_CODE_SQL,
         (code_id, name, colour, sort_order, group_name, now),
     )
     conn.commit()
