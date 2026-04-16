@@ -1877,3 +1877,27 @@ async def agreement_export_raw(request: Request):
         media_type="text/csv",
         headers={"Content-Disposition": 'attachment; filename="agreement_raw_data.csv"'},
     )
+
+
+@router.get("/agreement/export/references")
+async def agreement_export_references():
+    """Download the BibTeX references file for agreement metrics."""
+    bib_path = Path(__file__).resolve().parent.parent / "static" / "agreement_references.bib"
+    content = bib_path.read_text(encoding="utf-8")
+    return Response(
+        content=content,
+        media_type="application/x-bibtex",
+        headers={"Content-Disposition": 'attachment; filename="references.bib"'},
+    )
+
+
+@router.get("/agreement/export/methodology")
+async def agreement_export_methodology():
+    """Download the methodology markdown file describing agreement computations."""
+    md_path = Path(__file__).resolve().parent.parent / "static" / "agreement_methodology.md"
+    content = md_path.read_text(encoding="utf-8")
+    return Response(
+        content=content,
+        media_type="text/markdown; charset=utf-8",
+        headers={"Content-Disposition": 'attachment; filename="methodology.md"'},
+    )
