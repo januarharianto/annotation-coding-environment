@@ -2,7 +2,7 @@
 
 :root {
   --ace-annotation-alpha: 0.3;
-  --ace-sidebar-width: 200px;
+  --ace-sidebar-width: 240px;
 }
 
 /* ---- Workspace (full viewport flex column) ---- */
@@ -18,10 +18,11 @@
 
 .ace-sidebar-brand {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: space-between;
-  height: 52px;
-  padding: 0 var(--ace-space-2);
+  justify-content: center;
+  gap: var(--ace-space-1);
+  padding: var(--ace-space-2) var(--ace-space-2);
   flex-shrink: 0;
 }
 
@@ -44,17 +45,33 @@
   border-radius: var(--ace-radius);
 }
 
-.ace-sidebar-help-btn {
+.ace-sidebar-brand-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--ace-space-1);
+}
+
+.ace-sidebar-help-btn,
+.ace-codebook-menu-btn {
   background: none;
   border: none;
   cursor: pointer;
   color: var(--ace-text-muted);
-  font-size: var(--ace-font-size-sm);
-  padding: var(--ace-space-1);
-  transition: color var(--ace-transition);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--ace-radius);
+  padding: 0;
+  transition: color var(--ace-transition), background var(--ace-transition);
 }
 
-.ace-sidebar-help-btn:hover { color: var(--ace-text); }
+.ace-sidebar-help-btn:hover,
+.ace-codebook-menu-btn:hover {
+  color: var(--ace-text);
+  background: var(--ace-bg-muted);
+}
 
 /* ---- Flag row ---- */
 
@@ -736,23 +753,11 @@ dialog::backdrop {
   flex-shrink: 0;
 }
 
-.ace-codebook-menu-btn {
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: var(--ace-text-muted);
-  font-size: var(--ace-font-size-2xs);
-  padding: 2px 4px;
-  white-space: nowrap;
-  transition: color var(--ace-transition);
-}
-
-.ace-codebook-menu-btn:hover { color: var(--ace-text); }
-
 .ace-codebook-dropdown {
   position: absolute;
   top: 100%;
-  right: 0;
+  left: 50%;
+  transform: translateX(-50%);
   background: var(--ace-bg);
   border: 1px solid var(--ace-border);
   border-radius: var(--ace-radius);

@@ -641,6 +641,11 @@
       const width = parseInt(getComputedStyle(document.documentElement).getPropertyValue("--ace-sidebar-width"), 10);
       if (width) localStorage.setItem("ace-sidebar-width", width);
     });
+
+    handle.addEventListener("dblclick", function () {
+      document.documentElement.style.setProperty("--ace-sidebar-width", "240px");
+      localStorage.setItem("ace-sidebar-width", 240);
+    });
   }
 
   /* ================================================================
