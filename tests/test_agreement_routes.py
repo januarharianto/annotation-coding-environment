@@ -156,13 +156,18 @@ def test_compute_returns_new_results_html(client_with_agreement_files):
     assert resp.status_code == 200
     html = resp.text
     assert "ace-agreement-title-bar" in html
-    assert "Summary CSV" in html
-    assert "Raw data CSV" in html
+    assert "Export summary" in html
+    assert "Export raw data" in html
     assert "ace-agreement-context" in html
     assert "Overall (pooled)" in html
     assert "ace-agreement-table" in html
-    assert "ace-agreement-refs" in html
+    assert "ace-refs" in html
     assert "Krippendorff" in html
+    # Smoke tests for new elements
+    assert "ace-verdict" in html
+    assert "ace-status" in html
+    assert "Table 1:" in html
+    assert "ace-section-heading" in html
 
 
 def test_compute_insufficient_files(client, ace_file_a):
