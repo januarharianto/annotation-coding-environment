@@ -1,7 +1,7 @@
 use std::net::TcpStream;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
-use tauri::{Manager, RunEvent, WindowEvent};
+use tauri::{Manager, RunEvent, Url, WindowEvent};
 use tauri_plugin_shell::{process::CommandChild, ShellExt};
 
 const PORT: u16 = 18080;
@@ -56,9 +56,17 @@ fn main() {
 
             *child_clone.lock().unwrap() = Some(sidecar_child);
 
-            // Wait for server on a background thread (do NOT block main thread)
+            // Wait for server on a background thread (do NOT block main thread).
+            // The webview eagerly loads frontendDist on window creation, which
+            // fails because the sidecar isn't ready yet — leaving a blank page.
+            // After the server is up, navigate() forces a fresh load from the
+            // now-running server before the window becomes visible.
             std::thread::spawn(move || {
                 if wait_for_server(PORT, STARTUP_TIMEOUT) {
+                    let url = Url::parse(&format!("http://127.0.0.1:{PORT}"))
+                        .expect("invalid server URL");
+                    let _ = window.navigate(url);
+                    std::thread::sleep(Duration::from_millis(300));
                     let _ = window.set_title("ACE");
                     let _ = window.show();
                 } else {
