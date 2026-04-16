@@ -1652,22 +1652,6 @@ def _agreement_error(message: str) -> str:
     )
 
 
-def _interp_label(alpha: float | None) -> str:
-    if alpha is None:
-        return ""
-    if alpha < 0:
-        return "poor"
-    if alpha <= 0.20:
-        return "slight"
-    if alpha <= 0.40:
-        return "fair"
-    if alpha <= 0.60:
-        return "moderate"
-    if alpha <= 0.80:
-        return "substantial"
-    return "almost perfect"
-
-
 def _agreement_fmt(val: float | None, decimals: int = 2, is_pct: bool = False) -> str:
     if val is None:
         return "\u2013"
@@ -1677,6 +1661,8 @@ def _agreement_fmt(val: float | None, decimals: int = 2, is_pct: bool = False) -
 
 
 def _render_agreement_results(result, dataset, loader, jinja_env) -> str:
+    from ace.services.agreement_verdict import classify_code, classify_overall
+
     n_coders = result.n_coders
 
     # Compute totals for context bar
@@ -1687,21 +1673,58 @@ def _render_agreement_results(result, dataset, loader, jinja_env) -> str:
     for fd in loader._file_data:
         all_code_names |= {info["name"] for info in fd["codes"].values()}
 
-    # Prepare pairwise data
+    # Build per-code verdicts
+    code_verdicts = {
+        name: classify_code(m) for name, m in result.per_code.items()
+    }
+
+    # Build overall verdict
+    verdict = classify_overall(result, code_verdicts)
+
+    # Sort codes in codebook order (by sort_order from MatchedCode)
+    code_order = {c.name: c for c in dataset.codes}
+    per_code_sorted = sorted(
+        result.per_code.items(),
+        key=lambda item: code_order[item[0]].sort_order if item[0] in code_order else 0,
+    )
+
+    # Build group structure for template
+    code_groups = []
+    current_group = None
+    for name, metrics in per_code_sorted:
+        mc = code_order.get(name)
+        group = mc.group_name if mc else None
+        if group != current_group:
+            code_groups.append({"type": "group", "name": group})
+            current_group = group
+        code_groups.append({
+            "type": "code",
+            "name": name,
+            "metrics": metrics,
+            "verdict": code_verdicts[name],
+        })
+
+    # Pairwise (3+ coders)
     pairwise_sorted = []
     if n_coders >= 3 and result.pairwise:
         coder_labels = {c.id: c.label for c in dataset.coders}
-        pairwise_sorted = [
-            (
-                f"{coder_labels.get(cid_a, cid_a)} \u2194 {coder_labels.get(cid_b, cid_b)}",
-                pm,
+        for (cid_a, cid_b), pm in sorted(
+            result.pairwise.items(),
+            key=lambda x: x[1].gwets_ac1 if x[1].gwets_ac1 is not None else -1,
+        ):
+            label = (
+                f"{coder_labels.get(cid_a, cid_a)} \u2194 "
+                f"{coder_labels.get(cid_b, cid_b)}"
             )
-            for (cid_a, cid_b), pm in sorted(
-                result.pairwise.items(),
-                key=lambda x: x[1].krippendorffs_alpha if x[1].krippendorffs_alpha is not None else -1,
-                reverse=True,
-            )
-        ]
+            pairwise_sorted.append((label, pm, classify_code(pm)))
+
+    # Table numbering
+    table_per_code = 1
+    table_pairwise = 2 if pairwise_sorted else None
+    table_full = 3 if pairwise_sorted else 2
+
+    # Overall verdict for overall row
+    overall_verdict = classify_code(result.overall)
 
     tmpl = jinja_env.get_template("agreement_results.html")
     return tmpl.render(
@@ -1711,14 +1734,18 @@ def _render_agreement_results(result, dataset, loader, jinja_env) -> str:
         total_sources=len(all_source_hashes),
         total_codes=len(all_code_names),
         warnings=dataset.warnings,
-        kappa_header="Cohen \u03ba" if n_coders == 2 else "Fleiss \u03ba",
-        kappa_ref="3" if n_coders == 2 else "4",
-        per_code_sorted=sorted(result.per_code.items()),
+        verdict=verdict,
+        code_groups=code_groups,
+        code_verdicts=code_verdicts,
+        per_code_sorted=per_code_sorted,
         overall=result.overall,
-        pairwise=result.pairwise,
+        overall_verdict=overall_verdict,
         pairwise_sorted=pairwise_sorted,
+        kappa_header="Cohen \u03ba" if n_coders == 2 else "Fleiss \u03ba",
         fmt=_agreement_fmt,
-        interp_label=_interp_label,
+        table_per_code=table_per_code,
+        table_pairwise=table_pairwise,
+        table_full=table_full,
     )
 
 
