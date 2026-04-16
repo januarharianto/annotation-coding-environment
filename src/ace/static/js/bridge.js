@@ -1995,9 +1995,9 @@
         const right = Math.ceil(line.right - overlayRect.left);
         const bottom = Math.ceil(line.bottom - overlayRect.top);
         const el = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+        el.setAttribute("fill", "transparent");
         el.setAttribute("class", "ace-hl-" + ann.code_id);
         el.dataset.aceHl = "1";
-        el.dataset.annId = ann.id;
         el.setAttribute("x", x);
         el.setAttribute("y", y);
         el.setAttribute("width", right - x);
@@ -2786,12 +2786,23 @@
     const text = textarea.value;
     // Returns the same OOB payload as flag_route — pill, grid strip, and
     // status badge all refresh together.
-    const promise = htmx.ajax("PUT", "/api/source-note/" + encodeURIComponent(sourceId), {
-      values: { note_text: text },
-      target: "#text-panel",
-      swap: "outerHTML",
-    }).then(function () {
+    const promise = fetch("/api/source-note/" + encodeURIComponent(sourceId), {
+      method: "PUT",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: "note_text=" + encodeURIComponent(text),
+    }).then(function (resp) {
+      if (!resp.ok) throw new Error(resp.status);
+      return resp.json();
+    }).then(function (data) {
       _setNoteStatus("Saved \u2713", false);
+      var pill = document.getElementById("note-pill");
+      if (pill) {
+        if (data.has_note) {
+          pill.classList.add("ace-note-pill--has-note");
+        } else {
+          pill.classList.remove("ace-note-pill--has-note");
+        }
+      }
     }).catch(function () {
       _setNoteStatus("Save failed — retry?", true);
     });

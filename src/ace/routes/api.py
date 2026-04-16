@@ -1037,40 +1037,39 @@ async def put_source_note(
 ):
     """Upsert (or delete via empty text) the current coder's note for a source.
 
-    Returns the same full OOB refresh payload as flag_route so the pill state,
-    grid amber strip, and status badge update in a single swap. Promotes a
-    pending source to in_progress when the first non-empty note is saved
-    (Decision 15). Does not set the X-ACE-Toast header (Decision 14).
+    Returns a minimal JSON response (no HTMX swap) so the save doesn't
+    interfere with the SVG highlight overlay or trigger idiomorph errors.
+    The JS caller updates the pill state client-side. Promotes a pending
+    source to in_progress when the first non-empty note is saved.
     """
     from ace.models.assignment import get_assignments_for_coder, update_assignment_status
     from ace.models.source_note import upsert_note
 
     coder_id = _require_coder_id(request)
     if coder_id is None:
-        return HTMLResponse("", status_code=400)
+        return JSONResponse({"ok": False}, status_code=400)
 
     conn = _open_project_db(request)
     try:
-        # Find the assignment index so we can re-render with the same source focused
         assignments = get_assignments_for_coder(conn, coder_id)
-        source_index = None
+        found = False
         current_status = None
-        for i, a in enumerate(assignments):
+        for a in assignments:
             if a["source_id"] == source_id:
-                source_index = i
+                found = True
                 current_status = a["status"]
                 break
-        if source_index is None:
-            return HTMLResponse("", status_code=404)
+        if not found:
+            return JSONResponse({"ok": False}, status_code=404)
 
         upsert_note(conn, source_id, coder_id, note_text)
 
-        # Status promotion (Decision 15): only on first non-empty save
+        promoted = False
         if note_text.strip() and current_status == "pending":
             update_assignment_status(conn, source_id, coder_id, "in_progress")
+            promoted = True
 
-        content = _render_full_coding_oob(request, conn, coder_id, source_index)
-        return HTMLResponse(content)
+        return JSONResponse({"ok": True, "has_note": bool(note_text.strip()), "promoted": promoted})
     finally:
         conn.close()
 

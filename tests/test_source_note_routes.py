@@ -44,8 +44,8 @@ def test_put_note_creates_and_get_returns_it(client_with_sources):
     put = client.put(f"/api/source-note/{s1}", data={"note_text": "Hello"})
     assert put.status_code == 200
     assert "X-ACE-Toast" not in put.headers  # Decision 14: no toast on autosave
-    # Response body is the OOB refresh payload — confirm the pill state shipped
-    assert "ace-note-pill--has-note" in put.text
+    assert put.json()["ok"] is True
+    assert put.json()["has_note"] is True
 
     got = client.get(f"/api/source-note/{s1}")
     assert got.json() == {"note_text": "Hello"}

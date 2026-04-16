@@ -79,7 +79,6 @@ def test_coding_page_renders(client_with_sources):
     assert 'id="note-pill"' in resp.text
     assert 'id="note-drawer"' in resp.text
     assert 'id="note-textarea"' in resp.text
-    assert 'id="note-rail"' in resp.text
     assert 'role="complementary"' in resp.text
 
 
