@@ -200,6 +200,17 @@ rect.ace-flash-{{ code["id"] }} {
       </main>
       {% endblock %}
 
+      {# Right-edge rail — click to open note drawer #}
+      <button type="button"
+              id="note-rail"
+              class="ace-note-rail"
+              aria-label="Open source note"
+              aria-controls="note-drawer"
+              aria-expanded="false"
+              title="Open source note (n)">
+        <span class="ace-note-rail-dot" aria-hidden="true"></span>
+      </button>
+
       {# Source note drawer (push layout — shrinks text panel when open) #}
       <aside id="note-drawer"
              class="ace-note-drawer"

@@ -12,3 +12,20 @@ docs/
 .DS_Store
 dist/
 build/
+
+# Playwright (kept local, never committed)
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+/playwright/.auth/
+/e2e/
+/playwright.config.ts
+/package.json
+/package-lock.json
+/.playwright-mcp/
+
+# Local debugging screenshots
+/webkit-*.png
+/chromium-*.png
+/firefox-*.png

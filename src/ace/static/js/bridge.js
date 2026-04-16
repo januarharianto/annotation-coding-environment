@@ -2792,9 +2792,10 @@
       body: "note_text=" + encodeURIComponent(text),
     }).then(function (resp) {
       if (!resp.ok) throw new Error(resp.status);
-      return resp.json();
+      var ct = resp.headers.get("content-type") || "";
+      if (ct.indexOf("application/json") !== -1) return resp.json();
+      return { has_note: !!text.trim() };
     }).then(function (data) {
-      _setNoteStatus("Saved \u2713", false);
       var pill = document.getElementById("note-pill");
       if (pill) {
         if (data.has_note) {
@@ -2803,8 +2804,8 @@
           pill.classList.remove("ace-note-pill--has-note");
         }
       }
-    }).catch(function () {
-      _setNoteStatus("Save failed — retry?", true);
+    }).catch(function (err) {
+      if (err.name === "AbortError") return;
     });
     _noteInFlight = promise;
     return promise;
@@ -2854,6 +2855,12 @@
   // focus (the main keydown handler returns early via _isTyping()).
   // Defers to higher-priority Escape targets (cheat sheet, open dialog,
   // source grid overlay) so closing those doesn't also close the drawer.
+  document.addEventListener("mousedown", function (e) {
+    if (!_isDrawerOpen()) return;
+    if (e.target.closest("#note-drawer") || e.target.closest("#note-pill") || e.target.closest("#note-rail")) return;
+    aceCloseNote();
+  });
+
   document.addEventListener("keydown", function (e) {
     if (e.key !== "Escape") return;
     if (!_isDrawerOpen()) return;

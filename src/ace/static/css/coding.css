@@ -944,8 +944,9 @@ body:has(#note-textarea:focus) .ace-note-drawer {
 
 .ace-note-drawer-header {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
-  gap: var(--ace-space-2);
+  gap: var(--ace-space-1) var(--ace-space-2);
   padding: var(--ace-space-2) var(--ace-space-4);
   border-bottom: 1px solid var(--ace-note-border);
   flex-shrink: 0;
@@ -973,6 +974,7 @@ body:has(#note-textarea:focus) .ace-note-drawer {
 
 html[data-ace-note-open="1"] .ace-note-mode-indicator::before {
   content: "View · N to edit";
+  font-size: 11px;
   background: #e3f2fd;
   color: #1976d2;
   padding: 2px 6px;
@@ -981,6 +983,7 @@ html[data-ace-note-open="1"] .ace-note-mode-indicator::before {
 
 body:has(#note-textarea:focus) .ace-note-mode-indicator::before {
   content: "Edit · Esc to stop";
+  font-size: 11px;
   background: #fff3e0;
   color: #e65100;
 }
@@ -989,8 +992,7 @@ body:has(#note-textarea:focus) .ace-note-mode-indicator::before {
   font-size: var(--ace-font-size-2xs);
   color: #888;
   font-style: normal;
-  margin-left: auto;
-  flex-shrink: 0;
+  flex-basis: 100%;
 }
 
 /* READ mode: subtle cue that the textarea isn't active yet */
@@ -1024,6 +1026,53 @@ body:has(#note-textarea:focus) .ace-note-drawer .ace-note-textarea {
 }
 
 /* ---- Note rail (persistent right-edge affordance) ---- */
+
+.ace-note-rail {
+  width: 16px;
+  flex-shrink: 0;
+  padding: 0;
+  border: none;
+  border-left: 1px solid var(--ace-note-border);
+  background: linear-gradient(
+    to bottom,
+    transparent 0%,
+    #fdf6d8 15%,
+    #fdf6d8 85%,
+    transparent 100%
+  );
+  cursor: pointer;
+  transition: width 150ms ease;
+  position: relative;
+}
+
+.ace-note-rail:hover {
+  width: 22px;
+}
+
+.ace-note-rail:focus-visible {
+  outline: 2px solid var(--ace-note-accent);
+  outline-offset: -2px;
+}
+
+.ace-note-rail-dot {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: transparent;
+  transition: background 150ms;
+}
+
+html[data-ace-has-note="1"] .ace-note-rail-dot {
+  background: var(--ace-note-accent);
+}
+
+html[data-ace-note-open="1"] .ace-note-rail {
+  display: none;
+}
 
 /* ---- Reduced motion ---- */
 @media (prefers-reduced-motion: reduce) {

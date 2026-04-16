@@ -5,6 +5,10 @@
   "build": {
     "devUrl": "http://127.0.0.1:18080",
     "frontendDist": "http://127.0.0.1:18080",
+    "beforeDevCommand": {
+      "script": "uv run uvicorn ace.app:create_app --factory --host 127.0.0.1 --port 18080 --reload --reload-dir src/ace",
+      "cwd": "../.."
+    },
     "beforeBuildCommand": {
       "script": "uv run python scripts/build_sidecar.py",
       "cwd": "../.."
