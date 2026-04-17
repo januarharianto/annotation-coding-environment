@@ -1,23 +1,33 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 231" width="200" height="231">
-  <!-- Pointy-top hexagon — R package hex sticker proportions -->
+  <!-- Pointy-top hexagon, dark navy fill -->
   <polygon
     points="100,3 195,57.75 195,173.25 100,228 5,173.25 5,57.75"
-    fill="#1a1d27"
-    stroke="#ffffff"
-    stroke-width="3"/>
+    fill="#1a1d27"/>
 
-  <!-- ACE wordmark — text + bar group vertically centered on y=115.5 -->
-  <text x="100" y="106"
-    font-family="'Plus Jakarta Sans', 'Helvetica Neue', Helvetica, Arial, sans-serif"
-    font-weight="800"
-    font-size="54"
-    fill="#ffffff"
-    text-anchor="middle"
-    dominant-baseline="central"
-    letter-spacing="2">ACE</text>
+  <!-- ACE wordmark: 3 light tiles with dark letters, group centred -->
+  <g transform="translate(35, 89)">
+    <rect x="0" y="0" width="40" height="40" rx="6" ry="6" fill="#fcfcfa"/>
+    <rect x="45" y="0" width="40" height="40" rx="6" ry="6" fill="#fcfcfa"/>
+    <rect x="90" y="0" width="40" height="40" rx="6" ry="6" fill="#fcfcfa"/>
+
+    <text x="20" y="20"
+      font-family="'Plus Jakarta Sans', 'Helvetica Neue', Helvetica, Arial, sans-serif"
+      font-weight="800" font-size="25" fill="#1a1d27"
+      text-anchor="middle" dominant-baseline="central">A</text>
+    <text x="65" y="20"
+      font-family="'Plus Jakarta Sans', 'Helvetica Neue', Helvetica, Arial, sans-serif"
+      font-weight="800" font-size="25" fill="#1a1d27"
+      text-anchor="middle" dominant-baseline="central">C</text>
+    <text x="110" y="20"
+      font-family="'Plus Jakarta Sans', 'Helvetica Neue', Helvetica, Arial, sans-serif"
+      font-weight="800" font-size="25" fill="#1a1d27"
+      text-anchor="middle" dominant-baseline="central">E</text>
+  </g>
 
   <!-- Tri-colour accent bar -->
-  <rect x="46" y="137" width="36" height="7" fill="#D55E00"/>
-  <rect x="82" y="137" width="36" height="7" fill="#56B4E9"/>
-  <rect x="118" y="137" width="36" height="7" fill="#F0E442"/>
+  <g transform="translate(35, 136)">
+    <rect x="0" y="0" width="43" height="5" fill="#D55E00"/>
+    <rect x="43" y="0" width="44" height="5" fill="#56B4E9"/>
+    <rect x="87" y="0" width="43" height="5" fill="#F0E442"/>
+  </g>
 </svg>
