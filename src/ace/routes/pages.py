@@ -209,7 +209,26 @@ async def agreement_page(request: Request):
 
 
 @router.get("/code", response_class=HTMLResponse)
-async def coding_page(request: Request, index: int = Query(default=0)):
+async def coding_page(
+    request: Request,
+    index: int = Query(default=0),
+    open: str | None = Query(default=None),
+):
+    # Tauri file association: open a project before rendering the coding page
+    if open:
+        from ace.db.connection import open_project
+        from ace.models.project import list_coders
+
+        try:
+            conn = open_project(open)
+            coders = list_coders(conn)
+            conn.close()
+            request.app.state.project_path = str(open)
+            if coders:
+                request.app.state.coder_id = coders[0]["id"]
+        except Exception:
+            raise HtmxRedirect("/")
+
     project_path: str | None = getattr(request.app.state, "project_path", None)
     if project_path is None or not Path(project_path).exists():
         raise HtmxRedirect("/")

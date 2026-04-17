@@ -5,6 +5,9 @@ edition = "2021"
 
 [dependencies]
 tauri = { version = "2", features = [] }
+urlencoding = "2"
+tauri-plugin-deep-link = "2"
+tauri-plugin-dialog = "2"
 tauri-plugin-shell = "2"
 tauri-plugin-single-instance = "2"
 

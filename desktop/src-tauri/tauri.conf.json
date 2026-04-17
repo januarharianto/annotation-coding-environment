@@ -39,6 +39,19 @@
       "icons/icon.png"
     ],
     "externalBin": ["binaries/ace-server"],
+    "fileAssociations": [
+      {
+        "ext": ["ace"],
+        "name": "ACE Project",
+        "role": "Editor",
+        "rank": "Owner",
+        "description": "ACE annotation project",
+        "exportedType": {
+          "identifier": "au.edu.sydney.ace-coder.project",
+          "conformsTo": ["public.data"]
+        }
+      }
+    ],
     "macOS": {
       "entitlements": "Entitlements.plist",
       "hardenedRuntime": true,
