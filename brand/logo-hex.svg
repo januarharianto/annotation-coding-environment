@@ -6,18 +6,18 @@
     stroke="#ffffff"
     stroke-width="3"/>
 
-  <!-- ACE wordmark -->
-  <text x="100" y="115"
+  <!-- ACE wordmark — text + bar group vertically centered on y=115.5 -->
+  <text x="100" y="106"
     font-family="'Plus Jakarta Sans', 'Helvetica Neue', Helvetica, Arial, sans-serif"
     font-weight="800"
-    font-size="66"
+    font-size="54"
     fill="#ffffff"
     text-anchor="middle"
     dominant-baseline="central"
     letter-spacing="2">ACE</text>
 
   <!-- Tri-colour accent bar -->
-  <rect x="46" y="162" width="36" height="7" fill="#D55E00"/>
-  <rect x="82" y="162" width="36" height="7" fill="#56B4E9"/>
-  <rect x="118" y="162" width="36" height="7" fill="#F0E442"/>
+  <rect x="46" y="137" width="36" height="7" fill="#D55E00"/>
+  <rect x="82" y="137" width="36" height="7" fill="#56B4E9"/>
+  <rect x="118" y="137" width="36" height="7" fill="#F0E442"/>
 </svg>
