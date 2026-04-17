@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 231" width="200" height="231">
+  <!-- Pointy-top hexagon — R package hex sticker proportions -->
+  <polygon
+    points="100,3 195,57.75 195,173.25 100,228 5,173.25 5,57.75"
+    fill="#1a1d27"
+    stroke="#ffffff"
+    stroke-width="3"/>
+
+  <!-- ACE wordmark -->
+  <text x="100" y="115"
+    font-family="'Plus Jakarta Sans', 'Helvetica Neue', Helvetica, Arial, sans-serif"
+    font-weight="800"
+    font-size="66"
+    fill="#ffffff"
+    text-anchor="middle"
+    dominant-baseline="central"
+    letter-spacing="2">ACE</text>
+
+  <!-- Tri-colour accent bar -->
+  <rect x="46" y="162" width="36" height="7" fill="#D55E00"/>
+  <rect x="82" y="162" width="36" height="7" fill="#56B4E9"/>
+  <rect x="118" y="162" width="36" height="7" fill="#F0E442"/>
+</svg>
