@@ -103,9 +103,20 @@ class AgreementLoader:
             "FROM source s JOIN source_content sc ON s.id = sc.source_id"
         ).fetchall()
 
-        # Codes
+        # Codes — group_name/sort_order may not exist in older .ace files
+        col_info = conn.execute("PRAGMA table_info(codebook_code)").fetchall()
+        col_names = {row["name"] for row in col_info}
+        has_group = "group_name" in col_names
+        has_sort = "sort_order" in col_names
+
+        code_cols = "id, name"
+        if has_group:
+            code_cols += ", group_name"
+        if has_sort:
+            code_cols += ", sort_order"
+        order = " ORDER BY sort_order" if has_sort else ""
         codes = conn.execute(
-            "SELECT id, name, group_name, sort_order FROM codebook_code ORDER BY sort_order"
+            f"SELECT {code_cols} FROM codebook_code{order}"
         ).fetchall()
 
         # Coders
@@ -120,8 +131,12 @@ class AgreementLoader:
         # Build lookup maps
         source_map = {s["id"]: dict(s) for s in sources}
         code_map = {
-            c["id"]: {"name": c["name"], "group_name": c["group_name"], "sort_order": c["sort_order"]}
-            for c in codes
+            c["id"]: {
+                "name": c["name"],
+                "group_name": c["group_name"] if has_group else None,
+                "sort_order": c["sort_order"] if has_sort else i,
+            }
+            for i, c in enumerate(codes)
         }
         coder_map = {c["id"]: c["name"] for c in coders}
 

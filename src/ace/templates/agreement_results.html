@@ -3,11 +3,12 @@
 <!-- Title bar -->
 <div class="ace-agreement-title-bar">
   <h1 class="ace-agreement-title">Inter-Coder Agreement</h1>
-  <div class="spacer"></div>
-  <a href="/api/agreement/export/results" class="ace-export-pill">Export summary</a>
-  <a href="/api/agreement/export/raw" class="ace-export-pill">Export raw data</a>
-  <a href="/api/agreement/export/references" class="ace-export-pill">Download .bib</a>
-  <a href="/api/agreement/export/methodology" class="ace-export-pill">Download methodology</a>
+</div>
+<div class="ace-agreement-exports">
+  <a href="/api/agreement/export/results" class="ace-export-pill">Summary CSV</a>
+  <a href="/api/agreement/export/raw" class="ace-export-pill">Raw data CSV</a>
+  <a href="/api/agreement/export/references" class="ace-export-pill">References .bib</a>
+  <a href="/api/agreement/export/methodology" class="ace-export-pill">Methodology .md</a>
 </div>
 
 <!-- Context bar -->
@@ -31,10 +32,7 @@
 <!-- Section: Summary -->
 <h2 class="ace-section-heading">Summary</h2>
 <div class="ace-verdict ace-verdict-{{ verdict.colour }}">
-  <div class="ace-verdict-header">
-    <div class="ace-verdict-dot"></div>
-    <span class="ace-verdict-title">{{ verdict.title }}</span>
-  </div>
+  <div class="ace-verdict-title">{{ verdict.title }}</div>
   {% for p in verdict.paragraphs %}
   <p>{{ p|safe }}</p>
   {% endfor %}
@@ -53,6 +51,7 @@
     </caption>
     <thead>
       <tr>
+        <th class="col-idx">#</th>
         <th class="col-sortable" data-sort="code">Code <span class="sort-icon">&updownarrow;</span></th>
         <th class="col-sortable" data-sort="status">Status <span class="sort-icon">&updownarrow;</span></th>
         <th class="col-sortable col-num" data-sort="ac1">AC1 <span class="sort-icon">&updownarrow;</span></th>
@@ -64,7 +63,7 @@
       {% for item in code_groups %}
         {% if item.type == "group" %}
           {% if item.name %}
-          <tr class="ace-group-header"><td colspan="5">{{ item.name }}</td></tr>
+          <tr class="ace-group-header"><td colspan="6">{{ item.name }}</td></tr>
           {% endif %}
         {% else %}
           {% set m = item.metrics %}
@@ -77,6 +76,7 @@
               data-sort-alpha="{{ m.krippendorffs_alpha if m.krippendorffs_alpha is not none else -1 }}"
               data-sort-agree="{{ m.percent_agreement }}"
               aria-expanded="false">
+            <td class="col-idx">{{ item.index }}</td>
             <td class="col-code">{{ item.name }}</td>
             <td class="col-status">
               <span class="ace-status ace-status-{{ v.colour }}">
@@ -90,7 +90,7 @@
             <td class="col-num">{{ fmt(m.percent_agreement, is_pct=True) }}%</td>
           </tr>
           <tr class="ace-expanded-row ace-expanded-{{ 'paradox' if v.paradox else v.colour }}" hidden>
-            <td colspan="5">
+            <td colspan="6">
               {% if v.paradox %}<span class="ace-paradox-badge">Prevalence paradox</span>{% endif %}
               <p class="ace-guidance">{{ v.guidance }}</p>
               <div class="ace-expanded-meta">{{ v.metadata_line }}</div>
@@ -101,6 +101,7 @@
 
       <!-- Overall row -->
       <tr class="ace-overall-row">
+        <td class="col-idx"></td>
         <td class="col-code">Overall (pooled)</td>
         <td class="col-status">
           <span class="ace-status ace-status-{{ overall_verdict.colour }}">
@@ -148,7 +149,7 @@
         <td class="col-num">{{ fmt(pm.percent_agreement, is_pct=True) }}%</td>
       </tr>
       <tr class="ace-expanded-row ace-expanded-{{ 'paradox' if pv.paradox else pv.colour }}" hidden>
-        <td colspan="5">
+        <td colspan="6">
           {% if pv.paradox %}<span class="ace-paradox-badge">Prevalence paradox</span>{% endif %}
           <p class="ace-guidance">{{ pv.guidance }}</p>
           <div class="ace-expanded-meta">{{ pv.metadata_line }}</div>
@@ -162,16 +163,14 @@
 
 <!-- Section: Detailed metrics -->
 <h2 class="ace-section-heading">Detailed metrics</h2>
-<details class="ace-collapsible">
-  <summary>Show all metrics &amp; references</summary>
-  <div class="ace-collapsible-body">
+<div class="ace-detailed-section">
     <!-- Methodology note -->
     <div class="ace-methodology-note">
       <strong>How verdicts are computed.</strong>
       Status is based on Gwet's AC1, which simulation studies show tracks true reliability more accurately than alpha or kappa under the prevalence conditions typical of text annotation (Zhao et al., 2022).
       Thresholds: Reliable &ge; 0.80, Tentative 0.60&ndash;0.79, Unreliable &lt; 0.60.
       When alpha appears low despite high agreement, ACE checks for the prevalence paradox (Feinstein &amp; Cicchetti, 1990) and flags it in the per-code guidance.
-      For full details including threshold derivation and paradox detection algorithm, download the methodology document above.
+      For full details including threshold derivation and paradox detection algorithm, download the methodology document from the export buttons at the top of the page.
     </div>
 
     <!-- Full metrics table -->
@@ -231,14 +230,7 @@
       <div>[11] Zhao, X. et al. (2022). Interrater reliability estimators tested against true interrater reliabilities. <em>BMC Med. Res. Methodol.</em>, 22, 232.</div>
       <div>[12] Krippendorff, K. (2011). Computing Krippendorff's alpha-reliability. University of Pennsylvania Scholarly Commons.</div>
     </div>
-
-    <!-- Downloads -->
-    <div class="ace-downloads">
-      <a href="/api/agreement/export/references">&darr; Download references.bib</a>
-      <a href="/api/agreement/export/methodology">&darr; Download methodology.md</a>
-    </div>
-  </div>
-</details>
+</div>
 
 <!-- Inline JS for expand/collapse and column sorting -->
 <script>

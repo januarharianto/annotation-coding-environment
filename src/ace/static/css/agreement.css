@@ -12,17 +12,18 @@
   margin: 0;
 }
 
-/* Title bar with export buttons */
+/* Title bar */
 .ace-agreement-title-bar {
-  display: flex;
-  align-items: center;
-  gap: 12px;
   margin: 16px 0 4px;
-  flex-wrap: wrap;
 }
 
-.ace-agreement-title-bar .ace-agreement-title { flex: 0 0 auto; }
-.ace-agreement-title-bar .spacer { flex: 1; }
+/* Export buttons row */
+.ace-agreement-exports {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
 
 .ace-export-pill {
   display: inline-flex;
@@ -116,28 +117,10 @@
   border-color: #e0e0e0;
 }
 
-.ace-verdict-header {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  margin-bottom: 12px;
-}
-
-.ace-verdict-dot {
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
-.ace-verdict-green .ace-verdict-dot { background: #2e7d32; }
-.ace-verdict-amber .ace-verdict-dot { background: #f9a825; }
-.ace-verdict-red .ace-verdict-dot { background: #c62828; }
-.ace-verdict-grey .ace-verdict-dot { background: #9e9e9e; }
-
 .ace-verdict-title {
   font-size: 18px;
   font-weight: 600;
+  margin-bottom: 12px;
 }
 
 .ace-verdict p {
@@ -147,6 +130,23 @@
   margin-bottom: 12px;
 }
 .ace-verdict p:last-child { margin-bottom: 0; }
+
+.ace-verdict-list {
+  margin: 4px 0 0;
+  padding-left: 20px;
+  font-size: 15px;
+  line-height: 1.6;
+  color: #333;
+}
+
+/* ── Index column ── */
+.col-idx {
+  width: 32px;
+  text-align: right;
+  color: #999;
+  font-size: var(--ace-font-size-2xs);
+  font-variant-numeric: tabular-nums;
+}
 
 /* ── Status dot + word ── */
 .ace-status {
@@ -302,22 +302,8 @@ th.col-num { text-align: right; }
 }
 
 /* ── Collapsible "Detailed metrics" section ── */
-.ace-collapsible {
-  border: 1px solid #e0e0e0;
-  border-radius: 6px;
-}
-
-.ace-collapsible summary {
-  padding: 12px 16px;
-  cursor: pointer;
-  font-size: 14px;
-  font-weight: 500;
-  color: #666;
-}
-
-.ace-collapsible-body {
-  padding: 16px;
-  border-top: 1px solid #e0e0e0;
+.ace-detailed-section {
+  padding: 16px 0;
 }
 
 /* Methodology note */
@@ -396,20 +382,6 @@ th.col-num { text-align: right; }
 }
 
 /* Downloads */
-.ace-downloads {
-  display: flex;
-  gap: 16px;
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px solid #f0f0f0;
-}
-.ace-downloads a {
-  color: #546e7a;
-  text-decoration: none;
-  font-size: 12px;
-}
-.ace-downloads a:hover { text-decoration: underline; }
-
 /* ── Empty / loading / error states ── */
 .ace-agreement-empty,
 .ace-agreement-loading,
@@ -444,4 +416,23 @@ th.col-num { text-align: right; }
 
 .ace-agreement-loading {
   font-size: var(--ace-font-size-sm);
+}
+
+/* ── Print styles ── */
+@media print {
+  .ace-agreement-page { max-width: none; padding: 0; }
+  .ace-back { display: none; }
+  .ace-agreement-exports { display: none; }
+  .ace-agreement-context .action { display: none; }
+  .ace-verdict { break-inside: avoid; }
+  .ace-agreement-table { break-inside: auto; }
+  .ace-agreement-table tr { break-inside: avoid; }
+  .ace-code-row { cursor: default; }
+  .ace-code-row:hover { background: inherit; }
+  .ace-row-red:hover { background: #fff5f5; }
+  .ace-expanded-row:not([hidden]) { break-inside: avoid; }
+  .ace-full-table { break-inside: auto; }
+  .ace-full-table tr { break-inside: avoid; }
+  .ace-refs { break-inside: avoid; }
+  .sort-icon { display: none; }
 }

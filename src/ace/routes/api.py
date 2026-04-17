@@ -1678,9 +1678,6 @@ def _render_agreement_results(result, dataset, loader, jinja_env) -> str:
         name: classify_code(m) for name, m in result.per_code.items()
     }
 
-    # Build overall verdict
-    verdict = classify_overall(result, code_verdicts)
-
     # Sort codes in codebook order (by sort_order from MatchedCode)
     code_order = {c.name: c for c in dataset.codes}
     per_code_sorted = sorted(
@@ -1688,9 +1685,10 @@ def _render_agreement_results(result, dataset, loader, jinja_env) -> str:
         key=lambda item: code_order[item[0]].sort_order if item[0] in code_order else 0,
     )
 
-    # Build group structure for template
+    # Build group structure for template (with 1-based index)
     code_groups = []
     current_group = None
+    code_idx = 1
     for name, metrics in per_code_sorted:
         mc = code_order.get(name)
         group = mc.group_name if mc else None
@@ -1702,7 +1700,19 @@ def _render_agreement_results(result, dataset, loader, jinja_env) -> str:
             "name": name,
             "metrics": metrics,
             "verdict": code_verdicts[name],
+            "index": code_idx,
         })
+        code_idx += 1
+
+    # Build code index for verdict text (1-based)
+    code_index = {
+        item["name"]: item["index"]
+        for item in code_groups
+        if item["type"] == "code"
+    }
+
+    # Overall verdict (needs code_index for large codebooks)
+    verdict = classify_overall(result, code_verdicts, code_index)
 
     # Pairwise (3+ coders)
     pairwise_sorted = []
@@ -1716,7 +1726,7 @@ def _render_agreement_results(result, dataset, loader, jinja_env) -> str:
                 f"{coder_labels.get(cid_a, cid_a)} \u2194 "
                 f"{coder_labels.get(cid_b, cid_b)}"
             )
-            pairwise_sorted.append((label, pm, classify_code(pm)))
+            pairwise_sorted.append((label, pm, classify_code(pm, pairwise=True)))
 
     # Table numbering
     table_per_code = 1

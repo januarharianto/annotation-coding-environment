@@ -156,8 +156,8 @@ def test_compute_returns_new_results_html(client_with_agreement_files):
     assert resp.status_code == 200
     html = resp.text
     assert "ace-agreement-title-bar" in html
-    assert "Export summary" in html
-    assert "Export raw data" in html
+    assert "Summary CSV" in html
+    assert "Raw data CSV" in html
     assert "ace-agreement-context" in html
     assert "Overall (pooled)" in html
     assert "ace-agreement-table" in html
