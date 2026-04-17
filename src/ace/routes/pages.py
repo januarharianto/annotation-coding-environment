@@ -212,22 +212,25 @@ async def agreement_page(request: Request):
 async def coding_page(
     request: Request,
     index: int = Query(default=0),
-    open: str | None = Query(default=None),
+    open_path: str | None = Query(default=None, alias="open"),
 ):
     # Tauri file association: open a project before rendering the coding page
-    if open:
+    if open_path:
         from ace.db.connection import open_project
         from ace.models.project import list_coders
 
         try:
-            conn = open_project(open)
-            coders = list_coders(conn)
-            conn.close()
-            request.app.state.project_path = str(open)
-            if coders:
-                request.app.state.coder_id = coders[0]["id"]
-        except Exception:
+            conn = open_project(open_path)
+        except (ValueError, FileNotFoundError, sqlite3.DatabaseError):
             raise HtmxRedirect("/")
+        try:
+            coders = list_coders(conn)
+        finally:
+            conn.close()
+        request.app.state.project_path = str(open_path)
+        if coders:
+            request.app.state.coder_id = coders[0]["id"]
+        request.app.state.active_projects.add(str(open_path))
 
     project_path: str | None = getattr(request.app.state, "project_path", None)
     if project_path is None or not Path(project_path).exists():

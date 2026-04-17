@@ -30,6 +30,16 @@ fn wait_for_server(port: u16, timeout: Duration) -> bool {
 /// or plain path strings (Windows/Linux argv).
 fn extract_ace_path(items: &[String]) -> Option<String> {
     for item in items {
+        // Common case: plain filesystem path (Windows/Linux argv, macOS argv).
+        // Checked first to avoid Url::parse succeeding on Windows drive letters
+        // (e.g. "C:\path" parses with scheme "c").
+        if std::path::Path::new(item)
+            .extension()
+            .and_then(|e| e.to_str())
+            == Some("ace")
+        {
+            return Some(item.clone());
+        }
         // macOS deep-link delivers file:// URLs
         if let Ok(url) = Url::parse(item) {
             if url.scheme() == "file" {
@@ -39,10 +49,6 @@ fn extract_ace_path(items: &[String]) -> Option<String> {
                     }
                 }
             }
-        }
-        // Windows/Linux: plain path as argv
-        if item.ends_with(".ace") {
-            return Some(item.clone());
         }
     }
     None
@@ -90,10 +96,11 @@ fn main() {
     let child: Arc<Mutex<Option<CommandChild>>> = Arc::new(Mutex::new(None));
     let child_clone = child.clone();
 
-    // Collect any .ace path from command-line args (Windows/Linux cold start)
+    // Collect any .ace path from command-line args (Windows/Linux cold start).
+    // Skip argv[0] (the executable path itself).
     let startup_path: Arc<Mutex<Option<String>>> = Arc::new(Mutex::new(
         extract_ace_path(
-            &std::env::args().collect::<Vec<_>>(),
+            &std::env::args().skip(1).collect::<Vec<_>>(),
         ),
     ));
     let startup_path_clone = startup_path.clone();
@@ -120,7 +127,9 @@ fn main() {
                 let url_strings: Vec<String> =
                     urls.iter().map(|u| u.to_string()).collect();
                 if let Some(path) = extract_ace_path(&url_strings) {
-                    *startup_path_clone.lock().unwrap() = Some(path);
+                    if let Ok(mut guard) = startup_path_clone.lock() {
+                        *guard = Some(path);
+                    }
                 }
             }
 
@@ -154,8 +163,10 @@ fn main() {
             let startup_path_thread = startup_path.clone();
             std::thread::spawn(move || {
                 if wait_for_server(PORT, STARTUP_TIMEOUT) {
-                    // Check if we have a file to open from cold start
-                    let file_path = startup_path_thread.lock().unwrap().take();
+                    let file_path = startup_path_thread
+                        .lock()
+                        .ok()
+                        .and_then(|mut g| g.take());
 
                     let target = if let Some(ref path) = file_path {
                         let encoded = urlencoding::encode(path);
