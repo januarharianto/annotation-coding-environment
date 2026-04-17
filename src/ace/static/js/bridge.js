@@ -761,6 +761,8 @@
       const textIndex = _buildTextIndex(body);
       if (!textIndex.length) return;
 
+      const paraBreakRects = _paraBreakRects(body);
+
       for (const ann of matching) {
         const startPos = _findDOMPosition(textIndex, ann.start);
         const endPos = _findDOMPosition(textIndex, ann.end);
@@ -774,7 +776,7 @@
           continue;
         }
         if (!firstRange) firstRange = range;
-        for (const line of _mergeRectsByLine(range.getClientRects())) {
+        for (const line of _mergeRectsByLine(range.getClientRects(), paraBreakRects)) {
           const x = Math.floor(line.left - overlayRect.left);
           const y = Math.floor(line.top - overlayRect.top);
           const right = Math.ceil(line.right - overlayRect.left);
@@ -1827,20 +1829,38 @@
   const CONTAIN_SLOP = 0.5;
   const LINE_OVERLAP_RATIO = 0.5;
 
+  function _paraBreakRects(body) {
+    return Array.from(body.querySelectorAll(".ace-para-break")).map(function (el) {
+      return el.getBoundingClientRect();
+    });
+  }
+
   /**
    * Merge DOMRectList entries from a Range into per-visual-line rects.
-   * Two steps:
-   *   1. Drop any rect that strictly contains another rect — kills duplicate
+   * Steps:
+   *   1. Drop rects whose vertical extent is fully contained within any
+   *      .ace-para-break element — WebKit's getClientRects() emits a rect
+   *      for block-level elements the range crosses, producing a phantom
+   *      highlight in the inter-paragraph gap for cross-paragraph ranges.
+   *   2. Drop any rect that strictly contains another rect — kills duplicate
    *      `display: block` element rects when a Range fully contains a list item.
-   *   2. Per-line union — sort by top, group rects whose vertical extents
+   *   3. Per-line union — sort by top, group rects whose vertical extents
    *      overlap by at least LINE_OVERLAP_RATIO of the smaller height, union
    *      left/right/top/bottom per group. This collapses sub-pixel gaps at
    *      sentence boundaries.
    */
-  function _mergeRectsByLine(rects) {
-    const valid = Array.from(rects).filter(function (r) {
+  function _mergeRectsByLine(rects, paraBreakRects) {
+    const PARA_SLOP = 1;
+    const validInitial = Array.from(rects).filter(function (r) {
       return r.width >= 1 && r.height >= 1;
     });
+    const valid = (paraBreakRects && paraBreakRects.length)
+      ? validInitial.filter(function (r) {
+          return !paraBreakRects.some(function (br) {
+            return r.top >= br.top - PARA_SLOP && r.bottom <= br.bottom + PARA_SLOP;
+          });
+        })
+      : validInitial;
 
     // Step 1: drop any rect that strictly contains another
     const nonContaining = valid.filter(function (r, i) {
@@ -1976,6 +1996,8 @@
       return;
     }
 
+    const paraBreakRects = _paraBreakRects(body);
+
     for (const ann of annotations) {
       const startPos = _findDOMPosition(textIndex, ann.start);
       const endPos = _findDOMPosition(textIndex, ann.end);
@@ -1988,7 +2010,7 @@
       } catch (e) {
         continue;
       }
-      const lines = _mergeRectsByLine(range.getClientRects());
+      const lines = _mergeRectsByLine(range.getClientRects(), paraBreakRects);
       for (const line of lines) {
         const x = Math.floor(line.left - overlayRect.left);
         const y = Math.floor(line.top - overlayRect.top);
