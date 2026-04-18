@@ -201,7 +201,7 @@ rect.ace-flash-{{ code["id"] }} {
           {% for code in margin_codes %}{% if not loop.first %}<span class="ace-code-sep"> · </span>{% endif %}<span class="ace-code-chip" data-code-id="{{ code['code_id'] }}" data-colour="{{ code['colour'] }}" style="color: {{ code['colour'] }};">{{ code['code_name'] }}</span>{% endfor %}
         </div>
         {% endif %}
-        <div class="ace-legend" aria-hidden="true"><span class="k">&uarr;&darr;</span> sentences &middot; <span class="k">&#8679;&larr;&#8679;&rarr;</span> sources &middot; <span class="k">Q</span> repeat &middot; <span class="k">Z</span> undo &middot; <span class="k">X</span> delete &middot; <span class="k">N</span> note &middot; <span class="k">?</span> full help</div>
+        <div class="ace-legend" aria-hidden="true"><span class="k">&uarr;&darr;</span> sentences &middot; <span class="k">&#8679;&larr;&#8679;&rarr;</span> sources &middot; <span class="k">Q</span> repeat &middot; <span class="k">Z</span> undo &middot; <span class="k">X</span> delete &middot; <span class="k">N</span> note</div>
       </main>
       {% endblock %}
 
