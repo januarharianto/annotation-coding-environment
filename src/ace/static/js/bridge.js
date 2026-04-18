@@ -345,6 +345,32 @@
       return;
     }
 
+    // ← / → (unmodified) — Aliases for ↑ / ↓ when reading. Text panel has no
+    // character cursor, so the horizontal arrows are free. "Forward / back"
+    // reads more naturally than strict "up / down" for sequential content.
+    if (key === "ArrowRight" && !shift) {
+      e.preventDefault();
+      const sentencesR = _getSentences();
+      if (sentencesR.length === 0) return;
+      if (window.__aceFocusIndex < 0) {
+        _focusSentence(0);
+      } else if (window.__aceFocusIndex < sentencesR.length - 1) {
+        _focusSentence(window.__aceFocusIndex + 1);
+      }
+      return;
+    }
+    if (key === "ArrowLeft" && !shift) {
+      e.preventDefault();
+      const sentencesL = _getSentences();
+      if (sentencesL.length === 0) return;
+      if (window.__aceFocusIndex < 0) {
+        _focusSentence(sentencesL.length - 1);
+      } else if (window.__aceFocusIndex > 0) {
+        _focusSentence(window.__aceFocusIndex - 1);
+      }
+      return;
+    }
+
     // Z — Undo (no modifier needed in sentence mode)
     if ((key === "z" || key === "Z") && !ctrl) {
       e.preventDefault();
