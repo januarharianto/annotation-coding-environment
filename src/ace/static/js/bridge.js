@@ -2,7 +2,6 @@
  * ACE Bridge — client-side utilities for the coding page.
  *
  * Sections:
- *  1. Toast notifications
  *  2. Sentence navigation (↑/↓ focus)
  *  3. Group collapse / expand
  *  4. Keymap (dynamic keycap assignment)
@@ -24,29 +23,6 @@
 
 (function () {
   "use strict";
-
-  /* ================================================================
-   * 1. Toast notifications
-   * ================================================================ */
-
-  window.aceToast = function (message, duration) {
-    duration = duration || 3000;
-    const container = document.getElementById("toast");
-    if (!container) return;
-    let el = document.createElement("div");
-    el.className = "toast-msg";
-    el.textContent = message;
-    container.appendChild(el);
-    setTimeout(function () {
-      el.classList.add("fade-out");
-      el.addEventListener("transitionend", function () { el.remove(); });
-    }, duration);
-  };
-
-  document.addEventListener("htmx:afterRequest", function (e) {
-    const msg = e.detail.xhr && e.detail.xhr.getResponseHeader("X-ACE-Toast");
-    if (msg) window.aceToast(msg);
-  });
 
   function _escapeHtml(str) {
     const div = document.createElement("div");
@@ -492,6 +468,7 @@
     }
     window.__aceCurrentIndex = index;
     window.__aceFocusIndex = -1;
+    _setAmbient();
     window.location.href = `/code?index=${index}`;
   };
 
@@ -1063,7 +1040,7 @@
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: body,
     }).then(function (r) {
-      if (!r.ok) { window.aceToast("Action failed"); return Promise.reject(); }
+      if (!r.ok) { window._setStatus("Action failed", "err"); return Promise.reject(); }
       _refreshSidebar();
     });
   }
@@ -2035,13 +2012,94 @@
    * 17. Sidebar keyboard navigation (ARIA treeview)
    * ================================================================ */
 
-  /** Push a message to the aria-live region for screen readers. */
-  function _announce(message) {
-    const region = document.getElementById("ace-live-region");
+  /** Push a message to a live region. Polite by default; assertive=true for errors. */
+  function _announce(message, assertive) {
+    const id = assertive ? "ace-live-region-assertive" : "ace-live-region";
+    const region = document.getElementById(id);
     if (!region) return;
     region.textContent = message;
     setTimeout(function () { region.textContent = ""; }, 3000);
   }
+
+  // ---- Status bar helpers ----
+  let _statusEventClearTimer = null;
+
+  /** Update the ambient left segment from current DOM state. */
+  function _setAmbient() {
+    const el = document.querySelector(".ace-statusbar-ambient");
+    if (!el) return;
+    const parts = [];
+    const projName = document.documentElement.dataset.aceProjectName;
+    if (projName) parts.push(projName);
+    const idx = window.__aceCurrentIndex;
+    const total = window.__aceTotalSources;
+    if (Number.isFinite(idx) && Number.isFinite(total) && total > 0) {
+      parts.push("Source " + (idx + 1) + " / " + total);
+    }
+    const codeChips = document.querySelectorAll(".ace-code-bar .ace-code-chip");
+    if (codeChips.length) {
+      parts.push(codeChips.length + (codeChips.length === 1 ? " code" : " codes"));
+    }
+    const flagBtn = document.getElementById("nav-flag-btn");
+    if (flagBtn && flagBtn.classList.contains("ace-flag-btn--active")) {
+      parts.push("flagged");
+    }
+    el.textContent = parts.join(" · ");
+  }
+
+  /**
+   * Show an ephemeral or sticky message in the status bar event segment.
+   *   kind="ok": text for ~2 s then fades (via empty-state CSS + timer clears text).
+   *   kind="err": sticky until the next _setStatus() call.
+   * Mirrors to the ARIA live region (assertive when kind="err").
+   */
+  function _setStatus(text, kind) {
+    kind = kind || "ok";
+    const el = document.querySelector(".ace-statusbar-event");
+    if (!el) return;
+    if (_statusEventClearTimer) {
+      clearTimeout(_statusEventClearTimer);
+      _statusEventClearTimer = null;
+    }
+    el.textContent = text || "";
+    el.classList.remove("ace-statusbar-event--ok", "ace-statusbar-event--err");
+    if (text) el.classList.add("ace-statusbar-event--" + kind);
+    if (text) _announce(text, kind === "err");
+    if (kind === "ok" && text) {
+      _statusEventClearTimer = setTimeout(function () {
+        el.textContent = "";
+        el.classList.remove("ace-statusbar-event--ok");
+      }, 2000);
+    }
+  }
+
+  window._setStatus = _setStatus;
+  window._setAmbient = _setAmbient;
+
+  /**
+   * Briefly swap a control's label to a confirmation, then revert.
+   * Used for import/export success feedback — no toast, no status-bar entry.
+   * Safe to call repeatedly on the same element; the prior revert timer is
+   * cancelled so the label always returns to the cached original.
+   */
+  function _flashOriginConfirmation(elementId, text, revertMs) {
+    const el = document.getElementById(elementId);
+    if (!el) return;
+    revertMs = revertMs || 1500;
+    if (!el.dataset.aceOriginalLabel) {
+      el.dataset.aceOriginalLabel = el.textContent;
+    }
+    el.textContent = text;
+    el.classList.add("ace-origin-flash");
+    if (el._aceFlashTimer) clearTimeout(el._aceFlashTimer);
+    el._aceFlashTimer = setTimeout(function () {
+      el.textContent = el.dataset.aceOriginalLabel;
+      delete el.dataset.aceOriginalLabel;
+      el.classList.remove("ace-origin-flash");
+      el._aceFlashTimer = null;
+    }, revertMs);
+  }
+  window._flashOriginConfirmation = _flashOriginConfirmation;
 
   // --- Zone cycling (Tab / Shift+Tab / Escape / /) ---
 
@@ -2503,6 +2561,7 @@
     if (e.target.closest("#codebook-export-btn")) {
       if (dropdown) dropdown.style.display = "none";
       window.location.href = "/api/codes/export";
+      window._setStatus("Exported", "ok");
       return;
     }
 
@@ -2510,6 +2569,7 @@
     if (e.target.closest("#export-annotations-btn")) {
       if (dropdown) dropdown.style.display = "none";
       window.location.href = "/api/export/annotations";
+      window._setStatus("Exported", "ok");
       return;
     }
 
@@ -2517,6 +2577,7 @@
     if (e.target.closest("#export-notes-btn")) {
       if (dropdown) dropdown.style.display = "none";
       window.location.href = "/api/export/notes";
+      window._setStatus("Exported", "ok");
       return;
     }
 
@@ -2557,7 +2618,7 @@
       document.exitFullscreen();
     } else {
       document.documentElement.requestFullscreen().catch(function (err) {
-        window.aceToast(`Fullscreen failed: ${err.message}`);
+        window._setStatus(`Fullscreen failed: ${err.message}`, "err");
       });
     }
   }
@@ -2582,6 +2643,31 @@
     const currentIndex = btn.getAttribute("data-current-index") || window.__aceCurrentIndex;
     const dialog = btn.closest("dialog");
     if (dialog) dialog.close();
+
+    let importCount = 0;
+    try {
+      const parsed = JSON.parse(codesJson);
+      if (Array.isArray(parsed)) importCount = parsed.length;
+    } catch (_) { /* ignore — fall back to no count */ }
+    const successLabel = importCount > 0
+      ? "Imported " + importCount + " code" + (importCount === 1 ? "" : "s")
+      : "Imported";
+
+    // One-time afterRequest listener — fires the success message only when the
+    // import request actually succeeded. _oob_status returns HTTP 200 with an
+    // OOB error fragment that overwrites the status bar, so we additionally
+    // skip when the response body contains the err-status marker.
+    const onAfter = function (evt) {
+      if (!evt.detail) return;
+      const xhr = evt.detail.xhr;
+      if (!xhr || !xhr.responseURL || !xhr.responseURL.endsWith("/api/codes/import")) return;
+      document.removeEventListener("htmx:afterRequest", onAfter);
+      if (!evt.detail.successful) return;
+      const body = xhr.responseText || "";
+      if (body.indexOf("ace-statusbar-event--err") !== -1) return;
+      window._setStatus(successLabel, "ok");
+    };
+    document.addEventListener("htmx:afterRequest", onAfter);
 
     htmx.ajax("POST", "/api/codes/import", {
       values: { codes_json: codesJson, current_index: currentIndex },
@@ -2650,6 +2736,7 @@
     _updateKeycaps();
     _initSortable();
     _paintSvg();
+    _setAmbient();
 
     // Set initial roving tabindex — first treeitem gets tabindex="0"
     const items = _getTreeItems();
@@ -2663,6 +2750,11 @@
       _focusSentence(0);
     }
     _focusTextPanel();
+  });
+
+  // Keep ambient status bar in sync after every HTMX swap.
+  document.addEventListener("htmx:afterSettle", function () {
+    _setAmbient();
   });
 
   /* ================================================================

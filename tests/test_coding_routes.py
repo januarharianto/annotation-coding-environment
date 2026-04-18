@@ -74,7 +74,7 @@ def test_coding_page_renders(client_with_sources):
     assert "coding-workspace" in resp.text
     assert "code-sidebar" in resp.text
     assert "text-panel" in resp.text
-    assert "hint-bar" in resp.text
+    assert "ace-legend" in resp.text
     # Source notes UI (Task R1 — drawer pattern)
     assert 'id="note-pill"' in resp.text
     assert 'id="note-drawer"' in resp.text
@@ -299,7 +299,6 @@ def test_undo_after_annotate(client_with_codes):
         data={"current_index": 0},
     )
     assert resp.status_code == 200
-    assert "X-ACE-Toast" in resp.headers
 
     # Verify annotation is now soft-deleted
     conn = sqlite3.connect(db_path)
@@ -333,7 +332,6 @@ def test_redo_after_undo(client_with_codes):
     # Redo
     resp = client.post("/api/code/redo", data={"current_index": 0})
     assert resp.status_code == 200
-    assert "X-ACE-Toast" in resp.headers
 
     # Verify annotation is active again
     conn = sqlite3.connect(db_path)
@@ -430,7 +428,6 @@ def test_flag_source(client_with_sources):
     )
     assert resp.status_code == 200
     assert "flagged" in resp.text.lower()
-    assert resp.headers.get("X-ACE-Toast") == "Source flagged"
 
     # Flag again to unflag
     resp = client.post(
@@ -544,3 +541,46 @@ def test_coding_context_includes_note_state(client_with_codes):
         assert ctx3["source_ids_with_notes"] == {s1, s2}
     finally:
         conn.close()
+
+
+def test_invalid_code_name_returns_status_oob_swap(client_with_codes):
+    """Code validation error returns an OOB swap into the status bar, not #toast."""
+    client, _coder, _a, _b, _path = client_with_codes
+    # Whitespace-only name passes Form(...) presence check but fails .strip() guard
+    resp = client.post("/api/codes", data={"name": "   "})
+    assert resp.status_code == 200
+    assert "ace-statusbar-event" in resp.text
+    # Errors must also reach screen readers via the assertive live region.
+    assert "ace-live-region-assertive" in resp.text
+    assert 'id="toast"' not in resp.text
+
+
+def test_undo_does_not_set_x_ace_toast_and_announces_via_live_region(client_with_codes):
+    """Undo action is silent in the status bar but announces to the polite live region."""
+    client, _coder_id, code_a, _code_b, _db_path = client_with_codes
+    # Create an annotation we can undo
+    client.post(
+        "/api/code/apply",
+        data={
+            "code_id": code_a,
+            "current_index": 0,
+            "start_offset": 0,
+            "end_offset": 5,
+            "selected_text": "First",
+        },
+    )
+    resp = client.post("/api/code/undo", data={"current_index": 0})
+    assert resp.status_code == 200
+    assert "X-ACE-Toast" not in resp.headers
+    assert 'id="ace-live-region"' in resp.text
+    assert "Annotation removed" in resp.text
+
+
+def test_flag_does_not_set_x_ace_toast_and_announces_via_live_region(client_with_codes):
+    """Flag action is silent in the status bar but announces to the polite live region."""
+    client, _coder_id, _code_a, _code_b, _db_path = client_with_codes
+    resp = client.post("/api/code/flag", data={"source_index": "0"})
+    assert resp.status_code == 200
+    assert "X-ACE-Toast" not in resp.headers
+    assert 'id="ace-live-region"' in resp.text
+    assert "Source flagged" in resp.text

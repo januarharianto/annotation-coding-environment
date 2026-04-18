@@ -53,7 +53,12 @@ async def import_page(request: Request):
     )
 
 
-def _coding_context(conn: sqlite3.Connection, coder_id: str, current_index: int) -> dict:
+def _coding_context(
+    conn: sqlite3.Connection,
+    coder_id: str,
+    current_index: int,
+    project_path: str | None = None,
+) -> dict:
     """Assemble all data needed to render the coding page."""
     from ace.services.coding_render import render_sentence_text
     from ace.services.text_splitter import split_into_units
@@ -61,6 +66,7 @@ def _coding_context(conn: sqlite3.Connection, coder_id: str, current_index: int)
     project = get_project(conn)
     sources = list_sources(conn)
     total_sources = len(sources)
+    project_file_stem = Path(project_path).stem if project_path else ""
 
     # Auto-create assignments if none exist for this coder
     assignments = get_assignments_for_coder(conn, coder_id)
@@ -176,6 +182,7 @@ def _coding_context(conn: sqlite3.Connection, coder_id: str, current_index: int)
 
     return {
         "project_name": project["name"],
+        "project_file_stem": project_file_stem,
         "current_index": current_index,
         "total_sources": total_sources,
         "current_source": current_source,
@@ -247,7 +254,7 @@ async def coding_page(
         if not sources:
             raise HtmxRedirect("/import")
 
-        context = _coding_context(conn, coder_id, index)
+        context = _coding_context(conn, coder_id, index, project_path=project_path)
     finally:
         db_gen.close()
 

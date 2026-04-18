@@ -417,6 +417,13 @@
   outline: none;
   line-height: 2;
   font-size: var(--ace-font-size-base);
+  display: flex;
+  flex-direction: column;
+}
+
+/* Push the legend (last child) to the bottom when content doesn't fill the panel */
+.ace-text-panel > .ace-legend {
+  margin-top: auto;
 }
 
 .ace-text-empty {
@@ -502,7 +509,7 @@ rect.ace-flash {
 
 .ace-code-bar {
   position: sticky;
-  bottom: 0;
+  bottom: 48px;
   margin-top: var(--ace-space-4);
   padding: var(--ace-space-2) var(--ace-space-8);
   display: flex;
@@ -531,28 +538,27 @@ rect.ace-flash {
   background: rgba(0, 0, 0, 0.06);
 }
 
-/* ---- Bottom hint bar ---- */
+/* ---- Permanent keyboard-shortcut legend (bottom of text panel) ---- */
 
-.ace-hint-bar {
-  padding: var(--ace-space-1) var(--ace-space-4);
-  font-size: var(--ace-font-size-2xs);
-  color: var(--ace-text-muted);
+.ace-legend {
+  position: sticky;
+  bottom: 24px;
+  padding: 4px var(--ace-space-8) 6px;
   text-align: center;
-  background: var(--ace-bg-muted);
-  border-top: 1px solid var(--ace-border);
-  flex-shrink: 0;
   font-family: var(--ace-font-mono);
+  font-size: var(--ace-font-size-2xs);
+  color: rgba(43, 48, 56, 0.40);
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+  user-select: none;
+  z-index: 1;
 }
 
-.ace-hint-bar kbd {
-  display: inline-block;
-  padding: 1px 5px;
-  font-size: var(--ace-font-size-2xs);
-  border: 1px solid var(--ace-border-light);
-  border-radius: var(--ace-radius);
-  background: var(--ace-bg);
-  font-family: inherit;
-  margin: 0 1px;
+.ace-legend .k {
+  color: rgba(43, 48, 56, 0.72);
 }
 
 /* ---- Source grid overlay ---- */

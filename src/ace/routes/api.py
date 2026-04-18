@@ -157,7 +157,7 @@ async def pick_files(accept: str | None = Form(default=None)):
 
 
 # ---------------------------------------------------------------------------
-# OOB toast helper
+# Import preview fragment helper
 # ---------------------------------------------------------------------------
 
 def _preview_fragment(filename: str, snippet: str, escaped_folder: str) -> str:
@@ -181,13 +181,39 @@ def _preview_fragment(filename: str, snippet: str, escaped_folder: str) -> str:
     )
 
 
-def _oob_toast(message: str, variant: str = "error") -> HTMLResponse:
-    """Return an OOB-swap toast element for HTMX."""
-    return HTMLResponse(
-        f'<div id="toast" hx-swap-oob="beforeend">'
-        f'<div class="toast-msg ace-toast--{variant}">{message}</div>'
-        f'</div>'
+def _oob_announce(message: str, assertive: bool = False) -> str:
+    """Return an OOB-swap fragment that writes to an ARIA live region.
+
+    Screen readers announce polite by default; pass assertive=True for errors
+    that should interrupt the user's flow. Returns a string fragment that a
+    caller can concatenate to their existing HTML response body.
+    """
+    escaped = html.escape(message)
+    target_id = "ace-live-region-assertive" if assertive else "ace-live-region"
+    role = 'role="alert" ' if assertive else ""
+    aria = "assertive" if assertive else "polite"
+    return (
+        f'<div {role}aria-live="{aria}" class="ace-sr-only" '
+        f'id="{target_id}" hx-swap-oob="innerHTML">{escaped}</div>'
     )
+
+
+def _oob_status(message: str, kind: str = "err") -> HTMLResponse:
+    """Return an OOB-swap fragment that sets the status-bar event segment.
+
+    Emits two OOB fragments — the visible status-bar span plus a sibling
+    update into the assertive ARIA live region (because the status bar itself
+    is aria-hidden, so screen-reader users would otherwise miss the error).
+    kind is "err" for sticky errors, "ok" for 2-second ephemeral success.
+    """
+    escaped = html.escape(message)
+    status_fragment = (
+        f'<span class="ace-statusbar-event ace-statusbar-event--{kind}" '
+        f'id="ace-statusbar-event" hx-swap-oob="outerHTML">{escaped}</span>'
+    )
+    # Assertive region for errors (sticky), polite for ok (ephemeral).
+    announce = _oob_announce(message, assertive=(kind == "err"))
+    return HTMLResponse(status_fragment + announce)
 
 
 # ---------------------------------------------------------------------------
@@ -250,7 +276,7 @@ async def project_create(
             headers={"HX-Redirect": "/import"},
         )
     except Exception as e:
-        return _oob_toast(f"Failed to create project: {e}")
+        return _oob_status(f"Failed to create project: {e}")
 
 
 @router.post("/project/open")
@@ -263,7 +289,7 @@ async def project_open(request: Request, path: str = Form(...)):
     try:
         conn = open_project(path)
     except (ValueError, FileNotFoundError, sqlite3.DatabaseError) as e:
-        return _oob_toast(str(e))
+        return _oob_status(str(e))
 
     try:
         coders = list_coders(conn)
@@ -299,7 +325,7 @@ async def import_upload(request: Request, file: UploadFile = File(...)):
     # Read the uploaded file into a temp file
     data = await file.read()
     if len(data) > _MAX_UPLOAD_BYTES:
-        return _oob_toast("File exceeds 50 MB limit")
+        return _oob_status("File exceeds 50 MB limit")
 
     suffix = Path(file.filename or "upload.csv").suffix
     tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
@@ -310,7 +336,7 @@ async def import_upload(request: Request, file: UploadFile = File(...)):
         rows, columns = read_tabular(Path(tmp.name))
     except Exception as e:
         Path(tmp.name).unlink(missing_ok=True)
-        return _oob_toast(f"Could not parse file: {e}")
+        return _oob_status(f"Could not parse file: {e}")
 
     # Store temp path for the commit step
     request.app.state.import_tmp_path = tmp.name
@@ -406,7 +432,7 @@ async def import_commit(
 
     tmp_path = getattr(request.app.state, "import_tmp_path", None)
     if tmp_path is None or not Path(tmp_path).exists():
-        return _oob_toast("No uploaded file found. Please upload again.")
+        return _oob_status("No uploaded file found. Please upload again.")
 
     db_gen = get_db(request)
     conn = next(db_gen)
@@ -415,7 +441,7 @@ async def import_commit(
         count = import_csv(conn, tmp_path, id_column, text_col_list)
     except Exception as e:
         db_gen.close()
-        return _oob_toast(f"Import failed: {e}")
+        return _oob_status(f"Import failed: {e}")
     finally:
         db_gen.close()
 
@@ -441,7 +467,7 @@ async def import_folder(
 
     folder = Path(path)
     if not folder.is_dir():
-        return _oob_toast("Invalid folder path.")
+        return _oob_status("Invalid folder path.")
 
     db_gen = get_db(request)
     conn = next(db_gen)
@@ -449,7 +475,7 @@ async def import_folder(
         count = import_text_files(conn, folder)
     except Exception as e:
         db_gen.close()
-        return _oob_toast(f"Import failed: {e}")
+        return _oob_status(f"Import failed: {e}")
     finally:
         db_gen.close()
 
@@ -519,7 +545,7 @@ async def code_excerpts(request: Request, code_id: str):
         code = next((c for c in codes if c["id"] == code_id), None)
         if code is None:
             db_gen.close()
-            return _oob_toast("Code not found.")
+            return _oob_status("Code not found.")
 
         code_name = html.escape(code["name"])
         code_colour = html.escape(code["colour"])
@@ -871,10 +897,8 @@ async def undo_route(
         else:
             msg = "Undo"
 
-        content = _render_coding_oob(request, conn, coder_id, current_index)
-        response = HTMLResponse(content)
-        response.headers["X-ACE-Toast"] = msg
-        return response
+        content = _render_coding_oob(request, conn, coder_id, current_index) + _oob_announce(msg)
+        return HTMLResponse(content)
     finally:
         conn.close()
 
@@ -911,10 +935,8 @@ async def redo_route(
         else:
             msg = "Redo"
 
-        content = _render_coding_oob(request, conn, coder_id, current_index)
-        response = HTMLResponse(content)
-        response.headers["X-ACE-Toast"] = msg
-        return response
+        content = _render_coding_oob(request, conn, coder_id, current_index) + _oob_announce(msg)
+        return HTMLResponse(content)
     finally:
         conn.close()
 
@@ -994,12 +1016,9 @@ async def flag_route(
         new_status = "in_progress" if current_status == "flagged" else "flagged"
         update_assignment_status(conn, source_id, coder_id, new_status)
 
-        content = _render_full_coding_oob(request, conn, coder_id, source_index)
-        response = HTMLResponse(content)
-        response.headers["X-ACE-Toast"] = (
-            "Source flagged" if new_status == "flagged" else "Source unflagged"
-        )
-        return response
+        msg = "Source flagged" if new_status == "flagged" else "Source unflagged"
+        content = _render_full_coding_oob(request, conn, coder_id, source_index) + _oob_announce(msg)
+        return HTMLResponse(content)
     finally:
         conn.close()
 
@@ -1260,9 +1279,7 @@ async def delete_sentence_annotations(
 
         content = _render_coding_oob(request, conn, coder_id, current_index)
         if most_recent:
-            response = HTMLResponse(content)
-            response.headers["X-ACE-Toast"] = "Annotation removed"
-            return response
+            content += _oob_announce("Annotation removed")
         return HTMLResponse(content)
     finally:
         conn.close()
@@ -1325,7 +1342,7 @@ async def create_code(
 
     name = name.strip()
     if not name:
-        return _oob_toast("Code name cannot be empty.")
+        return _oob_status("Code name cannot be empty.")
 
     conn = _open_project_db(request)
     try:
@@ -1335,7 +1352,7 @@ async def create_code(
         try:
             add_code(conn, name, colour, group_name=gn or None)
         except Exception:
-            return _oob_toast(f"A code named '{name}' already exists.")
+            return _oob_status(f"A code named '{name}' already exists.")
         content = _render_code_sidebar(request, conn, coder_id, current_index)
         return HTMLResponse(content)
     finally:
@@ -1358,7 +1375,7 @@ async def reorder_codes_route(
     try:
         ids_list = json.loads(code_ids)
     except (json.JSONDecodeError, TypeError):
-        return _oob_toast("Invalid code_ids format.")
+        return _oob_status("Invalid code_ids format.")
 
     conn = _open_project_db(request)
     try:
@@ -1409,13 +1426,13 @@ async def import_codebook_preview_path(
 
     file_path = Path(path)
     if file_path.suffix.lower() != ".csv":
-        return _oob_toast("Please select a valid CSV file.")
+        return _oob_status("Please select a valid CSV file.")
 
     conn = _open_project_db(request)
     try:
         previewed = preview_codebook_csv(conn, str(file_path))
     except Exception as e:
-        return _oob_toast(f"Could not parse CSV: {html.escape(str(e))}")
+        return _oob_status(f"Could not parse CSV: {e}")
     finally:
         conn.close()
 
@@ -1523,7 +1540,7 @@ async def import_codebook(
     try:
         codes_list = json.loads(codes_json)
     except (json.JSONDecodeError, TypeError):
-        return _oob_toast("Invalid codes_json format.")
+        return _oob_status("Invalid codes_json format.")
 
     conn = _open_project_db(request)
     try:
@@ -1562,7 +1579,7 @@ async def rename_group_route(
 
     new_name = new_name.strip()
     if not new_name:
-        return _oob_toast("Group name cannot be empty.")
+        return _oob_status("Group name cannot be empty.")
 
     conn = _open_project_db(request)
     try:
@@ -1595,11 +1612,11 @@ async def update_code_route(
         if name is not None:
             name = name.strip()
             if not name:
-                return _oob_toast("Code name cannot be empty.")
+                return _oob_status("Code name cannot be empty.")
             kwargs["name"] = name
         if colour is not None:
             if not re.fullmatch(r'#[0-9a-fA-F]{6}', colour):
-                return _oob_toast("Invalid colour format.")
+                return _oob_status("Invalid colour format.")
             kwargs["colour"] = colour
         if group_name is not None:
             kwargs["group_name"] = group_name
@@ -1607,7 +1624,7 @@ async def update_code_route(
         try:
             update_code(conn, code_id, **kwargs)
         except Exception:
-            return _oob_toast("A code with that name already exists.")
+            return _oob_status("A code with that name already exists.")
 
         content = _render_sidebar_and_text(request, conn, coder_id, current_index)
         return HTMLResponse(content)

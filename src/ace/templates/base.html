@@ -10,7 +10,10 @@
 </head>
 <body>
   {% block content %}{% endblock %}
-  <div id="toast"></div>
+  <div id="ace-statusbar" aria-hidden="true">
+    <span class="ace-statusbar-ambient" id="ace-statusbar-ambient"></span>
+    <span class="ace-statusbar-event" id="ace-statusbar-event"></span>
+  </div>
   <script src="/static/js/htmx.min.js"></script>
   <script src="/static/js/bridge.js"></script>
   {% block scripts %}{% endblock %}

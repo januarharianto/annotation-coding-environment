@@ -43,7 +43,6 @@ class TestAppStartup:
     def test_static_bridge_served(self, client):
         resp = client.get("/static/js/bridge.js")
         assert resp.status_code == 200
-        assert "aceToast" in resp.text
 
     def test_import_redirects_without_project(self, client):
         resp = client.get("/import", follow_redirects=False)
