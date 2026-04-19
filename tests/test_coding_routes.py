@@ -704,3 +704,26 @@ def test_counter_chip_is_static(client_with_codes):
     # Clickable affordance gone
     assert "aceToggleGrid" not in body
     assert "\u2687" not in body
+
+
+def test_grid_tabindex_and_live_region(client_with_codes):
+    """Active cell has tabindex=0, others -1, and live region is polite."""
+    import re
+    client, coder_id, _, _, _ = client_with_codes
+    client.cookies.set("coder_id", coder_id)
+    body = client.get("/code").text
+
+    # Live region wired up with the correct aria-live value
+    assert 'id="ace-grid-live"' in body
+    assert 'aria-live="polite"' in body
+
+    # Find the first ace-grid-cell button; it should be active and have tabindex=0
+    m = re.search(
+        r'<button[^>]*class="[^"]*ace-grid-cell[^"]*ace-grid-cell--active[^"]*"[^>]*>',
+        body,
+    )
+    assert m, "no active grid cell button found"
+    assert 'tabindex="0"' in m.group(0)
+
+    # At least one other cell has tabindex=-1
+    assert 'tabindex="-1"' in body
