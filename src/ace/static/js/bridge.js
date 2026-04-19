@@ -736,16 +736,14 @@
         case "Home":       dest = 0; break;
         case "End":        dest = last; break;
         case "PageUp": {
-          const rows = Math.max(1, Math.ceil(cells.length / cols));
-          const rowHeight = cellsEl.clientHeight / rows;
-          const visibleRows = Math.max(1, Math.floor(cellsEl.clientHeight / rowHeight));
+          const cellH = target.getBoundingClientRect().height || 1;
+          const visibleRows = Math.max(1, Math.floor(cellsEl.clientHeight / cellH));
           dest = Math.max(0, idx - visibleRows * cols);
           break;
         }
         case "PageDown": {
-          const rows = Math.max(1, Math.ceil(cells.length / cols));
-          const rowHeight = cellsEl.clientHeight / rows;
-          const visibleRows = Math.max(1, Math.floor(cellsEl.clientHeight / rowHeight));
+          const cellH = target.getBoundingClientRect().height || 1;
+          const visibleRows = Math.max(1, Math.floor(cellsEl.clientHeight / cellH));
           dest = Math.min(last, idx + visibleRows * cols);
           break;
         }
