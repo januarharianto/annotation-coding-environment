@@ -16,7 +16,31 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Preflight — fail fast (~10 s) if GITHUB_TOKEN lacks contents:write, so we
+  # don't burn 30 min of Rust compilation just to 403 at the release step.
+  # Repo Settings → Actions → General → Workflow permissions must be set to
+  # "Read and write permissions" for the token-level permissions: block to
+  # actually elevate (workflows cannot expand beyond the repo-level default).
+  preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Verify release API write access
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PROBE="preflight-${{ github.run_id }}"
+          RESP=$(gh api -X POST /repos/${{ github.repository }}/releases \
+            -f tag_name="$PROBE" -f name="$PROBE" -F draft=true 2>&1) || {
+            echo "::error::GITHUB_TOKEN lacks contents:write. Fix via repo Settings → Actions → General → Workflow permissions → 'Read and write permissions'."
+            echo "Response: $RESP"
+            exit 1
+          }
+          gh api -X DELETE /repos/${{ github.repository }}/releases/$(echo "$RESP" | jq -r .id) > /dev/null
+          echo "Release API write access confirmed."
+
   build:
+    needs: preflight
     strategy:
       fail-fast: false
       matrix:
