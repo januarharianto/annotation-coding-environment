@@ -104,7 +104,7 @@ jobs:
             **macOS:** Open the `.dmg`, drag ACE to Applications.
             **Windows:** Run the installer. You may see a SmartScreen warning — click "More info" then "Run anyway".
 
-            Not code-signed yet — see [signing plan](https://github.com/januarharianto/annotation-coding-environment/blob/main/docs/superpowers/specs/2026-04-03-tauri-desktop-packaging.md#code-signing) for details.
+            Not code-signed yet — macOS and Windows will show "unknown developer" / SmartScreen warnings on install. Signing is planned for a future release.
           releaseDraft: true
           prerelease: false
           args: ${{ matrix.args }}
