@@ -623,33 +623,42 @@
       return parseFloat(computed) || DEFAULT_VH;
     }
 
-    // Mouse drag
+    // Pointer drag — all listeners on the handle, with setPointerCapture,
+    // so they die cleanly with the subtree when #code-sidebar is replaced
+    // by an OOB swap (no document-level listener leak).
     let dragging = false;
     let startY = 0;
     let startVh = DEFAULT_VH;
 
-    handle.addEventListener("mousedown", function (e) {
+    handle.addEventListener("pointerdown", function (e) {
       if (e.button !== 0) return;
       dragging = true;
       startY = e.clientY;
       startVh = _currentVh();
+      handle.setPointerCapture(e.pointerId);
       document.body.style.userSelect = "none";
       e.preventDefault();
     });
 
-    document.addEventListener("mousemove", function (e) {
+    handle.addEventListener("pointermove", function (e) {
       if (!dragging) return;
       const dy = startY - e.clientY; // dragging up grows the panel
       const newVh = _pxToVh(_vhToPx(startVh) + dy);
       _setValue(newVh);
     });
 
-    document.addEventListener("mouseup", function () {
+    function _endDrag(e) {
       if (!dragging) return;
       dragging = false;
       document.body.style.userSelect = "";
+      if (e && typeof e.pointerId === "number" && handle.hasPointerCapture(e.pointerId)) {
+        handle.releasePointerCapture(e.pointerId);
+      }
       _persist(_clampVh(_currentVh()));
-    });
+    }
+
+    handle.addEventListener("pointerup", _endDrag);
+    handle.addEventListener("pointercancel", _endDrag);
 
     // Double-click reset
     handle.addEventListener("dblclick", function () {
