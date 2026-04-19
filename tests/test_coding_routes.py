@@ -584,3 +584,45 @@ def test_flag_does_not_set_x_ace_toast_and_announces_via_live_region(client_with
     assert "X-ACE-Toast" not in resp.headers
     assert 'id="ace-live-region"' in resp.text
     assert "Source flagged" in resp.text
+
+
+# ---------------------------------------------------------------------------
+# Grid cell pre-computation
+# ---------------------------------------------------------------------------
+
+
+def test_density_class():
+    """density_class maps annotation counts to density levels."""
+    from ace.routes.pages import density_class
+
+    assert density_class(0) == ""
+    assert density_class(1) == "ace-grid-cell--ann-1"
+    assert density_class(2) == "ace-grid-cell--ann-1"
+    assert density_class(3) == "ace-grid-cell--ann-3"
+    assert density_class(5) == "ace-grid-cell--ann-3"
+    assert density_class(6) == "ace-grid-cell--ann-6"
+    assert density_class(42) == "ace-grid-cell--ann-6"
+
+
+def test_coding_context_grid_cells(client_with_codes):
+    """_coding_context exposes grid_cells as a list of dicts with expected keys."""
+    import sqlite3
+    from ace.routes.pages import _coding_context
+
+    client, coder_id, _, _, db_path = client_with_codes
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    try:
+        ctx = _coding_context(conn, coder_id, 0)
+    finally:
+        conn.close()
+
+    assert "grid_cells" in ctx
+    assert isinstance(ctx["grid_cells"], list)
+    if ctx["grid_cells"]:
+        cell = ctx["grid_cells"][0]
+        for key in ("index", "source_id", "class_str", "title", "is_active", "tabindex"):
+            assert key in cell, f"grid_cells[0] missing key {key!r}"
+        # First cell is active (current_index=0)
+        assert cell["is_active"] is True
+        assert cell["tabindex"] == "0"
