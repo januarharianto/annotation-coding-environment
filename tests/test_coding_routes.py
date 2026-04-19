@@ -672,6 +672,27 @@ def test_sidebar_grid_replaces_popover(client_with_codes):
         assert gone not in body, f"legacy marker {gone!r} still in response"
 
 
+def test_grid_separator_aria(client_with_codes):
+    """Resize separator has the full ARIA contract required by WAI-ARIA."""
+    client, coder_id, _, _, _ = client_with_codes
+    client.cookies.set("coder_id", coder_id)
+    body = client.get("/code").text
+
+    assert 'class="ace-sidebar-vsplit"' in body
+    required = [
+        'role="separator"',
+        'aria-orientation="horizontal"',
+        'aria-controls="ace-sidebar-grid"',
+        'aria-valuemin=',
+        'aria-valuemax=',
+        'aria-valuenow=',
+        'aria-valuetext=',
+        'tabindex="0"',
+    ]
+    for attr in required:
+        assert attr in body, f"separator missing {attr!r}"
+
+
 def test_counter_chip_is_static(client_with_codes):
     """Counter span stays visible but has no onclick or ⚇ glyph."""
     client, coder_id, _, _, _ = client_with_codes

@@ -590,6 +590,86 @@
     });
   }
 
+  function _initGridResize() {
+    const handle = document.querySelector(".ace-sidebar-vsplit");
+    if (!handle || handle.dataset.aceResizeWired) return;
+    handle.dataset.aceResizeWired = "1";
+
+    const DEFAULT_VH = 35;
+    const MIN_VH = 10;
+    const MAX_VH = 70;
+    const KEY_STEP_PX = 8;
+
+    function _vhToPx(vh) { return (window.innerHeight * vh) / 100; }
+    function _pxToVh(px) { return (px / window.innerHeight) * 100; }
+    function _clampVh(v) { return Math.max(MIN_VH, Math.min(MAX_VH, v)); }
+
+    function _setValue(vh) {
+      const clamped = _clampVh(vh);
+      document.documentElement.style.setProperty("--ace-grid-height", clamped.toFixed(2) + "vh");
+      const rounded = Math.round(clamped);
+      handle.setAttribute("aria-valuenow", rounded.toString());
+      handle.setAttribute("aria-valuetext", rounded + " percent of viewport height");
+      return clamped;
+    }
+
+    function _persist(vh) {
+      try { localStorage.setItem("ace-grid-height", vh.toFixed(2) + "vh"); } catch (_) {}
+    }
+
+    function _currentVh() {
+      const computed = getComputedStyle(document.documentElement)
+        .getPropertyValue("--ace-grid-height").trim();
+      return parseFloat(computed) || DEFAULT_VH;
+    }
+
+    // Mouse drag
+    let dragging = false;
+    let startY = 0;
+    let startVh = DEFAULT_VH;
+
+    handle.addEventListener("mousedown", function (e) {
+      if (e.button !== 0) return;
+      dragging = true;
+      startY = e.clientY;
+      startVh = _currentVh();
+      document.body.style.userSelect = "none";
+      e.preventDefault();
+    });
+
+    document.addEventListener("mousemove", function (e) {
+      if (!dragging) return;
+      const dy = startY - e.clientY; // dragging up grows the panel
+      const newVh = _pxToVh(_vhToPx(startVh) + dy);
+      _setValue(newVh);
+    });
+
+    document.addEventListener("mouseup", function () {
+      if (!dragging) return;
+      dragging = false;
+      document.body.style.userSelect = "";
+      _persist(_clampVh(_currentVh()));
+    });
+
+    // Double-click reset
+    handle.addEventListener("dblclick", function () {
+      document.documentElement.style.removeProperty("--ace-grid-height");
+      handle.setAttribute("aria-valuenow", DEFAULT_VH.toString());
+      handle.setAttribute("aria-valuetext", DEFAULT_VH + " percent of viewport height");
+      try { localStorage.removeItem("ace-grid-height"); } catch (_) {}
+    });
+
+    // Keyboard resize
+    handle.addEventListener("keydown", function (e) {
+      if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+      const deltaPx = (e.key === "ArrowUp" ? 1 : -1) * KEY_STEP_PX;
+      const newVh = _pxToVh(_vhToPx(_currentVh()) + deltaPx);
+      const clamped = _setValue(newVh);
+      _persist(clamped);
+      e.preventDefault();
+    });
+  }
+
   /* ================================================================
    * 11. Dialog close cleanup
    * ================================================================ */
@@ -817,6 +897,7 @@
       if (document.getElementById("code-tree")) {
         _restoreCollapseState();
         _updateKeycaps();
+        _initGridResize();
       }
 
       // Announce flag state and restore focus after flag toggle
@@ -835,6 +916,7 @@
       if (!_isDragging) _initSortable();
       _restoreCollapseState();
       _updateKeycaps();
+      _initGridResize();
 
       // Restore focus state
       let search = document.getElementById("code-search-input");
@@ -2697,6 +2779,7 @@
 
   document.addEventListener("DOMContentLoaded", function () {
     _initResize();
+    _initGridResize();
     _restoreCollapseState();
     _updateKeycaps();
     _initSortable();
