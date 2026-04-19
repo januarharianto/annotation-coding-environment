@@ -750,7 +750,6 @@ def _render_full_coding_oob(request: Request, conn, coder_id: str, target_index:
     primary = render_block(templates.env, "coding.html", "text_panel", ctx)
 
     oob_blocks = [
-        ("source_grid", "source-grid-overlay"),
         ("code_sidebar", "code-sidebar"),
     ]
 

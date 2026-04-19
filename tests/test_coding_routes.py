@@ -362,8 +362,8 @@ def test_navigate_next(client_with_sources):
     # Should contain the second source's content
     assert "Second document with different text." in resp.text
     # Should contain all OOB swap zones
-    assert "source-grid-overlay" in resp.text
-    assert "code-sidebar" in resp.text
+    assert 'id="ace-sidebar-grid"' in resp.text
+    assert 'id="code-sidebar"' in resp.text
     # Should have HX-Trigger header with ace-navigate event
     assert "HX-Trigger" in resp.headers
     assert "ace-navigate" in resp.headers["HX-Trigger"]
@@ -605,7 +605,7 @@ def test_density_class():
 
 
 def test_coding_context_grid_cells(client_with_codes):
-    """_coding_context exposes grid_cells as a list of dicts with expected keys."""
+    """grid_cells has correct shape AND class composition."""
     import sqlite3
     from ace.routes.pages import _coding_context
 
@@ -618,11 +618,68 @@ def test_coding_context_grid_cells(client_with_codes):
         conn.close()
 
     assert "grid_cells" in ctx
-    assert isinstance(ctx["grid_cells"], list)
-    if ctx["grid_cells"]:
-        cell = ctx["grid_cells"][0]
-        for key in ("index", "source_id", "class_str", "title", "is_active", "tabindex"):
-            assert key in cell, f"grid_cells[0] missing key {key!r}"
-        # First cell is active (current_index=0)
-        assert cell["is_active"] is True
-        assert cell["tabindex"] == "0"
+    cells = ctx["grid_cells"]
+    assert isinstance(cells, list)
+    assert len(cells) >= 1
+
+    first = cells[0]
+    for key in ("index", "source_id", "class_str", "title", "is_active", "tabindex"):
+        assert key in first, f"grid_cells[0] missing key {key!r}"
+
+    # Active cell at index 0
+    assert first["is_active"] is True
+    assert first["tabindex"] == "0"
+    assert "ace-grid-cell" in first["class_str"]
+    assert "ace-grid-cell--active" in first["class_str"]
+    # No annotations yet → no density class
+    for density in ("--ann-1", "--ann-3", "--ann-6"):
+        assert density not in first["class_str"]
+    # Zero annotations uses plural grammar: "0 annotations"
+    assert first["title"].endswith("0 annotations")
+
+    if len(cells) >= 2:
+        second = cells[1]
+        assert second["is_active"] is False
+        assert second["tabindex"] == "-1"
+        assert "ace-grid-cell--active" not in second["class_str"]
+
+
+def test_sidebar_grid_replaces_popover(client_with_codes):
+    """Coding page renders the integrated sidebar grid, not the overlay."""
+    client, coder_id, _, _, _ = client_with_codes
+    client.cookies.set("coder_id", coder_id)
+    resp = client.get("/code")
+    body = resp.text
+
+    # New markers present
+    assert 'id="ace-sidebar-grid"' in body
+    assert 'role="grid"' in body
+    assert 'role="gridcell"' in body
+    assert 'aria-current="location"' in body
+    assert '<button type="button"' in body
+
+    # Legacy markers gone
+    for gone in (
+        "source-grid-overlay",
+        "ace-grid-overlay",
+        "ace-grid-popover",
+        "aceToggleGrid",
+        "ace-grid-cell--ann-2",
+        "ace-grid-cell--ann-5",
+        "ace-grid-cell--ann-8",
+        "ace-grid-cell--ann-10",
+    ):
+        assert gone not in body, f"legacy marker {gone!r} still in response"
+
+
+def test_counter_chip_is_static(client_with_codes):
+    """Counter span stays visible but has no onclick or ⚇ glyph."""
+    client, coder_id, _, _, _ = client_with_codes
+    client.cookies.set("coder_id", coder_id)
+    body = client.get("/code").text
+
+    # Static text still present in flag row
+    assert 'class="ace-nav-counter"' in body
+    # Clickable affordance gone
+    assert "aceToggleGrid" not in body
+    assert "\u2687" not in body

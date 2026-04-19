@@ -3,6 +3,7 @@
 :root {
   --ace-annotation-alpha: 0.3;
   --ace-sidebar-width: 360px;
+  --ace-grid-height: 35vh;
 }
 
 /* ---- Workspace (full viewport flex column) ---- */
@@ -110,16 +111,10 @@
 
 .ace-nav-counter {
   padding: var(--ace-space-1) var(--ace-space-2);
-  cursor: pointer;
   font-family: var(--ace-font-mono);
   font-size: var(--ace-font-size-sm);
   color: var(--ace-text-muted);
   border-radius: var(--ace-radius);
-  transition: background var(--ace-transition);
-}
-
-.ace-nav-counter:hover {
-  background: var(--ace-bg-muted);
 }
 
 .ace-text-nav {
@@ -560,58 +555,6 @@ rect.ace-flash {
 .ace-legend .k {
   color: rgba(43, 48, 56, 0.72);
 }
-
-/* ---- Source grid overlay ---- */
-
-.ace-grid-overlay {
-  position: fixed;
-  z-index: 50;
-}
-
-.ace-grid-popover {
-  background: var(--ace-bg);
-  border: 1px solid var(--ace-border);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
-  padding: 6px;
-  border-radius: var(--ace-radius);
-  width: fit-content;
-}
-
-.ace-grid-cells {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 1px;
-}
-
-.ace-grid-cell {
-  width: var(--ace-grid-cell-size, 10px);
-  height: var(--ace-grid-cell-size, 10px);
-  background: #eeeeee;
-  cursor: pointer;
-  transition: opacity var(--ace-transition);
-}
-
-.ace-grid-cell:hover { outline: 1px solid #546e7a; outline-offset: 0px; z-index: 1; }
-
-/* Current source: white fill + black outline */
-.ace-grid-cell--active { background: #fff; outline: 2px solid #212121; outline-offset: -1px; }
-
-/* Blue gradient for annotation density */
-.ace-grid-cell--ann-1 { background: #bbdefb; }
-.ace-grid-cell--ann-2 { background: #90caf9; }
-.ace-grid-cell--ann-3 { background: #64b5f6; }
-.ace-grid-cell--ann-5 { background: #42a5f5; }
-.ace-grid-cell--ann-8 { background: #1976d2; }
-.ace-grid-cell--ann-10 { background: #1565c0; }
-
-/* Complete: green */
-.ace-grid-cell--complete { background: #2e7d32; }
-
-/* Flagged: burnt orange outline (on top of any fill) */
-.ace-grid-cell--flagged { outline: 2px solid #d84315; outline-offset: -1px; }
-
-/* Active + flagged: keep black outline, add orange inner shadow */
-.ace-grid-cell--active.ace-grid-cell--flagged { outline: 2px solid #212121; box-shadow: inset 0 0 0 1px #d84315; }
 
 /* ---- Code menu dropdown (management mode) ---- */
 
@@ -1088,8 +1031,98 @@ html[data-ace-note-open="1"] .ace-note-rail {
   }
 }
 
-/* Grid amber bottom strip — composes with outlines because it lives
- * inside the cell edge via inset box-shadow. Two-pixel strip. */
+/* ================================================================ */
+/* Integrated source grid — permanent panel at bottom of sidebar    */
+/* ================================================================ */
+
+.ace-sidebar-vsplit {
+  flex-shrink: 0;
+  height: 14px;
+  padding: 4px 0;
+  background-clip: content-box;
+  background-color: transparent;
+  cursor: row-resize;
+  border-top: 1px solid var(--ace-border);
+  transition: background-color var(--ace-transition);
+}
+.ace-sidebar-vsplit:hover,
+.ace-sidebar-vsplit:focus-visible {
+  background-color: var(--ace-bg-muted);
+  outline: none;
+}
+
+.ace-sidebar-grid {
+  flex: 0 0 var(--ace-grid-height);
+  min-height: 120px;
+  max-height: 70vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.ace-grid-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--ace-space-1) var(--ace-space-3);
+  font-size: var(--ace-font-size-2xs);
+  color: var(--ace-text-muted);
+  flex-shrink: 0;
+}
+.ace-grid-meta { font-family: var(--ace-font-mono); }
+
+.ace-grid-cells {
+  flex: 1;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--ace-space-1) var(--ace-space-3) var(--ace-space-2);
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(10px, 16px));
+  gap: 1px;
+}
+
+.ace-grid-cell {
+  aspect-ratio: 1;
+  appearance: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  background: #eeeeee;
+  cursor: pointer;
+  position: relative;
+  transition: opacity var(--ace-transition);
+}
+.ace-grid-cell:hover {
+  outline: 1px solid var(--ace-focus);
+  outline-offset: 0;
+  z-index: 1;
+}
+.ace-grid-cell:focus-visible {
+  outline: 2px solid var(--ace-focus);
+  outline-offset: 1px;
+  z-index: 2;
+}
+
+.ace-grid-cell--ann-1 { background: #c5cae9; }
+.ace-grid-cell--ann-3 { background: #7986cb; }
+.ace-grid-cell--ann-6 { background: #3949ab; }
+
+.ace-grid-cell--complete { background: #2e7d32; }
+.ace-grid-cell--active   { background: #fff; outline: 2px solid #212121; outline-offset: -1px; z-index: 2; }
+.ace-grid-cell--flagged  { outline: 2px solid #d84315; outline-offset: -1px; }
+.ace-grid-cell--flagged::after {
+  content: "";
+  position: absolute;
+  top: 0; right: 0;
+  width: 5px; height: 5px;
+  background: #d84315;
+  clip-path: polygon(100% 0, 100% 100%, 0 0);
+  pointer-events: none;
+}
+.ace-grid-cell--active.ace-grid-cell--flagged {
+  outline: 2px solid #212121;
+  box-shadow: inset 0 0 0 1px #d84315;
+}
 .ace-grid-cell--has-note {
   box-shadow: inset 0 -2px 0 var(--ace-note-accent);
 }

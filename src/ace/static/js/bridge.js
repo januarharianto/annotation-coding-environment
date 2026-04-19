@@ -435,12 +435,6 @@
       const dialog = document.querySelector("dialog[open]");
       if (dialog) { dialog.close(); return; }
 
-      const grid = document.getElementById("source-grid-overlay");
-      if (grid && !grid.classList.contains("ace-hidden")) {
-        grid.classList.add("ace-hidden");
-        return;
-      }
-
       // Clear custom selection
       if (window.__aceLastSelection) {
         window.__aceLastSelection = null;
@@ -507,62 +501,7 @@
   };
 
   /* ================================================================
-   * 8. Source grid overlay
-   * ================================================================ */
-
-  window.aceToggleGrid = function () {
-    const grid = document.getElementById("source-grid-overlay");
-    if (!grid) return;
-    const wasHidden = grid.classList.contains("ace-hidden");
-    grid.classList.toggle("ace-hidden");
-    if (wasHidden) {
-      // Adaptive cell size to fit within 300x300 popover
-      const total = window.__aceTotalSources || 0;
-      const popover = grid.querySelector(".ace-grid-popover");
-      const innerSize = 300 - 12; // 300px minus 6px padding each side
-      // Calculate cell size that fits all sources in a ~square grid within 288px
-      const cols = Math.ceil(Math.sqrt(total)) || 1;
-      const cellSize = Math.max(4, Math.min(10, Math.floor((innerSize - (cols - 1)) / cols)));
-      if (popover) {
-        popover.style.setProperty("--ace-grid-cell-size", `${cellSize}px`);
-        const cellsContainer = popover.querySelector(".ace-grid-cells");
-        if (cellsContainer) {
-          // Snap width to exact multiple of (cellSize + 1px gap)
-          const cellStep = cellSize + 1;
-          const fitCols = Math.floor(innerSize / cellStep);
-          cellsContainer.style.maxWidth = `${fitCols * cellStep - 1}px`;
-        }
-      }
-      let maxWidth = 300;
-      // Position anchored below the nav counter, clamped to viewport
-      const counter = document.getElementById("nav-counter");
-      if (counter) {
-        const rect = counter.getBoundingClientRect();
-        grid.style.top = `${rect.bottom + 4}px`;
-        const idealLeft = rect.left + rect.width / 2 - maxWidth / 2;
-        // Clamp so popover doesn't overflow right or left edge
-        const clampedLeft = Math.max(4, Math.min(idealLeft, window.innerWidth - maxWidth - 8));
-        grid.style.left = `${clampedLeft}px`;
-      }
-      // Close on click outside (next tick)
-      setTimeout(function () {
-        document.addEventListener("click", _onGridOutsideClick);
-      }, 0);
-    } else {
-      document.removeEventListener("click", _onGridOutsideClick);
-    }
-  };
-
-  function _onGridOutsideClick(e) {
-    const grid = document.getElementById("source-grid-overlay");
-    if (grid && !grid.contains(e.target) && !e.target.closest(".ace-nav-counter")) {
-      grid.classList.add("ace-hidden");
-      document.removeEventListener("click", _onGridOutsideClick);
-    }
-  }
-
-  /* ================================================================
-   * 9. Cheat sheet overlay
+   * 8. Cheat sheet overlay
    * ================================================================ */
 
   function _toggleCheatSheet() {
@@ -3006,8 +2945,6 @@
     if (!_isDrawerOpen()) return;
     if (document.getElementById("ace-cheat-sheet")) return;
     if (document.querySelector("dialog[open]")) return;
-    const grid = document.getElementById("source-grid-overlay");
-    if (grid && !grid.classList.contains("ace-hidden")) return;
     e.preventDefault();
     if (_isEditing()) {
       aceExitEditMode();
