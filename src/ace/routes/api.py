@@ -822,7 +822,7 @@ async def annotate(
         if assignment and assignment["status"] == "pending":
             update_assignment_status(conn, source_id, coder_id, "in_progress")
 
-        content = _render_coding_oob(request, conn, coder_id, current_index)
+        content = _render_sidebar_and_text(request, conn, coder_id, current_index)
         return HTMLResponse(content)
     finally:
         conn.close()
@@ -858,7 +858,7 @@ async def delete_annotation_route(
         undo = _get_undo_manager(request)
         undo.record_delete(source_id, annotation_id)
 
-        content = _render_coding_oob(request, conn, coder_id, current_index)
+        content = _render_sidebar_and_text(request, conn, coder_id, current_index)
         return HTMLResponse(content)
     finally:
         conn.close()
@@ -896,7 +896,7 @@ async def undo_route(
         else:
             msg = "Undo"
 
-        content = _render_coding_oob(request, conn, coder_id, current_index) + _oob_announce(msg)
+        content = _render_sidebar_and_text(request, conn, coder_id, current_index) + _oob_announce(msg)
         return HTMLResponse(content)
     finally:
         conn.close()
@@ -934,7 +934,7 @@ async def redo_route(
         else:
             msg = "Redo"
 
-        content = _render_coding_oob(request, conn, coder_id, current_index) + _oob_announce(msg)
+        content = _render_sidebar_and_text(request, conn, coder_id, current_index) + _oob_announce(msg)
         return HTMLResponse(content)
     finally:
         conn.close()
@@ -1220,7 +1220,7 @@ async def annotate_sentence(
             if assignment and assignment["status"] == "pending":
                 update_assignment_status(conn, source_id, coder_id, "in_progress")
 
-        content = _render_coding_oob(request, conn, coder_id, current_index)
+        content = _render_sidebar_and_text(request, conn, coder_id, current_index)
         return HTMLResponse(content)
     finally:
         conn.close()
@@ -1276,7 +1276,7 @@ async def delete_sentence_annotations(
             delete_annotation(conn, most_recent["id"])
             undo.record_delete(source_id, most_recent["id"])
 
-        content = _render_coding_oob(request, conn, coder_id, current_index)
+        content = _render_sidebar_and_text(request, conn, coder_id, current_index)
         if most_recent:
             content += _oob_announce("Annotation removed")
         return HTMLResponse(content)

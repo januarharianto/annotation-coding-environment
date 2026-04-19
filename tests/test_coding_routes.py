@@ -727,3 +727,64 @@ def test_grid_tabindex_and_live_region(client_with_codes):
 
     # At least one other cell has tabindex=-1
     assert 'tabindex="-1"' in body
+
+
+def test_annotate_refreshes_grid(client_with_codes):
+    """POST /api/code/apply returns a sidebar OOB so the grid cell re-tints."""
+    client, coder_id, code_a, _, _ = client_with_codes
+    client.cookies.set("coder_id", coder_id)
+
+    resp = client.post(
+        "/api/code/apply",
+        data={
+            "code_id": code_a,
+            "current_index": 0,
+            "start_offset": 0,
+            "end_offset": 5,
+            "selected_text": "First",
+        },
+    )
+    assert resp.status_code == 200
+    assert 'id="code-sidebar"' in resp.text
+    # After applying one code, the current source has 1 annotation → ann-1
+    assert "ace-grid-cell--ann-1" in resp.text
+
+
+def test_delete_refreshes_grid(client_with_codes):
+    """Deleting an annotation returns a sidebar OOB so the grid cell re-tints."""
+    import json
+    import re
+    client, coder_id, code_a, _, _ = client_with_codes
+    client.cookies.set("coder_id", coder_id)
+
+    # Create an annotation, then delete it
+    create = client.post(
+        "/api/code/apply",
+        data={
+            "code_id": code_a,
+            "current_index": 0,
+            "start_offset": 0,
+            "end_offset": 5,
+            "selected_text": "First",
+        },
+    )
+    assert create.status_code == 200
+
+    # Pull the new annotation id from the OOB ann-data blob
+    m = re.search(r'data-annotations="([^"]+)"', create.text)
+    assert m, "ann-data payload missing from create response"
+    payload = m.group(1).replace("&#34;", '"').replace("&quot;", '"')
+    anns = json.loads(payload)
+    assert anns, "ann-data was empty after apply"
+    ann_id = anns[0]["id"]
+
+    # Delete the annotation
+    resp = client.post(
+        "/api/code/delete-annotation",
+        data={
+            "annotation_id": ann_id,
+            "current_index": 0,
+        },
+    )
+    assert resp.status_code == 200, f"delete returned {resp.status_code}: {resp.text[:200]}"
+    assert 'id="code-sidebar"' in resp.text
