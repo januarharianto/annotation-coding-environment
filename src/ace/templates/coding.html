@@ -16,9 +16,11 @@
   }
 </script>
 <script>
-  // Apply saved sidebar width before CSS loads to prevent layout glitch
+  // Apply saved sidebar width + grid height before CSS loads to prevent layout glitch
   var _sw = localStorage.getItem("ace-sidebar-width");
   if (_sw) document.documentElement.style.setProperty("--ace-sidebar-width", _sw + "px");
+  var _gh = localStorage.getItem("ace-grid-height");
+  if (_gh) document.documentElement.style.setProperty("--ace-grid-height", _gh);
 </script>
 <script>
   // Restore note drawer state before CSS loads to prevent flash on reload
@@ -137,6 +139,33 @@ rect.ace-flash-{{ code["id"] }} {
         </div>
         {% endif %}
       </div>
+      <div class="ace-sidebar-vsplit"
+           role="separator"
+           aria-orientation="horizontal"
+           aria-controls="ace-sidebar-grid"
+           aria-valuemin="10" aria-valuemax="70" aria-valuenow="35"
+           aria-valuetext="35 percent of viewport height"
+           tabindex="0"></div>
+
+      <section id="ace-sidebar-grid" class="ace-sidebar-grid" aria-label="Sources">
+        <header class="ace-grid-header">
+          <span class="ace-grid-title">Sources</span>
+          <span class="ace-grid-meta">{{ complete_count }} / {{ total_sources }}</span>
+        </header>
+        <div class="ace-grid-cells" role="grid"
+             aria-label="Source grid">
+          {% for cell in grid_cells %}
+            <button type="button" role="gridcell"
+                    class="{{ cell.class_str }}"
+                    title="{{ cell.title }}"
+                    tabindex="{{ cell.tabindex }}"
+                    {% if cell.is_active %}aria-current="location"{% endif %}
+                    data-source-index="{{ cell.index }}"
+                    onclick="aceNavigate({{ cell.index }})"></button>
+          {% endfor %}
+        </div>
+        <div id="ace-grid-live" class="ace-sr-only" aria-live="polite"></div>
+      </section>
       <div aria-live="polite" class="ace-sr-only" id="ace-live-region"></div>
       <div role="alert" aria-live="assertive" class="ace-sr-only" id="ace-live-region-assertive"></div>
     </aside>
@@ -156,10 +185,9 @@ rect.ace-flash-{{ code["id"] }} {
             <button class="ace-nav-btn" id="btn-prev"
                     {% if current_index <= 0 %}disabled{% endif %}
                     onclick="aceNavigatePrev()">&#8249;</button>
-            <span class="ace-nav-counter" id="nav-counter"
-                  onclick="aceToggleGrid()" title="Open source grid">
+            <span class="ace-nav-counter" id="nav-counter">
               <span class="ace-status-badge ace-status-badge--{{ current_status }}"></span>
-              {{ current_index + 1 }} / {{ total_sources }} &#9783;
+              {{ current_index + 1 }} / {{ total_sources }}
             </span>
             <button class="ace-nav-btn" id="btn-next"
                     {% if current_index >= total_sources - 1 %}disabled{% endif %}
@@ -237,23 +265,6 @@ rect.ace-flash-{{ code["id"] }} {
     </div>
 
   </div>
-
-  {# Source grid overlay (hidden) #}
-  {% block source_grid %}
-  <div id="source-grid-overlay" class="ace-grid-overlay ace-hidden">
-    <div class="ace-grid-popover">
-      <div class="ace-grid-cells">
-        {% for assignment in assignments %}
-        {% set ann_count = annotation_counts.get(assignment['source_id'], 0) %}
-        <div class="ace-grid-cell{% if loop.index0 == current_index %} ace-grid-cell--active{% endif %}{% if assignment['status'] == 'complete' %} ace-grid-cell--complete{% elif ann_count >= 10 %} ace-grid-cell--ann-10{% elif ann_count >= 8 %} ace-grid-cell--ann-8{% elif ann_count >= 5 %} ace-grid-cell--ann-5{% elif ann_count >= 3 %} ace-grid-cell--ann-3{% elif ann_count >= 2 %} ace-grid-cell--ann-2{% elif ann_count >= 1 %} ace-grid-cell--ann-1{% endif %}{% if assignment['status'] == 'flagged' %} ace-grid-cell--flagged{% endif %}{% if assignment['source_id'] in source_ids_with_notes %} ace-grid-cell--has-note{% endif %}"
-             title="{{ loop.index }} · {{ ann_count }} annotation{{ 's' if ann_count != 1 else '' }}"
-             onclick="aceNavigate({{ loop.index0 }})">
-        </div>
-        {% endfor %}
-      </div>
-    </div>
-  </div>
-  {% endblock %}
 
   {# Annotation data for SVG highlight overlay (updated via OOB swap) #}
   <div id="ace-ann-data" class="ace-hidden"

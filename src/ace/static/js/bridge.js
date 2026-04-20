@@ -435,12 +435,6 @@
       const dialog = document.querySelector("dialog[open]");
       if (dialog) { dialog.close(); return; }
 
-      const grid = document.getElementById("source-grid-overlay");
-      if (grid && !grid.classList.contains("ace-hidden")) {
-        grid.classList.add("ace-hidden");
-        return;
-      }
-
       // Clear custom selection
       if (window.__aceLastSelection) {
         window.__aceLastSelection = null;
@@ -507,62 +501,7 @@
   };
 
   /* ================================================================
-   * 8. Source grid overlay
-   * ================================================================ */
-
-  window.aceToggleGrid = function () {
-    const grid = document.getElementById("source-grid-overlay");
-    if (!grid) return;
-    const wasHidden = grid.classList.contains("ace-hidden");
-    grid.classList.toggle("ace-hidden");
-    if (wasHidden) {
-      // Adaptive cell size to fit within 300x300 popover
-      const total = window.__aceTotalSources || 0;
-      const popover = grid.querySelector(".ace-grid-popover");
-      const innerSize = 300 - 12; // 300px minus 6px padding each side
-      // Calculate cell size that fits all sources in a ~square grid within 288px
-      const cols = Math.ceil(Math.sqrt(total)) || 1;
-      const cellSize = Math.max(4, Math.min(10, Math.floor((innerSize - (cols - 1)) / cols)));
-      if (popover) {
-        popover.style.setProperty("--ace-grid-cell-size", `${cellSize}px`);
-        const cellsContainer = popover.querySelector(".ace-grid-cells");
-        if (cellsContainer) {
-          // Snap width to exact multiple of (cellSize + 1px gap)
-          const cellStep = cellSize + 1;
-          const fitCols = Math.floor(innerSize / cellStep);
-          cellsContainer.style.maxWidth = `${fitCols * cellStep - 1}px`;
-        }
-      }
-      let maxWidth = 300;
-      // Position anchored below the nav counter, clamped to viewport
-      const counter = document.getElementById("nav-counter");
-      if (counter) {
-        const rect = counter.getBoundingClientRect();
-        grid.style.top = `${rect.bottom + 4}px`;
-        const idealLeft = rect.left + rect.width / 2 - maxWidth / 2;
-        // Clamp so popover doesn't overflow right or left edge
-        const clampedLeft = Math.max(4, Math.min(idealLeft, window.innerWidth - maxWidth - 8));
-        grid.style.left = `${clampedLeft}px`;
-      }
-      // Close on click outside (next tick)
-      setTimeout(function () {
-        document.addEventListener("click", _onGridOutsideClick);
-      }, 0);
-    } else {
-      document.removeEventListener("click", _onGridOutsideClick);
-    }
-  };
-
-  function _onGridOutsideClick(e) {
-    const grid = document.getElementById("source-grid-overlay");
-    if (grid && !grid.contains(e.target) && !e.target.closest(".ace-nav-counter")) {
-      grid.classList.add("ace-hidden");
-      document.removeEventListener("click", _onGridOutsideClick);
-    }
-  }
-
-  /* ================================================================
-   * 9. Cheat sheet overlay
+   * 8. Cheat sheet overlay
    * ================================================================ */
 
   function _toggleCheatSheet() {
@@ -649,6 +588,203 @@
       document.documentElement.style.setProperty("--ace-sidebar-width", "360px");
       localStorage.setItem("ace-sidebar-width", 360);
     });
+  }
+
+  function _initGridResize() {
+    const handle = document.querySelector(".ace-sidebar-vsplit");
+    if (!handle || handle.dataset.aceResizeWired) return;
+    handle.dataset.aceResizeWired = "1";
+
+    const DEFAULT_VH = 35;
+    const MIN_VH = 10;
+    const MAX_VH = 70;
+    const KEY_STEP_PX = 8;
+
+    function _vhToPx(vh) { return (window.innerHeight * vh) / 100; }
+    function _pxToVh(px) { return (px / window.innerHeight) * 100; }
+    function _clampVh(v) { return Math.max(MIN_VH, Math.min(MAX_VH, v)); }
+
+    function _setValue(vh) {
+      const clamped = _clampVh(vh);
+      document.documentElement.style.setProperty("--ace-grid-height", clamped.toFixed(2) + "vh");
+      const rounded = Math.round(clamped);
+      handle.setAttribute("aria-valuenow", rounded.toString());
+      handle.setAttribute("aria-valuetext", rounded + " percent of viewport height");
+      return clamped;
+    }
+
+    function _persist(vh) {
+      try { localStorage.setItem("ace-grid-height", vh.toFixed(2) + "vh"); } catch (_) {}
+    }
+
+    function _currentVh() {
+      const computed = getComputedStyle(document.documentElement)
+        .getPropertyValue("--ace-grid-height").trim();
+      return parseFloat(computed) || DEFAULT_VH;
+    }
+
+    // Sync ARIA state with the actual computed starting height — catches
+    // values restored from localStorage before the first user interaction.
+    _setValue(_currentVh());
+
+    // Pointer drag — all listeners on the handle, with setPointerCapture,
+    // so they die cleanly with the subtree when #code-sidebar is replaced
+    // by an OOB swap (no document-level listener leak).
+    let dragging = false;
+    let startY = 0;
+    let startVh = DEFAULT_VH;
+
+    handle.addEventListener("pointerdown", function (e) {
+      if (e.button !== 0) return;
+      dragging = true;
+      startY = e.clientY;
+      startVh = _currentVh();
+      handle.setPointerCapture(e.pointerId);
+      document.body.style.userSelect = "none";
+      e.preventDefault();
+    });
+
+    handle.addEventListener("pointermove", function (e) {
+      if (!dragging) return;
+      const dy = startY - e.clientY; // dragging up grows the panel
+      const newVh = _pxToVh(_vhToPx(startVh) + dy);
+      _setValue(newVh);
+    });
+
+    function _endDrag(e) {
+      if (!dragging) return;
+      dragging = false;
+      document.body.style.userSelect = "";
+      if (e && typeof e.pointerId === "number" && handle.hasPointerCapture(e.pointerId)) {
+        handle.releasePointerCapture(e.pointerId);
+      }
+      _persist(_clampVh(_currentVh()));
+    }
+
+    handle.addEventListener("pointerup", _endDrag);
+    handle.addEventListener("pointercancel", _endDrag);
+
+    // Double-click reset
+    handle.addEventListener("dblclick", function () {
+      document.documentElement.style.removeProperty("--ace-grid-height");
+      handle.setAttribute("aria-valuenow", DEFAULT_VH.toString());
+      handle.setAttribute("aria-valuetext", DEFAULT_VH + " percent of viewport height");
+      try { localStorage.removeItem("ace-grid-height"); } catch (_) {}
+    });
+
+    // Keyboard resize
+    handle.addEventListener("keydown", function (e) {
+      if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+      const deltaPx = (e.key === "ArrowUp" ? 1 : -1) * KEY_STEP_PX;
+      const newVh = _pxToVh(_vhToPx(_currentVh()) + deltaPx);
+      const clamped = _setValue(newVh);
+      _persist(clamped);
+      e.preventDefault();
+    });
+  }
+
+  function _getGridColumnCount() {
+    const cellsEl = document.querySelector(".ace-grid-cells");
+    if (!cellsEl) return 1;
+    const tracks = getComputedStyle(cellsEl)
+      .getPropertyValue("grid-template-columns").trim();
+    if (!tracks) return 1;
+    return tracks.split(/\s+/).length || 1;
+  }
+
+  function _announceFocus(cellButton) {
+    const live = document.getElementById("ace-grid-live");
+    if (!live || !cellButton) return;
+    const idx = parseInt(cellButton.dataset.sourceIndex, 10);
+    const total = document.querySelectorAll(".ace-grid-cell").length;
+    const title = cellButton.getAttribute("title") || "";
+    // title is "N · K annotation(s)" — pull the "K annotation[s]" part
+    const annPart = title.split("\u00b7")[1] ? title.split("\u00b7")[1].trim() : "";
+    const parts = ["Source " + (idx + 1) + " of " + total];
+    if (annPart) parts.push(annPart);
+    if (cellButton.classList.contains("ace-grid-cell--flagged")) parts.push("flagged");
+    if (cellButton.classList.contains("ace-grid-cell--has-note")) parts.push("has note");
+    live.textContent = parts.join(", ") + ".";
+  }
+
+  function _setRovingFocus(cells, targetIdx) {
+    if (targetIdx < 0 || targetIdx >= cells.length) return;
+    cells.forEach(function (c, i) {
+      c.setAttribute("tabindex", i === targetIdx ? "0" : "-1");
+    });
+    cells[targetIdx].focus();
+    _announceFocus(cells[targetIdx]);
+    cells[targetIdx].scrollIntoView({ block: "nearest", behavior: "auto" });
+  }
+
+  function _initGridKeyboardNav() {
+    const cellsEl = document.querySelector(".ace-grid-cells");
+    if (!cellsEl || cellsEl.dataset.aceKbdWired) return;
+    cellsEl.dataset.aceKbdWired = "1";
+
+    cellsEl.addEventListener("keydown", function (e) {
+      const target = e.target.closest(".ace-grid-cell");
+      if (!target) return;
+      const cells = Array.from(cellsEl.querySelectorAll(".ace-grid-cell"));
+      const idx = cells.indexOf(target);
+      if (idx < 0) return;
+      const cols = _getGridColumnCount();
+      const last = cells.length - 1;
+      let dest = -1;
+
+      switch (e.key) {
+        case "ArrowLeft":  dest = Math.max(0, idx - 1); break;
+        case "ArrowRight": dest = Math.min(last, idx + 1); break;
+        case "ArrowUp":    dest = Math.max(0, idx - cols); break;
+        case "ArrowDown":  dest = Math.min(last, idx + cols); break;
+        case "Home":       dest = 0; break;
+        case "End":        dest = last; break;
+        case "PageUp": {
+          const cellH = target.getBoundingClientRect().height || 1;
+          const visibleRows = Math.max(1, Math.floor(cellsEl.clientHeight / cellH));
+          dest = Math.max(0, idx - visibleRows * cols);
+          break;
+        }
+        case "PageDown": {
+          const cellH = target.getBoundingClientRect().height || 1;
+          const visibleRows = Math.max(1, Math.floor(cellsEl.clientHeight / cellH));
+          dest = Math.min(last, idx + visibleRows * cols);
+          break;
+        }
+        case "Enter":
+        case " ": {
+          const navIdx = parseInt(target.dataset.sourceIndex, 10);
+          if (typeof window.aceNavigate === "function") window.aceNavigate(navIdx);
+          e.preventDefault();
+          return;
+        }
+        case "Escape": {
+          const panel = document.querySelector(".ace-text-panel");
+          if (panel) {
+            if (typeof panel.focus === "function" && panel.tabIndex >= 0) {
+              panel.focus();
+            } else {
+              const firstFocus = panel.querySelector("[tabindex], button, a, input, textarea");
+              if (firstFocus) firstFocus.focus();
+            }
+          }
+          e.preventDefault();
+          return;
+        }
+        default:
+          return;
+      }
+
+      if (dest >= 0) {
+        _setRovingFocus(cells, dest);
+        e.preventDefault();
+      }
+    });
+  }
+
+  function _scrollActiveCellIntoView() {
+    const active = document.querySelector('.ace-grid-cell[aria-current="location"]');
+    if (active) active.scrollIntoView({ block: "nearest", behavior: "auto" });
   }
 
   /* ================================================================
@@ -878,6 +1014,8 @@
       if (document.getElementById("code-tree")) {
         _restoreCollapseState();
         _updateKeycaps();
+        _initGridResize();
+        _initGridKeyboardNav();
       }
 
       // Announce flag state and restore focus after flag toggle
@@ -896,6 +1034,9 @@
       if (!_isDragging) _initSortable();
       _restoreCollapseState();
       _updateKeycaps();
+      _initGridResize();
+      _initGridKeyboardNav();
+      _scrollActiveCellIntoView();
 
       // Restore focus state
       let search = document.getElementById("code-search-input");
@@ -2758,6 +2899,8 @@
 
   document.addEventListener("DOMContentLoaded", function () {
     _initResize();
+    _initGridResize();
+    _initGridKeyboardNav();
     _restoreCollapseState();
     _updateKeycaps();
     _initSortable();
@@ -3006,8 +3149,6 @@
     if (!_isDrawerOpen()) return;
     if (document.getElementById("ace-cheat-sheet")) return;
     if (document.querySelector("dialog[open]")) return;
-    const grid = document.getElementById("source-grid-overlay");
-    if (grid && !grid.classList.contains("ace-hidden")) return;
     e.preventDefault();
     if (_isEditing()) {
       aceExitEditMode();

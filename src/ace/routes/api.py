@@ -724,20 +724,6 @@ def _render_ann_data_oob(ctx: dict) -> str:
     return f'<div id="ace-ann-data" class="ace-hidden" data-annotations="{ann_json}" hx-swap-oob="outerHTML"></div>'
 
 
-def _render_coding_oob(request: Request, conn, coder_id: str, current_index: int) -> str:
-    """Render text_panel (primary) + annotation data (OOB)."""
-    from ace.routes.pages import _coding_context
-    from jinja2_fragments import render_block
-
-    templates = request.app.state.templates
-    ctx = _coding_context(conn, coder_id, current_index)
-    ctx["request"] = request
-
-    text_html = render_block(templates.env, "coding.html", "text_panel", ctx)
-
-    return text_html + _render_ann_data_oob(ctx)
-
-
 def _render_full_coding_oob(request: Request, conn, coder_id: str, target_index: int) -> str:
     """Render all coding swap zones."""
     from ace.routes.pages import _coding_context
@@ -750,7 +736,6 @@ def _render_full_coding_oob(request: Request, conn, coder_id: str, target_index:
     primary = render_block(templates.env, "coding.html", "text_panel", ctx)
 
     oob_blocks = [
-        ("source_grid", "source-grid-overlay"),
         ("code_sidebar", "code-sidebar"),
     ]
 
@@ -823,7 +808,7 @@ async def annotate(
         if assignment and assignment["status"] == "pending":
             update_assignment_status(conn, source_id, coder_id, "in_progress")
 
-        content = _render_coding_oob(request, conn, coder_id, current_index)
+        content = _render_sidebar_and_text(request, conn, coder_id, current_index)
         return HTMLResponse(content)
     finally:
         conn.close()
@@ -859,7 +844,7 @@ async def delete_annotation_route(
         undo = _get_undo_manager(request)
         undo.record_delete(source_id, annotation_id)
 
-        content = _render_coding_oob(request, conn, coder_id, current_index)
+        content = _render_sidebar_and_text(request, conn, coder_id, current_index)
         return HTMLResponse(content)
     finally:
         conn.close()
@@ -897,7 +882,7 @@ async def undo_route(
         else:
             msg = "Undo"
 
-        content = _render_coding_oob(request, conn, coder_id, current_index) + _oob_announce(msg)
+        content = _render_sidebar_and_text(request, conn, coder_id, current_index) + _oob_announce(msg)
         return HTMLResponse(content)
     finally:
         conn.close()
@@ -935,7 +920,7 @@ async def redo_route(
         else:
             msg = "Redo"
 
-        content = _render_coding_oob(request, conn, coder_id, current_index) + _oob_announce(msg)
+        content = _render_sidebar_and_text(request, conn, coder_id, current_index) + _oob_announce(msg)
         return HTMLResponse(content)
     finally:
         conn.close()
@@ -1221,7 +1206,7 @@ async def annotate_sentence(
             if assignment and assignment["status"] == "pending":
                 update_assignment_status(conn, source_id, coder_id, "in_progress")
 
-        content = _render_coding_oob(request, conn, coder_id, current_index)
+        content = _render_sidebar_and_text(request, conn, coder_id, current_index)
         return HTMLResponse(content)
     finally:
         conn.close()
@@ -1277,7 +1262,7 @@ async def delete_sentence_annotations(
             delete_annotation(conn, most_recent["id"])
             undo.record_delete(source_id, most_recent["id"])
 
-        content = _render_coding_oob(request, conn, coder_id, current_index)
+        content = _render_sidebar_and_text(request, conn, coder_id, current_index)
         if most_recent:
             content += _oob_announce("Annotation removed")
         return HTMLResponse(content)

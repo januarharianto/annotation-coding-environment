@@ -362,8 +362,8 @@ def test_navigate_next(client_with_sources):
     # Should contain the second source's content
     assert "Second document with different text." in resp.text
     # Should contain all OOB swap zones
-    assert "source-grid-overlay" in resp.text
-    assert "code-sidebar" in resp.text
+    assert 'id="ace-sidebar-grid"' in resp.text
+    assert 'id="code-sidebar"' in resp.text
     # Should have HX-Trigger header with ace-navigate event
     assert "HX-Trigger" in resp.headers
     assert "ace-navigate" in resp.headers["HX-Trigger"]
@@ -584,3 +584,209 @@ def test_flag_does_not_set_x_ace_toast_and_announces_via_live_region(client_with
     assert "X-ACE-Toast" not in resp.headers
     assert 'id="ace-live-region"' in resp.text
     assert "Source flagged" in resp.text
+
+
+# ---------------------------------------------------------------------------
+# Grid cell pre-computation
+# ---------------------------------------------------------------------------
+
+
+def test_density_class():
+    """density_class maps annotation counts to density levels."""
+    from ace.routes.pages import density_class
+
+    assert density_class(0) == ""
+    assert density_class(1) == "ace-grid-cell--ann-1"
+    assert density_class(2) == "ace-grid-cell--ann-1"
+    assert density_class(3) == "ace-grid-cell--ann-3"
+    assert density_class(5) == "ace-grid-cell--ann-3"
+    assert density_class(6) == "ace-grid-cell--ann-6"
+    assert density_class(42) == "ace-grid-cell--ann-6"
+
+
+def test_coding_context_grid_cells(client_with_codes):
+    """grid_cells has correct shape AND class composition."""
+    import sqlite3
+    from ace.routes.pages import _coding_context
+
+    client, coder_id, _, _, db_path = client_with_codes
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    try:
+        ctx = _coding_context(conn, coder_id, 0)
+    finally:
+        conn.close()
+
+    assert "grid_cells" in ctx
+    cells = ctx["grid_cells"]
+    assert isinstance(cells, list)
+    assert len(cells) >= 1
+
+    first = cells[0]
+    for key in ("index", "source_id", "class_str", "title", "is_active", "tabindex"):
+        assert key in first, f"grid_cells[0] missing key {key!r}"
+
+    # Active cell at index 0
+    assert first["is_active"] is True
+    assert first["tabindex"] == "0"
+    assert "ace-grid-cell" in first["class_str"]
+    assert "ace-grid-cell--active" in first["class_str"]
+    # No annotations yet → no density class
+    for density in ("--ann-1", "--ann-3", "--ann-6"):
+        assert density not in first["class_str"]
+    # Zero annotations uses plural grammar: "0 annotations"
+    assert first["title"].endswith("0 annotations")
+
+    if len(cells) >= 2:
+        second = cells[1]
+        assert second["is_active"] is False
+        assert second["tabindex"] == "-1"
+        assert "ace-grid-cell--active" not in second["class_str"]
+
+
+def test_sidebar_grid_replaces_popover(client_with_codes):
+    """Coding page renders the integrated sidebar grid, not the overlay."""
+    client, coder_id, _, _, _ = client_with_codes
+    client.cookies.set("coder_id", coder_id)
+    resp = client.get("/code")
+    body = resp.text
+
+    # New markers present
+    assert 'id="ace-sidebar-grid"' in body
+    assert 'role="grid"' in body
+    assert 'role="gridcell"' in body
+    assert 'aria-current="location"' in body
+    assert '<button type="button"' in body
+
+    # Legacy markers gone
+    for gone in (
+        "source-grid-overlay",
+        "ace-grid-overlay",
+        "ace-grid-popover",
+        "aceToggleGrid",
+        "ace-grid-cell--ann-2",
+        "ace-grid-cell--ann-5",
+        "ace-grid-cell--ann-8",
+        "ace-grid-cell--ann-10",
+    ):
+        assert gone not in body, f"legacy marker {gone!r} still in response"
+
+
+def test_grid_separator_aria(client_with_codes):
+    """Resize separator has the full ARIA contract required by WAI-ARIA."""
+    client, coder_id, _, _, _ = client_with_codes
+    client.cookies.set("coder_id", coder_id)
+    body = client.get("/code").text
+
+    assert 'class="ace-sidebar-vsplit"' in body
+    required = [
+        'role="separator"',
+        'aria-orientation="horizontal"',
+        'aria-controls="ace-sidebar-grid"',
+        'aria-valuemin=',
+        'aria-valuemax=',
+        'aria-valuenow=',
+        'aria-valuetext=',
+        'tabindex="0"',
+    ]
+    for attr in required:
+        assert attr in body, f"separator missing {attr!r}"
+
+
+def test_counter_chip_is_static(client_with_codes):
+    """Counter span stays visible but has no onclick or ⚇ glyph."""
+    client, coder_id, _, _, _ = client_with_codes
+    client.cookies.set("coder_id", coder_id)
+    body = client.get("/code").text
+
+    # Static text still present in flag row
+    assert 'class="ace-nav-counter"' in body
+    # Clickable affordance gone
+    assert "aceToggleGrid" not in body
+    assert "\u2687" not in body
+
+
+def test_grid_tabindex_and_live_region(client_with_codes):
+    """Active cell has tabindex=0, others -1, and live region is polite."""
+    import re
+    client, coder_id, _, _, _ = client_with_codes
+    client.cookies.set("coder_id", coder_id)
+    body = client.get("/code").text
+
+    # Live region wired up with the correct aria-live value
+    assert 'id="ace-grid-live"' in body
+    assert 'aria-live="polite"' in body
+
+    # Find the first ace-grid-cell button; it should be active and have tabindex=0
+    m = re.search(
+        r'<button[^>]*class="[^"]*ace-grid-cell[^"]*ace-grid-cell--active[^"]*"[^>]*>',
+        body,
+    )
+    assert m, "no active grid cell button found"
+    assert 'tabindex="0"' in m.group(0)
+
+    # At least one other cell has tabindex=-1
+    assert 'tabindex="-1"' in body
+
+
+def test_annotate_refreshes_grid(client_with_codes):
+    """POST /api/code/apply returns a sidebar OOB so the grid cell re-tints."""
+    client, coder_id, code_a, _, _ = client_with_codes
+    client.cookies.set("coder_id", coder_id)
+
+    resp = client.post(
+        "/api/code/apply",
+        data={
+            "code_id": code_a,
+            "current_index": 0,
+            "start_offset": 0,
+            "end_offset": 5,
+            "selected_text": "First",
+        },
+    )
+    assert resp.status_code == 200
+    assert 'id="code-sidebar"' in resp.text
+    # After applying one code, the current source has 1 annotation → ann-1
+    assert "ace-grid-cell--ann-1" in resp.text
+
+
+def test_delete_refreshes_grid(client_with_codes):
+    """Deleting an annotation returns a sidebar OOB so the grid cell re-tints."""
+    import json
+    import re
+    client, coder_id, code_a, _, _ = client_with_codes
+    client.cookies.set("coder_id", coder_id)
+
+    # Create an annotation, then delete it
+    create = client.post(
+        "/api/code/apply",
+        data={
+            "code_id": code_a,
+            "current_index": 0,
+            "start_offset": 0,
+            "end_offset": 5,
+            "selected_text": "First",
+        },
+    )
+    assert create.status_code == 200
+
+    # Pull the new annotation id from the OOB ann-data blob
+    m = re.search(r'data-annotations="([^"]+)"', create.text)
+    assert m, "ann-data payload missing from create response"
+    payload = m.group(1).replace("&#34;", '"').replace("&quot;", '"')
+    anns = json.loads(payload)
+    assert anns, "ann-data was empty after apply"
+    ann_id = anns[0]["id"]
+
+    # Delete the annotation
+    resp = client.post(
+        "/api/code/delete-annotation",
+        data={
+            "annotation_id": ann_id,
+            "current_index": 0,
+        },
+    )
+    assert resp.status_code == 200, f"delete returned {resp.status_code}: {resp.text[:200]}"
+    assert 'id="code-sidebar"' in resp.text
+    # After deleting the only annotation, the density class should be gone
+    assert "ace-grid-cell--ann-1" not in resp.text
