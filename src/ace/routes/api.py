@@ -724,20 +724,6 @@ def _render_ann_data_oob(ctx: dict) -> str:
     return f'<div id="ace-ann-data" class="ace-hidden" data-annotations="{ann_json}" hx-swap-oob="outerHTML"></div>'
 
 
-def _render_coding_oob(request: Request, conn, coder_id: str, current_index: int) -> str:
-    """Render text_panel (primary) + annotation data (OOB)."""
-    from ace.routes.pages import _coding_context
-    from jinja2_fragments import render_block
-
-    templates = request.app.state.templates
-    ctx = _coding_context(conn, coder_id, current_index)
-    ctx["request"] = request
-
-    text_html = render_block(templates.env, "coding.html", "text_panel", ctx)
-
-    return text_html + _render_ann_data_oob(ctx)
-
-
 def _render_full_coding_oob(request: Request, conn, coder_id: str, target_index: int) -> str:
     """Render all coding swap zones."""
     from ace.routes.pages import _coding_context

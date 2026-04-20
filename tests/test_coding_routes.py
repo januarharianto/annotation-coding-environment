@@ -788,3 +788,5 @@ def test_delete_refreshes_grid(client_with_codes):
     )
     assert resp.status_code == 200, f"delete returned {resp.status_code}: {resp.text[:200]}"
     assert 'id="code-sidebar"' in resp.text
+    # After deleting the only annotation, the density class should be gone
+    assert "ace-grid-cell--ann-1" not in resp.text
