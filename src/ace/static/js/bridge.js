@@ -623,6 +623,10 @@
       return parseFloat(computed) || DEFAULT_VH;
     }
 
+    // Sync ARIA state with the actual computed starting height — catches
+    // values restored from localStorage before the first user interaction.
+    _setValue(_currentVh());
+
     // Pointer drag — all listeners on the handle, with setPointerCapture,
     // so they die cleanly with the subtree when #code-sidebar is replaced
     // by an OOB swap (no document-level listener leak).
@@ -710,7 +714,7 @@
     });
     cells[targetIdx].focus();
     _announceFocus(cells[targetIdx]);
-    cells[targetIdx].scrollIntoView({ block: "nearest", behavior: "instant" });
+    cells[targetIdx].scrollIntoView({ block: "nearest", behavior: "auto" });
   }
 
   function _initGridKeyboardNav() {
@@ -780,7 +784,7 @@
 
   function _scrollActiveCellIntoView() {
     const active = document.querySelector('.ace-grid-cell[aria-current="location"]');
-    if (active) active.scrollIntoView({ block: "nearest", behavior: "instant" });
+    if (active) active.scrollIntoView({ block: "nearest", behavior: "auto" });
   }
 
   /* ================================================================
