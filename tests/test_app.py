@@ -230,7 +230,8 @@ from unittest.mock import patch
 def test_run_accepts_port_parameter():
     """run(port=9999) should pass port=9999 to uvicorn."""
     with patch("ace.app.uvicorn.run") as mock_run, \
-         patch("ace.app._kill_stale_server"):
+         patch("ace.app._kill_stale_server"), \
+         patch("ace.app._kill_stale_ace_instances"):
         from ace.app import run
         run(port=9999)
         mock_run.assert_called_once()
@@ -242,7 +243,8 @@ def test_run_defaults_to_8080():
     import os
     os.environ.pop("ACE_PORT", None)
     with patch("ace.app.uvicorn.run") as mock_run, \
-         patch("ace.app._kill_stale_server"):
+         patch("ace.app._kill_stale_server"), \
+         patch("ace.app._kill_stale_ace_instances"):
         from ace.app import run
         run()
         assert mock_run.call_args.kwargs["port"] == 8080
@@ -252,6 +254,7 @@ def test_run_respects_ace_port_env():
     """run() without --port should use ACE_PORT env var."""
     with patch("ace.app.uvicorn.run") as mock_run, \
          patch("ace.app._kill_stale_server"), \
+         patch("ace.app._kill_stale_ace_instances"), \
          patch.dict("os.environ", {"ACE_PORT": "9000"}):
         from ace.app import run
         run()
@@ -262,6 +265,7 @@ def test_run_cli_port_overrides_env():
     """run(port=7777) should take priority over ACE_PORT."""
     with patch("ace.app.uvicorn.run") as mock_run, \
          patch("ace.app._kill_stale_server"), \
+         patch("ace.app._kill_stale_ace_instances"), \
          patch.dict("os.environ", {"ACE_PORT": "9000"}):
         from ace.app import run
         run(port=7777)
@@ -271,8 +275,46 @@ def test_run_cli_port_overrides_env():
 def test_run_uses_callable_not_string():
     """run() should pass the create_app callable, not a string, to uvicorn."""
     with patch("ace.app.uvicorn.run") as mock_run, \
-         patch("ace.app._kill_stale_server"):
+         patch("ace.app._kill_stale_server"), \
+         patch("ace.app._kill_stale_ace_instances"):
         from ace.app import run
         run()
         first_arg = mock_run.call_args[0][0]
         assert callable(first_arg), f"Expected callable, got {type(first_arg)}: {first_arg}"
+
+
+def test_kill_stale_ace_instances_signals_other_pids_not_self():
+    """_kill_stale_ace_instances should SIGTERM every pgrep hit except the current PID."""
+    import os as _os
+    from unittest.mock import MagicMock
+    from ace.app import _kill_stale_ace_instances
+
+    me = _os.getpid()
+    fake_result = MagicMock()
+    fake_result.stdout = f"{me}\n12345\n67890\n"
+
+    with patch("ace.app.subprocess.run", return_value=fake_result) as mock_run, \
+         patch("ace.app.os.kill") as mock_kill, \
+         patch("ace.app.time.sleep"):
+        _kill_stale_ace_instances()
+
+    mock_run.assert_called_once()
+    args = mock_run.call_args[0][0]
+    assert args[0] == "pgrep"
+    assert "ace.app:create_app" in args
+
+    killed_pids = [call.args[0] for call in mock_kill.call_args_list]
+    assert me not in killed_pids, "must not kill self"
+    assert 12345 in killed_pids
+    assert 67890 in killed_pids
+
+
+def test_kill_stale_ace_instances_swallows_missing_pgrep():
+    """Windows has no pgrep — helper must no-op gracefully."""
+    from ace.app import _kill_stale_ace_instances
+
+    with patch("ace.app.subprocess.run", side_effect=FileNotFoundError()), \
+         patch("ace.app.os.kill") as mock_kill:
+        _kill_stale_ace_instances()  # must not raise
+
+    mock_kill.assert_not_called()

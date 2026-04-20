@@ -211,11 +211,45 @@ def _kill_stale_server(port: int) -> None:
         pass
 
 
+def _kill_stale_ace_instances() -> None:
+    """Kill any other ACE server processes regardless of port.
+
+    Single-user local app — one ACE at a time. Prevents confusion from
+    browser tabs pointing at leftover dev servers on other ports.
+    """
+    try:
+        result = subprocess.run(
+            ["pgrep", "-f", "ace.app:create_app"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        me = os.getpid()
+        killed = False
+        for raw in result.stdout.split():
+            try:
+                pid = int(raw)
+            except ValueError:
+                continue
+            if pid == me:
+                continue
+            try:
+                os.kill(pid, signal.SIGTERM)
+                killed = True
+            except ProcessLookupError:
+                pass
+        if killed:
+            time.sleep(0.5)
+    except (subprocess.SubprocessError, FileNotFoundError):
+        pass
+
+
 def run(port: int | None = None) -> None:
     if port is None:
         port = int(os.environ.get("ACE_PORT", "8080"))
     global _ALLOWED_ORIGINS
     _ALLOWED_ORIGINS = _build_allowed_origins(port)
+    _kill_stale_ace_instances()
     _kill_stale_server(port)
     # Nuitka's onefile bootloader may not forward SIGTERM to the Python
     # process cleanly. Explicitly convert SIGTERM to KeyboardInterrupt so
