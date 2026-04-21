@@ -194,36 +194,44 @@ rect.ace-flash-{{ code["id"] }} {
       {# Centre: text panel #}
       {% block text_panel %}
       <main id="text-panel" class="ace-text-panel" tabindex="0">
-        <div class="ace-text-nav">
-          <div class="ace-nav-cluster">
-            <button class="ace-nav-btn" id="btn-prev"
-                    {% if current_index <= 0 %}disabled{% endif %}
-                    onclick="aceNavigatePrev()">&#8249;</button>
-            <span class="ace-nav-counter" id="nav-counter">
-              <span class="ace-status-badge ace-status-badge--{{ current_status }}"></span>
-              {{ current_index + 1 }} / {{ total_sources }}
-            </span>
-            <button class="ace-nav-btn" id="btn-next"
-                    {% if current_index >= total_sources - 1 %}disabled{% endif %}
-                    onclick="aceNavigateNext()">&#8250;</button>
+        <div class="ace-text-header">
+          <div class="ace-text-nav">
+            <div class="ace-nav-cluster">
+              <button class="ace-nav-btn" id="btn-prev"
+                      {% if current_index <= 0 %}disabled{% endif %}
+                      onclick="aceNavigatePrev()">&#8249;</button>
+              <span class="ace-nav-counter" id="nav-counter">
+                <span class="ace-status-badge ace-status-badge--{{ current_status }}"></span>
+                {{ current_index + 1 }} / {{ total_sources }}
+              </span>
+              <button class="ace-nav-btn" id="btn-next"
+                      {% if current_index >= total_sources - 1 %}disabled{% endif %}
+                      onclick="aceNavigateNext()">&#8250;</button>
+            </div>
           </div>
-        </div>
-        <div class="ace-flag-row">
-          <button type="button" class="ace-flag-btn{% if current_status == 'flagged' %} ace-flag-btn--active{% endif %}"
-                  aria-label="Toggle flag" aria-pressed="{{ 'true' if current_status == 'flagged' else 'false' }}"
-                  id="nav-flag-btn">
-            <span class="ace-flag-chip{% if current_status == 'flagged' %} ace-flag-chip--active{% endif %}">&#9873; {{ 'Flagged' if current_status == 'flagged' else 'Flag' }}</span>
-          </button>
-          <button type="button"
-                  id="note-pill"
-                  class="ace-note-pill{% if has_note %} ace-note-pill--has-note{% endif %}"
-                  aria-label="Open source note"
-                  aria-controls="note-drawer"
-                  aria-expanded="false"
-                  title="Open source note (n)">
-            <span class="ace-note-icon">&#9998;</span>
-            <span class="ace-note-label">Note</span>
-          </button>
+          <div class="ace-text-event-row">
+            <span id="ace-text-event-pill"
+                  class="ace-text-event-pill"
+                  role="status"
+                  aria-live="polite"></span>
+          </div>
+          <div class="ace-flag-row">
+            <button type="button" class="ace-flag-btn{% if current_status == 'flagged' %} ace-flag-btn--active{% endif %}"
+                    aria-label="Toggle flag" aria-pressed="{{ 'true' if current_status == 'flagged' else 'false' }}"
+                    id="nav-flag-btn">
+              <span class="ace-flag-chip{% if current_status == 'flagged' %} ace-flag-chip--active{% endif %}">&#9873; {{ 'Flagged' if current_status == 'flagged' else 'Flag' }}</span>
+            </button>
+            <button type="button"
+                    id="note-pill"
+                    class="ace-note-pill{% if has_note %} ace-note-pill--has-note{% endif %}"
+                    aria-label="Open source note"
+                    aria-controls="note-drawer"
+                    aria-expanded="false"
+                    title="Open source note (n)">
+              <span class="ace-note-icon">&#9998;</span>
+              <span class="ace-note-label">Note</span>
+            </button>
+          </div>
         </div>
         {% if sentence_html %}
         <div class="ace-text-body">

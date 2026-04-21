@@ -819,3 +819,26 @@ def test_coding_page_has_inline_collapse_restore_script(client_with_codes):
     body = r.text
     assert 'localStorage.getItem("ace-grid-collapsed")' in body
     assert "dataset.aceGridCollapsed" in body
+
+
+def test_coding_page_text_header_has_three_rows(client_with_sources):
+    """Text panel header is wrapped in .ace-text-header with nav, event row, flag row in that order."""
+    client, _ = client_with_sources
+    r = client.get("/code?index=0")
+    assert r.status_code == 200
+    body = r.text
+
+    # Wrapper present
+    assert 'class="ace-text-header"' in body
+    # Three child rows — ordering matters
+    nav_idx = body.find('class="ace-text-nav"')
+    event_idx = body.find('class="ace-text-event-row"')
+    flag_idx = body.find('class="ace-flag-row"')
+    assert nav_idx > 0 and event_idx > 0 and flag_idx > 0
+    assert nav_idx < event_idx < flag_idx
+
+    # Event pill element present, empty on initial render
+    assert 'id="ace-text-event-pill"' in body
+    assert 'class="ace-text-event-pill"' in body
+    assert 'role="status"' in body
+    assert 'aria-live="polite"' in body

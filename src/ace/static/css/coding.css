@@ -127,11 +127,14 @@
   border-radius: var(--ace-radius);
 }
 
+.ace-text-header {
+  margin: 0 var(--ace-space-8) var(--ace-space-4);
+  border-bottom: 1px solid var(--ace-border-light);
+}
+
 .ace-text-nav {
   text-align: center;
   padding: var(--ace-space-2) 0 0;
-  margin: 0 var(--ace-space-8) var(--ace-space-4);
-  border-bottom: 1px solid var(--ace-border-light);
 }
 
 .ace-text-nav .ace-nav-cluster {
@@ -175,6 +178,56 @@
 }
 
 .ace-flag-btn:hover .ace-flag-chip--active { background: rgba(191, 54, 12, 0.16); }
+
+/* ---- Text-panel event slot (row 2 of 3 in the header stack) ---- */
+
+.ace-text-event-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 28px;              /* fixed — pill cannot shift neighbours */
+  padding: 0 var(--ace-space-4);
+}
+
+.ace-text-event-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--ace-font-mono);
+  font-size: var(--ace-font-size-2xs);
+  padding: 2px 10px;
+  background: var(--ace-bg-muted);
+  border: 1px solid var(--ace-border-light);
+  border-radius: 999px;
+  color: var(--ace-text);
+  opacity: 0;
+  transform: translateY(-2px);
+  transition: opacity var(--ace-transition), transform var(--ace-transition);
+}
+
+.ace-text-event-pill::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ace-success);
+  flex-shrink: 0;
+}
+
+.ace-text-event-pill:not(:empty) {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.ace-text-event-pill--err {
+  color: var(--ace-warning);
+  border-color: var(--ace-warning);
+  background: #fff;
+}
+
+.ace-text-event-pill--err::before {
+  background: var(--ace-warning);
+}
 
 /* ---- Status badge ---- */
 
