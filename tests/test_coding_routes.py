@@ -161,8 +161,9 @@ def test_coding_page_auto_creates_assignments(client_with_sources):
     client, _ = client_with_sources
     resp = client.get("/code")
     assert resp.status_code == 200
-    # Grid cells should exist (one per assignment/source)
-    assert "ace-grid-cell" in resp.text
+    # Grid tile container + JSON payload should exist
+    assert 'id="ace-grid-tiles"' in resp.text
+    assert 'id="ace-sources-data"' in resp.text
 
 
 def test_coding_page_includes_idiomorph(client_with_sources):
@@ -591,59 +592,6 @@ def test_flag_does_not_set_x_ace_toast_and_announces_via_live_region(client_with
 # ---------------------------------------------------------------------------
 
 
-def test_density_class():
-    """density_class maps annotation counts to density levels."""
-    from ace.routes.pages import density_class
-
-    assert density_class(0) == ""
-    assert density_class(1) == "ace-grid-cell--ann-1"
-    assert density_class(2) == "ace-grid-cell--ann-1"
-    assert density_class(3) == "ace-grid-cell--ann-3"
-    assert density_class(5) == "ace-grid-cell--ann-3"
-    assert density_class(6) == "ace-grid-cell--ann-6"
-    assert density_class(42) == "ace-grid-cell--ann-6"
-
-
-def test_coding_context_grid_cells(client_with_codes):
-    """grid_cells has correct shape AND class composition."""
-    import sqlite3
-    from ace.routes.pages import _coding_context
-
-    client, coder_id, _, _, db_path = client_with_codes
-    conn = sqlite3.connect(db_path)
-    conn.row_factory = sqlite3.Row
-    try:
-        ctx = _coding_context(conn, coder_id, 0)
-    finally:
-        conn.close()
-
-    assert "grid_cells" in ctx
-    cells = ctx["grid_cells"]
-    assert isinstance(cells, list)
-    assert len(cells) >= 1
-
-    first = cells[0]
-    for key in ("index", "source_id", "class_str", "title", "is_active", "tabindex"):
-        assert key in first, f"grid_cells[0] missing key {key!r}"
-
-    # Active cell at index 0
-    assert first["is_active"] is True
-    assert first["tabindex"] == "0"
-    assert "ace-grid-cell" in first["class_str"]
-    assert "ace-grid-cell--active" in first["class_str"]
-    # No annotations yet → no density class
-    for density in ("--ann-1", "--ann-3", "--ann-6"):
-        assert density not in first["class_str"]
-    # Zero annotations uses plural grammar: "0 annotations"
-    assert first["title"].endswith("0 annotations")
-
-    if len(cells) >= 2:
-        second = cells[1]
-        assert second["is_active"] is False
-        assert second["tabindex"] == "-1"
-        assert "ace-grid-cell--active" not in second["class_str"]
-
-
 def test_coding_context_emits_sources_json(client_with_codes):
     """sources_json is a flat per-source array suitable for client rendering."""
     import sqlite3
@@ -676,7 +624,7 @@ def test_coding_context_emits_sources_json(client_with_codes):
 
 
 def test_sidebar_grid_replaces_popover(client_with_codes):
-    """Coding page renders the integrated sidebar grid, not the overlay."""
+    """Coding page renders the sparkline + tile grid, not the legacy overlay."""
     client, coder_id, _, _, _ = client_with_codes
     client.cookies.set("coder_id", coder_id)
     resp = client.get("/code")
@@ -684,10 +632,10 @@ def test_sidebar_grid_replaces_popover(client_with_codes):
 
     # New markers present
     assert 'id="ace-sidebar-grid"' in body
-    assert 'role="grid"' in body
-    assert 'role="gridcell"' in body
-    assert 'aria-current="location"' in body
-    assert '<button type="button"' in body
+    assert 'id="ace-grid-spark"' in body
+    assert 'id="ace-grid-tiles"' in body
+    assert 'id="ace-grid-inspector"' in body
+    assert 'id="ace-sources-data"' in body
 
     # Legacy markers gone
     for gone in (
@@ -695,10 +643,10 @@ def test_sidebar_grid_replaces_popover(client_with_codes):
         "ace-grid-overlay",
         "ace-grid-popover",
         "aceToggleGrid",
-        "ace-grid-cell--ann-2",
-        "ace-grid-cell--ann-5",
-        "ace-grid-cell--ann-8",
-        "ace-grid-cell--ann-10",
+        "ace-grid-cell--ann-1",
+        "ace-grid-cell--ann-3",
+        "ace-grid-cell--ann-6",
+        "ace-grid-cell--complete",
     ):
         assert gone not in body, f"legacy marker {gone!r} still in response"
 
@@ -737,9 +685,8 @@ def test_counter_chip_is_static(client_with_codes):
     assert "\u2687" not in body
 
 
-def test_grid_tabindex_and_live_region(client_with_codes):
-    """Active cell has tabindex=0, others -1, and live region is polite."""
-    import re
+def test_grid_scaffold_and_live_region(client_with_codes):
+    """Tile grid container + live region scaffold present on the coding page."""
     client, coder_id, _, _, _ = client_with_codes
     client.cookies.set("coder_id", coder_id)
     body = client.get("/code").text
@@ -748,20 +695,18 @@ def test_grid_tabindex_and_live_region(client_with_codes):
     assert 'id="ace-grid-live"' in body
     assert 'aria-live="polite"' in body
 
-    # Find the first ace-grid-cell button; it should be active and have tabindex=0
-    m = re.search(
-        r'<button[^>]*class="[^"]*ace-grid-cell[^"]*ace-grid-cell--active[^"]*"[^>]*>',
-        body,
-    )
-    assert m, "no active grid cell button found"
-    assert 'tabindex="0"' in m.group(0)
+    # Tile grid host exists (tiles are rendered client-side)
+    assert 'id="ace-grid-tiles"' in body
+    assert 'role="grid"' in body
 
-    # At least one other cell has tabindex=-1
-    assert 'tabindex="-1"' in body
+    # Sources payload present
+    assert 'id="ace-sources-data"' in body
 
 
 def test_annotate_refreshes_grid(client_with_codes):
-    """POST /api/code/apply returns a sidebar OOB so the grid cell re-tints."""
+    """POST /api/code/apply returns OOB sources blob with incremented count."""
+    import json
+    import re
     client, coder_id, code_a, _, _ = client_with_codes
     client.cookies.set("coder_id", coder_id)
 
@@ -777,12 +722,22 @@ def test_annotate_refreshes_grid(client_with_codes):
     )
     assert resp.status_code == 200
     assert 'id="code-sidebar"' in resp.text
-    # After applying one code, the current source has 1 annotation → ann-1
-    assert "ace-grid-cell--ann-1" in resp.text
+    assert 'id="ace-sources-data"' in resp.text
+
+    # Parse the OOB blob and confirm the first source now has count == 1.
+    # The OOB payload is JSON with < > & escaped as \u003c \u003e \u0026 (Task 4 fix);
+    # those are valid inside JSON strings so json.loads accepts it as-is.
+    m = re.search(
+        r'id="ace-sources-data"[^>]*hx-swap-oob[^>]*>([^<]*)</script>',
+        resp.text,
+    )
+    assert m, "ace-sources-data OOB fragment not found in response"
+    payload = json.loads(m.group(1))
+    assert payload[0]["count"] == 1
 
 
 def test_delete_refreshes_grid(client_with_codes):
-    """Deleting an annotation returns a sidebar OOB so the grid cell re-tints."""
+    """Deleting an annotation returns OOB sources blob with decremented count."""
     import json
     import re
     client, coder_id, code_a, _, _ = client_with_codes
@@ -801,7 +756,7 @@ def test_delete_refreshes_grid(client_with_codes):
     )
     assert create.status_code == 200
 
-    # Pull the new annotation id from the OOB ann-data blob
+    # Pull the new annotation id from the ann-data OOB blob (data-annotations attr)
     m = re.search(r'data-annotations="([^"]+)"', create.text)
     assert m, "ann-data payload missing from create response"
     payload = m.group(1).replace("&#34;", '"').replace("&quot;", '"')
@@ -817,7 +772,17 @@ def test_delete_refreshes_grid(client_with_codes):
             "current_index": 0,
         },
     )
-    assert resp.status_code == 200, f"delete returned {resp.status_code}: {resp.text[:200]}"
+    assert resp.status_code == 200, (
+        f"delete returned {resp.status_code}: {resp.text[:200]}"
+    )
     assert 'id="code-sidebar"' in resp.text
-    # After deleting the only annotation, the density class should be gone
-    assert "ace-grid-cell--ann-1" not in resp.text
+    assert 'id="ace-sources-data"' in resp.text
+
+    # Parse the OOB sources blob — source 0's count should be back to 0
+    m = re.search(
+        r'id="ace-sources-data"[^>]*hx-swap-oob[^>]*>([^<]*)</script>',
+        resp.text,
+    )
+    assert m, "ace-sources-data OOB fragment missing after delete"
+    sources = json.loads(m.group(1))
+    assert sources[0]["count"] == 0
