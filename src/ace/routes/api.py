@@ -807,7 +807,7 @@ async def annotate(
     selected_text: str = Form(default=""),
 ):
     """Create an annotation and return updated text panel + annotation list."""
-    from ace.models.annotation import add_annotation
+    from ace.models.annotation import add_annotation_merging
     from ace.models.assignment import update_assignment_status
 
     coder_id = _require_coder_id(request)
@@ -824,14 +824,17 @@ async def annotate(
         if source_id is None:
             return HTMLResponse("", status_code=400)
 
-        ann_id = add_annotation(
+        ann_id, replaced_ids = add_annotation_merging(
             conn, source_id, coder_id, code_id,
             start_offset, end_offset, selected_text,
         )
 
-        # Record for undo
+        # Record for undo — compound if any existing annotations were merged
         undo = _get_undo_manager(request)
-        undo.record_add(source_id, ann_id)
+        if replaced_ids:
+            undo.record_merge_add(source_id, ann_id, replaced_ids)
+        else:
+            undo.record_add(source_id, ann_id)
 
         # Auto-transition pending -> in_progress
         assignment = conn.execute(
@@ -912,6 +915,12 @@ async def undo_route(
         elif action["type"] == "undo_delete":
             undelete_annotation(conn, action["annotation_id"])
             msg = "Annotation restored"
+        elif action["type"] == "undo_merge_add":
+            # Reverse a merge: delete the merged row, undelete the originals
+            delete_annotation(conn, action["annotation_id"])
+            for rid in action["replaced_ids"]:
+                undelete_annotation(conn, rid)
+            msg = "Merge undone"
         else:
             msg = "Undo"
 
@@ -950,6 +959,12 @@ async def redo_route(
         elif action["type"] == "redo_delete":
             delete_annotation(conn, action["annotation_id"])
             msg = "Annotation re-removed"
+        elif action["type"] == "redo_merge_add":
+            # Replay a merge: undelete the merged row, delete the originals
+            undelete_annotation(conn, action["annotation_id"])
+            for rid in action["replaced_ids"]:
+                delete_annotation(conn, rid)
+            msg = "Merge re-applied"
         else:
             msg = "Redo"
 
