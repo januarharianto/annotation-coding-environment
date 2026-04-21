@@ -30,6 +30,15 @@
     }
   } catch (_) {}
 </script>
+<script>
+  // Restore source-grid collapse state before CSS loads (matches the
+  // ace-note-open pattern above — see CLAUDE.md).
+  try {
+    if (localStorage.getItem("ace-grid-collapsed") === "1") {
+      document.documentElement.dataset.aceGridCollapsed = "1";
+    }
+  } catch (_) {}
+</script>
 <link rel="stylesheet" href="/static/css/coding.css">
 <style id="code-colours">
 {% for code in codes %}
@@ -76,6 +85,7 @@ rect.ace-flash-{{ code["id"] }} {
     <aside id="code-sidebar" class="ace-sidebar" aria-label="Codebook">
       <div class="ace-sidebar-brand" role="banner">
         <a href="/" class="ace-sidebar-brand-link" title="ACE v{{ version }}"><img src="/static/logo-light.svg" alt="ACE" class="ace-sidebar-logo"></a>
+        <span class="ace-sidebar-brand-project" title="{{ project_file_stem }}">{{ project_file_stem }}</span>
         <div class="ace-sidebar-brand-actions">
           <button type="button" class="ace-sidebar-help-btn" aria-label="Keyboard shortcuts" id="sidebar-help-btn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></button>
           <div class="ace-codebook-menu" id="codebook-menu-wrapper">
@@ -148,21 +158,28 @@ rect.ace-flash-{{ code["id"] }} {
            tabindex="0"></div>
 
       <section id="ace-sidebar-grid" class="ace-sidebar-grid" aria-label="Sources">
-        <header class="ace-grid-header">
+        <button type="button" id="ace-grid-collapse-btn" class="ace-grid-header"
+                aria-expanded="true" aria-controls="ace-grid-content">
+          <svg class="ace-grid-chevron" width="12" height="12" viewBox="0 0 12 12"
+               aria-hidden="true" focusable="false">
+            <path d="M3 4.5 L6 7.5 L9 4.5" fill="none" stroke="currentColor"
+                  stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
           <span class="ace-grid-title">Sources</span>
-          <span class="ace-grid-meta">{{ total_sources }}</span>
-        </header>
-        <div id="ace-grid-spark" class="ace-grid-spark"
-             role="img" aria-label="Source density overview — click to jump to a range"></div>
-        <div class="ace-grid-sub-header">
-          <span class="ace-grid-sub-label" id="ace-grid-range-label">—</span>
+        </button>
+        <div id="ace-grid-content" class="ace-grid-content">
+          <div id="ace-grid-spark" class="ace-grid-spark"
+               role="img" aria-label="Source density overview — click to jump to a range"></div>
+          <div class="ace-grid-sub-header">
+            <span class="ace-grid-sub-label" id="ace-grid-range-label">—</span>
+          </div>
+          <div id="ace-grid-tiles" class="ace-grid-tiles" role="grid"
+               aria-label="Source grid"></div>
+          <div id="ace-grid-inspector" class="ace-grid-inspector"
+               aria-live="polite" aria-atomic="true"></div>
+          <script id="ace-sources-data" type="application/json">{{ sources_json | tojson }}</script>
+          <div id="ace-grid-live" class="ace-sr-only" aria-live="polite"></div>
         </div>
-        <div id="ace-grid-tiles" class="ace-grid-tiles" role="grid"
-             aria-label="Source grid"></div>
-        <div id="ace-grid-inspector" class="ace-grid-inspector"
-             aria-live="polite" aria-atomic="true"></div>
-        <script id="ace-sources-data" type="application/json">{{ sources_json | tojson }}</script>
-        <div id="ace-grid-live" class="ace-sr-only" aria-live="polite"></div>
       </section>
       <div aria-live="polite" class="ace-sr-only" id="ace-live-region"></div>
       <div role="alert" aria-live="assertive" class="ace-sr-only" id="ace-live-region-assertive"></div>
@@ -178,36 +195,44 @@ rect.ace-flash-{{ code["id"] }} {
       {# Centre: text panel #}
       {% block text_panel %}
       <main id="text-panel" class="ace-text-panel" tabindex="0">
-        <div class="ace-text-nav">
-          <div class="ace-nav-cluster">
-            <button class="ace-nav-btn" id="btn-prev"
-                    {% if current_index <= 0 %}disabled{% endif %}
-                    onclick="aceNavigatePrev()">&#8249;</button>
-            <span class="ace-nav-counter" id="nav-counter">
-              <span class="ace-status-badge ace-status-badge--{{ current_status }}"></span>
-              {{ current_index + 1 }} / {{ total_sources }}
-            </span>
-            <button class="ace-nav-btn" id="btn-next"
-                    {% if current_index >= total_sources - 1 %}disabled{% endif %}
-                    onclick="aceNavigateNext()">&#8250;</button>
+        <div class="ace-text-header">
+          <div class="ace-text-nav">
+            <div class="ace-nav-cluster">
+              <button class="ace-nav-btn" id="btn-prev"
+                      {% if current_index <= 0 %}disabled{% endif %}
+                      onclick="aceNavigatePrev()">&#8249;</button>
+              <span class="ace-nav-counter" id="nav-counter">
+                <span class="ace-status-badge ace-status-badge--{{ current_status }}"></span>
+                {{ current_index + 1 }} / {{ total_sources }}
+              </span>
+              <button class="ace-nav-btn" id="btn-next"
+                      {% if current_index >= total_sources - 1 %}disabled{% endif %}
+                      onclick="aceNavigateNext()">&#8250;</button>
+            </div>
           </div>
-        </div>
-        <div class="ace-flag-row">
-          <button type="button" class="ace-flag-btn{% if current_status == 'flagged' %} ace-flag-btn--active{% endif %}"
-                  aria-label="Toggle flag" aria-pressed="{{ 'true' if current_status == 'flagged' else 'false' }}"
-                  id="nav-flag-btn">
-            <span class="ace-flag-chip{% if current_status == 'flagged' %} ace-flag-chip--active{% endif %}">&#9873; {{ 'Flagged' if current_status == 'flagged' else 'Flag' }}</span>
-          </button>
-          <button type="button"
-                  id="note-pill"
-                  class="ace-note-pill{% if has_note %} ace-note-pill--has-note{% endif %}"
-                  aria-label="Open source note"
-                  aria-controls="note-drawer"
-                  aria-expanded="false"
-                  title="Open source note (n)">
-            <span class="ace-note-icon">&#9998;</span>
-            <span class="ace-note-label">Note</span>
-          </button>
+          <div class="ace-text-event-row">
+            <span id="ace-text-event-pill"
+                  class="ace-text-event-pill"
+                  role="status"
+                  aria-live="polite"></span>
+          </div>
+          <div class="ace-flag-row">
+            <button type="button" class="ace-flag-btn{% if current_status == 'flagged' %} ace-flag-btn--active{% endif %}"
+                    aria-label="Toggle flag" aria-pressed="{{ 'true' if current_status == 'flagged' else 'false' }}"
+                    id="nav-flag-btn">
+              <span class="ace-flag-chip{% if current_status == 'flagged' %} ace-flag-chip--active{% endif %}">&#9873; {{ 'Flagged' if current_status == 'flagged' else 'Flag' }}</span>
+            </button>
+            <button type="button"
+                    id="note-pill"
+                    class="ace-note-pill{% if has_note %} ace-note-pill--has-note{% endif %}"
+                    aria-label="Open source note"
+                    aria-controls="note-drawer"
+                    aria-expanded="false"
+                    title="Open source note (n)">
+              <span class="ace-note-icon">&#9998;</span>
+              <span class="ace-note-label">Note</span>
+            </button>
+          </div>
         </div>
         {% if sentence_html %}
         <div class="ace-text-body">
@@ -290,6 +315,9 @@ rect.ace-flash-{{ code["id"] }} {
     if (typeof window._aceRenderSourceGrid === "function") {
       window._aceRenderSourceGrid();
     }
+    const collapsed = document.documentElement.dataset.aceGridCollapsed === "1";
+    const btn = document.getElementById("ace-grid-collapse-btn");
+    if (btn && collapsed) btn.setAttribute("aria-expanded", "false");
   });
   (function() {
     var params = new URLSearchParams(window.location.search);
