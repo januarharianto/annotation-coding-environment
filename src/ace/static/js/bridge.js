@@ -737,11 +737,19 @@
     const active = typeof window.__aceCurrentIndex === "number"
       ? window.__aceCurrentIndex : 0;
 
-    // Compute visible count from measured dimensions
+    // Compute visible count from the CONTENT box (exclude padding) so the
+    // math matches CSS `repeat(auto-fill, 22px)` — otherwise we overcount
+    // columns by ~1 and the extra tiles spill into a row that gets clipped
+    // by `overflow: hidden`.
+    const cs = getComputedStyle(host);
+    const padX = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight);
+    const padY = parseFloat(cs.paddingTop)  + parseFloat(cs.paddingBottom);
     const rect = host.getBoundingClientRect();
+    const contentW = Math.max(0, rect.width  - padX);
+    const contentH = Math.max(0, rect.height - padY);
     const TILE = 22, GAP = 2;
-    const cols = Math.max(1, Math.floor((rect.width  + GAP) / (TILE + GAP)));
-    const rows = Math.max(1, Math.floor((rect.height + GAP) / (TILE + GAP)));
+    const cols = Math.max(1, Math.floor((contentW + GAP) / (TILE + GAP)));
+    const rows = Math.max(1, Math.floor((contentH + GAP) / (TILE + GAP)));
     st.visibleCount = Math.min(st.sources.length, cols * rows);
 
     // Auto-centre on active ONLY when the active source has changed since
@@ -919,9 +927,12 @@
   function _aceTileCols() {
     const host = document.getElementById("ace-grid-tiles");
     if (!host) return 1;
+    const cs = getComputedStyle(host);
+    const padX = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight);
     const rect = host.getBoundingClientRect();
+    const contentW = Math.max(0, rect.width - padX);
     const TILE = 22, GAP = 2;
-    return Math.max(1, Math.floor((rect.width + GAP) / (TILE + GAP)));
+    return Math.max(1, Math.floor((contentW + GAP) / (TILE + GAP)));
   }
 
   function _aceNavigateFocus(targetIndex) {
