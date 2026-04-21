@@ -885,3 +885,134 @@ def test_oob_status_ok_kind_uses_ok_class_suffix():
     body = response.body.decode("utf-8")
     assert "ace-statusbar-event--ok" in body
     assert "ace-text-event-pill--ok" in body
+
+
+# ---------------------------------------------------------------------------
+# Merge-on-apply integration tests
+# ---------------------------------------------------------------------------
+
+
+def _count_active_annotations(client, db_path: str, source_index: int) -> int:
+    """Count non-deleted annotations on the source at source_index."""
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    try:
+        source_row = conn.execute(
+            "SELECT id FROM source ORDER BY sort_order LIMIT 1 OFFSET ?",
+            (source_index,),
+        ).fetchone()
+        assert source_row is not None, f"no source at index {source_index}"
+        row = conn.execute(
+            "SELECT COUNT(*) AS n FROM annotation "
+            "WHERE source_id = ? AND deleted_at IS NULL",
+            (source_row["id"],),
+        ).fetchone()
+        return row["n"]
+    finally:
+        conn.close()
+
+
+def test_apply_same_code_overlap_merges(client_with_codes):
+    """POST /api/code/apply twice with overlapping same-code ranges → 1 annotation."""
+    client, _, code_a, _, db_path = client_with_codes
+
+    r1 = client.post("/api/code/apply", data={
+        "code_id": code_a, "current_index": 0,
+        "start_offset": 0, "end_offset": 10, "selected_text": "First docu",
+    })
+    assert r1.status_code == 200
+
+    r2 = client.post("/api/code/apply", data={
+        "code_id": code_a, "current_index": 0,
+        "start_offset": 5, "end_offset": 15, "selected_text": "documen",
+    })
+    assert r2.status_code == 200
+
+    assert _count_active_annotations(client, db_path, 0) == 1
+
+
+def test_apply_different_code_overlap_creates_two(client_with_codes):
+    """Overlap with DIFFERENT code → both annotations remain."""
+    client, _, code_a, code_b, db_path = client_with_codes
+
+    client.post("/api/code/apply", data={
+        "code_id": code_a, "current_index": 0,
+        "start_offset": 0, "end_offset": 10, "selected_text": "First docu",
+    })
+    client.post("/api/code/apply", data={
+        "code_id": code_b, "current_index": 0,
+        "start_offset": 5, "end_offset": 15, "selected_text": "documen",
+    })
+
+    assert _count_active_annotations(client, db_path, 0) == 2
+
+
+def test_apply_merge_then_undo_restores_originals(client_with_codes):
+    """After a merge, undo: originals restored, merged one gone."""
+    client, _, code_a, _, db_path = client_with_codes
+
+    # Two non-overlapping annotations first
+    client.post("/api/code/apply", data={
+        "code_id": code_a, "current_index": 0,
+        "start_offset": 0, "end_offset": 4, "selected_text": "Firs",
+    })
+    client.post("/api/code/apply", data={
+        "code_id": code_a, "current_index": 0,
+        "start_offset": 10, "end_offset": 14, "selected_text": "cont",
+    })
+    assert _count_active_annotations(client, db_path, 0) == 2
+
+    # Spanning apply merges both
+    client.post("/api/code/apply", data={
+        "code_id": code_a, "current_index": 0,
+        "start_offset": 2, "end_offset": 13, "selected_text": "rst documen",
+    })
+    assert _count_active_annotations(client, db_path, 0) == 1
+
+    # Undo → originals restored
+    r = client.post("/api/code/undo", data={"current_index": 0})
+    assert r.status_code == 200
+    assert _count_active_annotations(client, db_path, 0) == 2
+
+
+def _active_annotation_ranges(db_path: str, source_index: int) -> list[tuple[int, int]]:
+    """Return [(start_offset, end_offset), ...] for active annotations, ordered by start."""
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    try:
+        source_row = conn.execute(
+            "SELECT id FROM source ORDER BY sort_order LIMIT 1 OFFSET ?",
+            (source_index,),
+        ).fetchone()
+        rows = conn.execute(
+            "SELECT start_offset, end_offset FROM annotation "
+            "WHERE source_id = ? AND deleted_at IS NULL "
+            "ORDER BY start_offset",
+            (source_row["id"],),
+        ).fetchall()
+        return [(r["start_offset"], r["end_offset"]) for r in rows]
+    finally:
+        conn.close()
+
+
+def test_apply_merge_then_undo_then_redo(client_with_codes):
+    """Undo + redo returns to merged state. Asserts specific ranges to prove
+    the right annotation survives each transition (count alone would pass even
+    if undo/redo were no-ops)."""
+    client, _, code_a, _, db_path = client_with_codes
+
+    client.post("/api/code/apply", data={
+        "code_id": code_a, "current_index": 0,
+        "start_offset": 0, "end_offset": 10, "selected_text": "First docu",
+    })
+    client.post("/api/code/apply", data={
+        "code_id": code_a, "current_index": 0,
+        "start_offset": 5, "end_offset": 15, "selected_text": "documen",
+    })
+    assert _active_annotation_ranges(db_path, 0) == [(0, 15)]
+
+    client.post("/api/code/undo", data={"current_index": 0})
+    assert _active_annotation_ranges(db_path, 0) == [(0, 10)]
+
+    client.post("/api/code/redo", data={"current_index": 0})
+    assert _active_annotation_ranges(db_path, 0) == [(0, 15)]

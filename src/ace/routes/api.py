@@ -807,7 +807,7 @@ async def annotate(
     selected_text: str = Form(default=""),
 ):
     """Create an annotation and return updated text panel + annotation list."""
-    from ace.models.annotation import add_annotation
+    from ace.models.annotation import add_annotation_merging
     from ace.models.assignment import update_assignment_status
 
     coder_id = _require_coder_id(request)
@@ -824,14 +824,17 @@ async def annotate(
         if source_id is None:
             return HTMLResponse("", status_code=400)
 
-        ann_id = add_annotation(
+        ann_id, replaced_ids = add_annotation_merging(
             conn, source_id, coder_id, code_id,
             start_offset, end_offset, selected_text,
         )
 
-        # Record for undo
+        # Record for undo — compound if any existing annotations were merged
         undo = _get_undo_manager(request)
-        undo.record_add(source_id, ann_id)
+        if replaced_ids:
+            undo.record_merge_add(source_id, ann_id, replaced_ids)
+        else:
+            undo.record_add(source_id, ann_id)
 
         # Auto-transition pending -> in_progress
         assignment = conn.execute(
@@ -889,7 +892,9 @@ async def undo_route(
     current_index: int = Form(default=0),
 ):
     """Undo the last annotation action for the current source."""
-    from ace.models.annotation import delete_annotation, undelete_annotation
+    from ace.models.annotation import (
+        delete_annotation, undelete_annotation, reverse_merge_add,
+    )
 
     coder_id = _require_coder_id(request)
     if coder_id is None:
@@ -912,6 +917,10 @@ async def undo_route(
         elif action["type"] == "undo_delete":
             undelete_annotation(conn, action["annotation_id"])
             msg = "Annotation restored"
+        elif action["type"] == "undo_merge_add":
+            # Atomic: delete merged row + undelete originals in one transaction
+            reverse_merge_add(conn, action["annotation_id"], action["replaced_ids"])
+            msg = "Merge undone"
         else:
             msg = "Undo"
 
@@ -927,7 +936,9 @@ async def redo_route(
     current_index: int = Form(default=0),
 ):
     """Redo the last undone annotation action for the current source."""
-    from ace.models.annotation import delete_annotation, undelete_annotation
+    from ace.models.annotation import (
+        delete_annotation, undelete_annotation, replay_merge_add,
+    )
 
     coder_id = _require_coder_id(request)
     if coder_id is None:
@@ -950,6 +961,10 @@ async def redo_route(
         elif action["type"] == "redo_delete":
             delete_annotation(conn, action["annotation_id"])
             msg = "Annotation re-removed"
+        elif action["type"] == "redo_merge_add":
+            # Atomic: undelete merged row + delete originals in one transaction
+            replay_merge_add(conn, action["annotation_id"], action["replaced_ids"])
+            msg = "Merge re-applied"
         else:
             msg = "Redo"
 

@@ -130,3 +130,141 @@ def compact_deleted(conn: sqlite3.Connection) -> int:
     cursor = conn.execute("DELETE FROM annotation WHERE deleted_at IS NOT NULL")
     conn.commit()
     return cursor.rowcount
+
+
+def add_annotation_merging(
+    conn: sqlite3.Connection,
+    source_id: str,
+    coder_id: str,
+    code_id: str,
+    start_offset: int,
+    end_offset: int,
+    selected_text: str,
+) -> tuple[str, list[str]]:
+    """Create an annotation, merging any existing same-code annotations that
+    overlap or touch the new range.
+
+    Returns (new_annotation_id, replaced_ids). replaced_ids is the list of
+    soft-deleted annotation ids merged into the new one; empty if no merge.
+
+    Overlap-or-touch: existing.end_offset >= new.start_offset AND
+    existing.start_offset <= new.end_offset. Only same code_id + coder_id +
+    not-soft-deleted annotations are merged.
+
+    For merges, selected_text is re-sliced from source.content_text for the
+    full union range. Caller does not need to pass the union text.
+
+    Atomic: all soft-deletes + insert run in one transaction; rollback on error.
+    """
+    overlapping = conn.execute(
+        "SELECT id, start_offset, end_offset FROM annotation "
+        "WHERE source_id = ? AND coder_id = ? AND code_id = ? "
+        "AND deleted_at IS NULL "
+        "AND end_offset >= ? AND start_offset <= ?",
+        (source_id, coder_id, code_id, start_offset, end_offset),
+    ).fetchall()
+
+    now = datetime.now(timezone.utc).isoformat()
+    new_id = uuid.uuid4().hex
+
+    if not overlapping:
+        conn.execute(
+            "INSERT INTO annotation "
+            "(id, source_id, coder_id, code_id, start_offset, end_offset, "
+            "selected_text, memo, w3c_selector_json, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?)",
+            (new_id, source_id, coder_id, code_id, start_offset, end_offset,
+             selected_text, now, now),
+        )
+        conn.commit()
+        return new_id, []
+
+    union_start = min(start_offset, *(r["start_offset"] for r in overlapping))
+    union_end = max(end_offset, *(r["end_offset"] for r in overlapping))
+
+    source_row = conn.execute(
+        "SELECT content_text FROM source_content WHERE source_id = ?", (source_id,)
+    ).fetchone()
+    if source_row is None:
+        raise ValueError(f"source {source_id} not found")
+    merged_text = source_row["content_text"][union_start:union_end]
+
+    replaced_ids = [r["id"] for r in overlapping]
+    try:
+        for rid in replaced_ids:
+            conn.execute(
+                "UPDATE annotation SET deleted_at = ? WHERE id = ?",
+                (now, rid),
+            )
+        conn.execute(
+            "INSERT INTO annotation "
+            "(id, source_id, coder_id, code_id, start_offset, end_offset, "
+            "selected_text, memo, w3c_selector_json, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?)",
+            (new_id, source_id, coder_id, code_id, union_start, union_end,
+             merged_text, now, now),
+        )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+
+    return new_id, replaced_ids
+
+
+def reverse_merge_add(
+    conn: sqlite3.Connection,
+    merged_id: str,
+    replaced_ids: list[str],
+) -> None:
+    """Atomically reverse a merge-add: soft-delete the merged row and
+    undelete each replaced original, in a single transaction.
+
+    Used by the /api/code/undo route. The per-call delete_annotation /
+    undelete_annotation helpers each commit independently, which would
+    leave the DB in a partially-undone state if an error occurred
+    mid-sequence. This function commits once.
+    """
+    now = datetime.now(timezone.utc).isoformat()
+    try:
+        conn.execute(
+            "UPDATE annotation SET deleted_at = ? WHERE id = ?",
+            (now, merged_id),
+        )
+        for rid in replaced_ids:
+            conn.execute(
+                "UPDATE annotation SET deleted_at = NULL WHERE id = ?",
+                (rid,),
+            )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+
+
+def replay_merge_add(
+    conn: sqlite3.Connection,
+    merged_id: str,
+    replaced_ids: list[str],
+) -> None:
+    """Atomically replay a previously-undone merge-add: undelete the merged
+    row and soft-delete each original again, in a single transaction.
+
+    Used by the /api/code/redo route. See reverse_merge_add for the
+    atomicity rationale.
+    """
+    now = datetime.now(timezone.utc).isoformat()
+    try:
+        conn.execute(
+            "UPDATE annotation SET deleted_at = NULL WHERE id = ?",
+            (merged_id,),
+        )
+        for rid in replaced_ids:
+            conn.execute(
+                "UPDATE annotation SET deleted_at = ? WHERE id = ?",
+                (now, rid),
+            )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
