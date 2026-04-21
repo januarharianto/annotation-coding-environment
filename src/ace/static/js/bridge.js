@@ -683,91 +683,326 @@
     });
   }
 
-  function _getGridColumnCount() {
-    const cellsEl = document.querySelector(".ace-grid-cells");
-    if (!cellsEl) return 1;
-    const tracks = getComputedStyle(cellsEl)
-      .getPropertyValue("grid-template-columns").trim();
-    if (!tracks) return 1;
-    return tracks.split(/\s+/).length || 1;
+  // ==========================================================
+  // Source-grid renderer: sparkline minimap + tile viewport
+  // ==========================================================
+
+  let _aceSourceGridState = {
+    sources: [],
+    windowStart: 0,
+    visibleCount: 0,
+    resizeObs: null,
+    hoveredIndex: -1, // -1 means "no hover; show active"
+    lastActive: -1,   // last rendered active index; used to decide whether to
+                      // auto-centre the viewport (only on active-source change,
+                      // so sparkline clicks to a distant range aren't snapped back)
+  };
+
+  function _aceInspectorLine(src) {
+    if (!src) return "";
+    const n = src.index + 1;
+    const flags = [];
+    if (src.flagged) flags.push("flagged");
+    if (src.note)    flags.push("has note");
+    const plural = src.count === 1 ? "" : "s";
+    const parts = [
+      "#" + n,
+      src.display_id,
+      src.count + " annotation" + plural,
+    ];
+    if (flags.length) parts.push(flags.join(" · "));
+    return parts.join(" · ");
   }
 
-  function _announceFocus(cellButton) {
-    const live = document.getElementById("ace-grid-live");
-    if (!live || !cellButton) return;
-    const idx = parseInt(cellButton.dataset.sourceIndex, 10);
-    const total = document.querySelectorAll(".ace-grid-cell").length;
-    const title = cellButton.getAttribute("title") || "";
-    // title is "N · K annotation(s)" — pull the "K annotation[s]" part
-    const annPart = title.split("\u00b7")[1] ? title.split("\u00b7")[1].trim() : "";
-    const parts = ["Source " + (idx + 1) + " of " + total];
-    if (annPart) parts.push(annPart);
-    if (cellButton.classList.contains("ace-grid-cell--flagged")) parts.push("flagged");
-    if (cellButton.classList.contains("ace-grid-cell--has-note")) parts.push("has note");
-    live.textContent = parts.join(", ") + ".";
+  function _aceUpdateInspector() {
+    const el = document.getElementById("ace-grid-inspector");
+    if (!el) return;
+    const st = _aceSourceGridState;
+    let src = null;
+    if (st.hoveredIndex >= 0 && st.hoveredIndex < st.sources.length) {
+      src = st.sources[st.hoveredIndex];
+    } else if (typeof window.__aceCurrentIndex === "number" &&
+               window.__aceCurrentIndex >= 0 &&
+               window.__aceCurrentIndex < st.sources.length) {
+      src = st.sources[window.__aceCurrentIndex];
+    }
+    el.textContent = _aceInspectorLine(src);
   }
 
-  function _setRovingFocus(cells, targetIdx) {
-    if (targetIdx < 0 || targetIdx >= cells.length) return;
-    cells.forEach(function (c, i) {
-      c.setAttribute("tabindex", i === targetIdx ? "0" : "-1");
+  function _aceRenderTiles() {
+    const host = document.getElementById("ace-grid-tiles");
+    const label = document.getElementById("ace-grid-range-label");
+    if (!host) return;
+    const st = _aceSourceGridState;
+    const active = typeof window.__aceCurrentIndex === "number"
+      ? window.__aceCurrentIndex : 0;
+
+    // Compute visible count from the CONTENT box (exclude padding) so the
+    // math matches CSS `repeat(auto-fill, 22px)` — otherwise we overcount
+    // columns by ~1 and the extra tiles spill into a row that gets clipped
+    // by `overflow: hidden`.
+    const cs = getComputedStyle(host);
+    const padX = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight);
+    const padY = parseFloat(cs.paddingTop)  + parseFloat(cs.paddingBottom);
+    const rect = host.getBoundingClientRect();
+    const contentW = Math.max(0, rect.width  - padX);
+    const contentH = Math.max(0, rect.height - padY);
+    const TILE = 22, GAP = 2;
+    const cols = Math.max(1, Math.floor((contentW + GAP) / (TILE + GAP)));
+    const rows = Math.max(1, Math.floor((contentH + GAP) / (TILE + GAP)));
+    st.visibleCount = Math.min(st.sources.length, cols * rows);
+
+    // Auto-centre on active ONLY when the active source has changed since
+    // the previous render (i.e. real navigation). Otherwise respect
+    // st.windowStart so sparkline clicks to a far range aren't snapped back.
+    if (active !== st.lastActive &&
+        (active < st.windowStart ||
+         active >= st.windowStart + st.visibleCount)) {
+      st.windowStart = Math.max(0, Math.min(
+        st.sources.length - st.visibleCount,
+        active - Math.floor(st.visibleCount / 2),
+      ));
+    }
+    // Always clamp so windowStart stays in valid range (e.g. after resize).
+    st.windowStart = Math.max(0, Math.min(
+      st.windowStart, Math.max(0, st.sources.length - st.visibleCount),
+    ));
+    st.lastActive = active;
+
+    const from = st.windowStart;
+    const to   = Math.min(st.sources.length, from + st.visibleCount);
+
+    if (label) {
+      label.textContent = "Sources " + (from + 1) + "–" + to +
+        " of " + st.sources.length;
+    }
+
+    const frag = document.createDocumentFragment();
+    for (let i = from; i < to; i++) {
+      const s = st.sources[i];
+      const cls = ["ace-grid-tile"];
+      if (s.count >= 6) cls.push("hot");
+      else if (s.count >= 3) cls.push("warm");
+      if (i === active)  cls.push("active");
+      if (s.flagged)     cls.push("flagged");
+      if (s.note)        cls.push("note");
+
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = cls.join(" ");
+      btn.setAttribute("role", "gridcell");
+      btn.dataset.sourceIndex = String(i);
+      btn.dataset.count = String(s.count);
+      btn.tabIndex = (i === active) ? 0 : -1;
+      if (i === active) btn.setAttribute("aria-current", "location");
+      btn.title = "#" + (i + 1) + " · " + s.display_id +
+        " · " + s.count + " annotation" + (s.count === 1 ? "" : "s");
+
+      const span = document.createElement("span");
+      span.textContent = String(s.count);
+      btn.appendChild(span);
+
+      btn.addEventListener("click", function () {
+        if (typeof window.aceNavigate === "function") {
+          window.aceNavigate(i);
+        }
+      });
+      btn.addEventListener("mouseenter", function () {
+        _aceSourceGridState.hoveredIndex = i;
+        _aceUpdateInspector();
+      });
+      btn.addEventListener("focus", function () {
+        _aceSourceGridState.hoveredIndex = i;
+        _aceUpdateInspector();
+      });
+
+      frag.appendChild(btn);
+    }
+    host.replaceChildren(frag);
+
+    // Mouse leaving the tile grid clears hover → inspector falls back to active
+    if (!host.dataset.aceMouseleaveWired) {
+      host.addEventListener("mouseleave", function () {
+        _aceSourceGridState.hoveredIndex = -1;
+        _aceUpdateInspector();
+      });
+      host.dataset.aceMouseleaveWired = "1";
+    }
+
+    _aceUpdateInspector();
+  }
+
+  function _aceRenderSparkline() {
+    const host = document.getElementById("ace-grid-spark");
+    if (!host) return;
+    const st = _aceSourceGridState;
+    const total = st.sources.length;
+    if (total === 0) { host.replaceChildren(); return; }
+
+    const W = host.clientWidth || 240;
+    const H = 38;
+    const padX = 2;
+    const innerW = Math.max(1, W - 2 * padX);
+
+    const nPoints = Math.max(40, Math.min(160, Math.floor(innerW / 4)));
+    const step = total / nPoints;
+    let maxCount = 1;
+    for (let k = 0; k < total; k++) {
+      if (st.sources[k].count > maxCount) maxCount = st.sources[k].count;
+    }
+
+    const density = new Array(nPoints);
+    for (let i = 0; i < nPoints; i++) {
+      const from = Math.floor(i * step);
+      const toEx = Math.floor((i + 1) * step);
+      let sum = 0, cnt = 0;
+      for (let k = from; k < toEx && k < total; k++) {
+        sum += st.sources[k].count; cnt++;
+      }
+      density[i] = cnt > 0 ? sum / cnt : 0;
+    }
+
+    const pts = density.map(function (d, i) {
+      const x = padX + (nPoints === 1 ? 0 : (i / (nPoints - 1)) * innerW);
+      const y = H - (d / maxCount) * (H - 4) - 2;
+      return [x, y];
     });
-    cells[targetIdx].focus();
-    _announceFocus(cells[targetIdx]);
-    cells[targetIdx].scrollIntoView({ block: "nearest", behavior: "auto" });
+    const line = "M" + pts.map(function (p) {
+      return p[0].toFixed(1) + "," + p[1].toFixed(1);
+    }).join(" L");
+    const area = line + " L" + (W - padX).toFixed(1) + "," + H +
+                        " L" + padX.toFixed(1) + "," + H + " Z";
+
+    const denom = Math.max(1, total - 1);
+    const vpX1 = padX + (st.windowStart / denom) * innerW;
+    const vpEnd = Math.min(total, st.windowStart + st.visibleCount) - 1;
+    const vpX2 = padX + (Math.max(vpEnd, 0) / denom) * innerW;
+    const vpW  = Math.max(6, vpX2 - vpX1);
+    const active = typeof window.__aceCurrentIndex === "number"
+      ? window.__aceCurrentIndex : 0;
+    const playX = padX + (active / denom) * innerW;
+
+    const NS = "http://www.w3.org/2000/svg";
+    const svg = document.createElementNS(NS, "svg");
+    svg.setAttribute("viewBox", "0 0 " + W + " " + (H + 4));
+    svg.setAttribute("preserveAspectRatio", "none");
+
+    function mk(tag, attrs) {
+      const el = document.createElementNS(NS, tag);
+      for (const k in attrs) el.setAttribute(k, attrs[k]);
+      return el;
+    }
+    svg.appendChild(mk("path", { class: "spark-area", d: area }));
+    svg.appendChild(mk("path", { class: "spark-line", d: line }));
+    svg.appendChild(mk("rect", {
+      class: "spark-viewport",
+      x: vpX1.toFixed(1), y: 0,
+      width: vpW.toFixed(1), height: H,
+    }));
+    svg.appendChild(mk("line", {
+      class: "spark-playhead",
+      x1: playX, x2: playX, y1: 0, y2: H,
+    }));
+    svg.appendChild(mk("circle", {
+      class: "spark-playhead-cap",
+      cx: playX, cy: H + 2, r: 2,
+    }));
+
+    svg.addEventListener("click", function (ev) {
+      const r = svg.getBoundingClientRect();
+      const x = ev.clientX - r.left;
+      const normalised = (x - padX) / innerW;
+      const idx = Math.round(Math.max(0, Math.min(1, normalised)) * denom);
+      _aceSourceGridState.windowStart = Math.max(0, Math.min(
+        total - _aceSourceGridState.visibleCount,
+        idx - Math.floor(_aceSourceGridState.visibleCount / 2),
+      ));
+      _aceRenderSparkline();
+      _aceRenderTiles();
+    });
+
+    host.replaceChildren(svg);
   }
 
-  function _initGridKeyboardNav() {
-    const cellsEl = document.querySelector(".ace-grid-cells");
-    if (!cellsEl || cellsEl.dataset.aceKbdWired) return;
-    cellsEl.dataset.aceKbdWired = "1";
+  function _aceTileCols() {
+    const host = document.getElementById("ace-grid-tiles");
+    if (!host) return 1;
+    const cs = getComputedStyle(host);
+    const padX = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight);
+    const rect = host.getBoundingClientRect();
+    const contentW = Math.max(0, rect.width - padX);
+    const TILE = 22, GAP = 2;
+    return Math.max(1, Math.floor((contentW + GAP) / (TILE + GAP)));
+  }
 
-    cellsEl.addEventListener("keydown", function (e) {
-      const target = e.target.closest(".ace-grid-cell");
+  function _aceNavigateFocus(targetIndex) {
+    const st = _aceSourceGridState;
+    const total = st.sources.length;
+    if (total === 0) return;
+    targetIndex = Math.max(0, Math.min(total - 1, targetIndex));
+
+    // Shift window if target is outside; center on target
+    if (targetIndex < st.windowStart ||
+        targetIndex >= st.windowStart + st.visibleCount) {
+      st.windowStart = Math.max(0, Math.min(
+        total - st.visibleCount,
+        targetIndex - Math.floor(st.visibleCount / 2),
+      ));
+      _aceRenderTiles();
+      _aceRenderSparkline();
+    }
+
+    // Focus the destination tile
+    const host = document.getElementById("ace-grid-tiles");
+    if (!host) return;
+    const btn = host.querySelector(
+      '[data-source-index="' + targetIndex + '"]');
+    if (btn) {
+      host.querySelectorAll('.ace-grid-tile').forEach(function (t) {
+        t.tabIndex = -1;
+      });
+      btn.tabIndex = 0;
+      btn.focus();
+      _aceSourceGridState.hoveredIndex = targetIndex;
+      _aceUpdateInspector();
+    }
+  }
+
+  function _aceInitTileKeyboard() {
+    const host = document.getElementById("ace-grid-tiles");
+    if (!host || host.dataset.aceKbdWired) return;
+    host.dataset.aceKbdWired = "1";
+
+    host.addEventListener("keydown", function (e) {
+      const target = e.target.closest(".ace-grid-tile");
       if (!target) return;
-      const cells = Array.from(cellsEl.querySelectorAll(".ace-grid-cell"));
-      const idx = cells.indexOf(target);
-      if (idx < 0) return;
-      const cols = _getGridColumnCount();
-      const last = cells.length - 1;
-      let dest = -1;
+      const idx = parseInt(target.dataset.sourceIndex, 10);
+      if (Number.isNaN(idx)) return;
+      const st = _aceSourceGridState;
+      const cols = _aceTileCols();
+      const total = st.sources.length;
 
+      let dest = null;
       switch (e.key) {
-        case "ArrowLeft":  dest = Math.max(0, idx - 1); break;
-        case "ArrowRight": dest = Math.min(last, idx + 1); break;
-        case "ArrowUp":    dest = Math.max(0, idx - cols); break;
-        case "ArrowDown":  dest = Math.min(last, idx + cols); break;
+        case "ArrowLeft":  dest = idx - 1; break;
+        case "ArrowRight": dest = idx + 1; break;
+        case "ArrowUp":    dest = idx - cols; break;
+        case "ArrowDown":  dest = idx + cols; break;
         case "Home":       dest = 0; break;
-        case "End":        dest = last; break;
-        case "PageUp": {
-          const cellH = target.getBoundingClientRect().height || 1;
-          const visibleRows = Math.max(1, Math.floor(cellsEl.clientHeight / cellH));
-          dest = Math.max(0, idx - visibleRows * cols);
-          break;
-        }
-        case "PageDown": {
-          const cellH = target.getBoundingClientRect().height || 1;
-          const visibleRows = Math.max(1, Math.floor(cellsEl.clientHeight / cellH));
-          dest = Math.min(last, idx + visibleRows * cols);
-          break;
-        }
+        case "End":        dest = total - 1; break;
+        case "PageUp":     dest = idx - Math.max(cols, st.visibleCount); break;
+        case "PageDown":   dest = idx + Math.max(cols, st.visibleCount); break;
         case "Enter":
         case " ": {
-          const navIdx = parseInt(target.dataset.sourceIndex, 10);
-          if (typeof window.aceNavigate === "function") window.aceNavigate(navIdx);
+          if (typeof window.aceNavigate === "function") {
+            window.aceNavigate(idx);
+          }
           e.preventDefault();
           return;
         }
         case "Escape": {
           const panel = document.querySelector(".ace-text-panel");
-          if (panel) {
-            if (typeof panel.focus === "function" && panel.tabIndex >= 0) {
-              panel.focus();
-            } else {
-              const firstFocus = panel.querySelector("[tabindex], button, a, input, textarea");
-              if (firstFocus) firstFocus.focus();
-            }
-          }
+          if (panel) panel.focus();
           e.preventDefault();
           return;
         }
@@ -775,17 +1010,42 @@
           return;
       }
 
-      if (dest >= 0) {
-        _setRovingFocus(cells, dest);
-        e.preventDefault();
+      // Clamp to valid range; _aceNavigateFocus also clamps but do it here too
+      // so we can tell "key consumed" vs "already at target".
+      const clamped = Math.max(0, Math.min(total - 1, dest));
+      if (clamped !== idx) {
+        _aceNavigateFocus(clamped);
       }
+      e.preventDefault();
     });
   }
 
-  function _scrollActiveCellIntoView() {
-    const active = document.querySelector('.ace-grid-cell[aria-current="location"]');
-    if (active) active.scrollIntoView({ block: "nearest", behavior: "auto" });
-  }
+  window._aceRenderSourceGrid = function () {
+    const blob = document.getElementById("ace-sources-data");
+    if (!blob) return;
+    try {
+      _aceSourceGridState.sources = JSON.parse(blob.textContent || "[]");
+    } catch (e) {
+      _aceSourceGridState.sources = [];
+    }
+    // HTMX sidebar swaps (e.g. after code CRUD) detach the old tile host,
+    // so the existing observer would point at a dead node. Re-observe the
+    // current host on every call to stay pointed at live DOM.
+    const tiles = document.getElementById("ace-grid-tiles");
+    if (_aceSourceGridState.resizeObs) {
+      _aceSourceGridState.resizeObs.disconnect();
+    }
+    if (tiles) {
+      _aceSourceGridState.resizeObs = new ResizeObserver(function () {
+        _aceRenderTiles();
+        _aceRenderSparkline();
+      });
+      _aceSourceGridState.resizeObs.observe(tiles);
+    }
+    _aceRenderTiles();
+    _aceRenderSparkline();
+    _aceInitTileKeyboard();
+  };
 
   /* ================================================================
    * 11. Dialog close cleanup
@@ -1015,7 +1275,13 @@
         _restoreCollapseState();
         _updateKeycaps();
         _initGridResize();
-        _initGridKeyboardNav();
+      }
+      // Re-render the source grid if its data blob is in the swapped DOM.
+      // Primary swaps don't fire htmx:oobAfterSwap, so without this the
+      // grid would stay empty after a sidebar swap that replaced the hosts.
+      if (document.getElementById("ace-sources-data") &&
+          typeof window._aceRenderSourceGrid === "function") {
+        window._aceRenderSourceGrid();
       }
 
       // Announce flag state and restore focus after flag toggle
@@ -1035,8 +1301,14 @@
       _restoreCollapseState();
       _updateKeycaps();
       _initGridResize();
-      _initGridKeyboardNav();
-      _scrollActiveCellIntoView();
+
+      // Re-render source grid after sidebar swap (code CRUD / reorder) —
+      // primary swaps replace #ace-grid-tiles + #ace-sources-data but
+      // don't fire htmx:oobAfterSwap, so bind the renderer here.
+      if (document.getElementById("ace-sources-data") &&
+          typeof window._aceRenderSourceGrid === "function") {
+        window._aceRenderSourceGrid();
+      }
 
       // Restore focus state
       let search = document.getElementById("code-search-input");
@@ -2900,7 +3172,6 @@
   document.addEventListener("DOMContentLoaded", function () {
     _initResize();
     _initGridResize();
-    _initGridKeyboardNav();
     _restoreCollapseState();
     _updateKeycaps();
     _initSortable();
@@ -3164,6 +3435,17 @@
       if (_noteSaveTimer) { clearTimeout(_noteSaveTimer); _noteSaveTimer = null; }
       _noteInFlight = null;
       _syncHasNoteAttribute();
+    }
+  });
+
+  // When the server OOB-swaps a fresh sources payload, re-render the
+  // sparkline + tiles from the new data.
+  document.body.addEventListener("htmx:oobAfterSwap", function (evt) {
+    if (!evt.detail || !evt.detail.target) return;
+    if (evt.detail.target.id === "ace-sources-data") {
+      if (typeof window._aceRenderSourceGrid === "function") {
+        window._aceRenderSourceGrid();
+      }
     }
   });
 
