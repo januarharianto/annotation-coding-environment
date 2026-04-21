@@ -44,6 +44,18 @@
   text-decoration: none;
 }
 
+.ace-sidebar-brand-project {
+  font-size: var(--ace-font-size-2xs);
+  color: var(--ace-text-muted);
+  font-weight: 400;
+  letter-spacing: 0.2px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0 var(--ace-space-2);
+}
+
 .ace-sidebar-logo {
   height: 40px;
   width: auto;

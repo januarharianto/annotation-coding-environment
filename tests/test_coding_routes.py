@@ -865,6 +865,18 @@ def test_oob_status_emits_both_statusbar_and_pill_fragments():
     assert 'id="ace-live-region-assertive"' in body
 
 
+def test_coding_page_shows_project_name_in_sidebar_brand(client_with_sources):
+    """Project name appears inside the sidebar brand section."""
+    client, _ = client_with_sources
+    r = client.get("/code?index=0")
+    assert r.status_code == 200
+    body = r.text
+    # Class is unique to this span
+    assert 'class="ace-sidebar-brand-project"' in body
+    # Fixture uses test.ace → stem is "test"
+    assert ">test<" in body
+
+
 def test_oob_status_ok_kind_uses_ok_class_suffix():
     """_oob_status with kind='ok' uses --ok class suffix on both fragments."""
     from ace.routes.api import _oob_status
