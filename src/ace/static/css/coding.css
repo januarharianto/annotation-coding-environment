@@ -1071,15 +1071,50 @@ html[data-ace-note-open="1"] .ace-note-rail {
 }
 
 .ace-grid-header {
+  appearance: none;
+  background: none;
+  border: 0;
+  width: 100%;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: var(--ace-space-1) var(--ace-space-3);
+  gap: var(--ace-space-2);
+  padding: var(--ace-space-2) var(--ace-space-3);
+  font: inherit;
   font-size: var(--ace-font-size-2xs);
   color: var(--ace-text-muted);
+  cursor: pointer;
+  text-align: left;
+  flex-shrink: 0;
+  transition: background-color var(--ace-transition);
+}
+.ace-grid-header:hover { background-color: var(--ace-bg-muted); }
+.ace-grid-header:focus-visible {
+  outline: 2px solid var(--ace-focus);
+  outline-offset: -2px;
+}
+.ace-grid-chevron {
+  transition: transform var(--ace-transition);
   flex-shrink: 0;
 }
-.ace-grid-meta { font-family: var(--ace-font-mono); }
+.ace-grid-header[aria-expanded="false"] .ace-grid-chevron {
+  transform: rotate(-90deg);
+}
+.ace-grid-title {
+  font-weight: var(--ace-weight-medium);
+}
+
+/* Collapse mechanism: display:contents keeps the wrapper neutral in layout
+   when expanded, so flex children of .ace-sidebar-grid still participate.
+   When collapsed, the wrapper flips to display:none, hiding all children
+   in one shot. */
+.ace-grid-content {
+  display: contents;
+}
+html[data-ace-grid-collapsed="1"] .ace-grid-content { display: none; }
+html[data-ace-grid-collapsed="1"] .ace-sidebar-grid {
+  flex: 0 0 auto;
+  min-height: 0;
+}
 
 /* ================================================================ */
 /* Sparkline minimap + tile viewport (replaces coloured-square grid)*/

@@ -786,3 +786,36 @@ def test_delete_refreshes_grid(client_with_codes):
     assert m, "ace-sources-data OOB fragment missing after delete"
     sources = json.loads(m.group(1))
     assert sources[0]["count"] == 0
+
+
+def test_coding_page_has_collapsible_grid_header(client_with_codes):
+    """Source-grid header is a single button with chevron + 'Sources' label, no total count."""
+    client, coder_id, _, _, _ = client_with_codes
+    client.cookies.set("coder_id", coder_id)
+    r = client.get("/code?index=0")
+    assert r.status_code == 200
+    body = r.text
+
+    # Collapsible button replaces the old header span pair
+    assert 'id="ace-grid-collapse-btn"' in body
+    assert 'aria-expanded="true"' in body
+    assert 'class="ace-grid-header"' in body
+    assert "ace-grid-chevron" in body
+    # Title still present
+    assert '<span class="ace-grid-title">Sources</span>' in body
+    # Total count no longer in header (it still appears in range label, which is
+    # client-rendered)
+    assert 'class="ace-grid-meta"' not in body
+    # Wrapper for collapse state exists
+    assert 'id="ace-grid-content"' in body
+
+
+def test_coding_page_has_inline_collapse_restore_script(client_with_codes):
+    """Inline head script restores ace-grid-collapsed dataset before CSS loads."""
+    client, coder_id, _, _, _ = client_with_codes
+    client.cookies.set("coder_id", coder_id)
+    r = client.get("/code?index=0")
+    assert r.status_code == 200
+    body = r.text
+    assert 'localStorage.getItem("ace-grid-collapsed")' in body
+    assert "dataset.aceGridCollapsed" in body

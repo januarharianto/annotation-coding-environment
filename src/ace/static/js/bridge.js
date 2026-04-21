@@ -19,6 +19,10 @@
  * 16. SVG overlay — annotation rendering
  * 17. Sidebar keyboard navigation (ARIA treeview)
  * 18. DOMContentLoaded init
+ * 19. Import form column-role assignment
+ * 20. Codebook menu
+ * 21. Source note drawer
+ * 22. Source-grid collapse toggle
  */
 
 (function () {
@@ -3456,6 +3460,39 @@
       if (drawer) drawer.setAttribute("aria-hidden", "false");
       if (pill) pill.setAttribute("aria-expanded", "true");
       if (rail) rail.setAttribute("aria-expanded", "true");
+    }
+  });
+
+  /* ================================================================
+   * 22. Source-grid collapse toggle
+   * ================================================================ */
+
+  /** Toggle the sidebar source-grid panel between expanded and collapsed. */
+  function _aceToggleGridCollapse() {
+    const wasCollapsed = document.documentElement.dataset.aceGridCollapsed === "1";
+    const btn = document.getElementById("ace-grid-collapse-btn");
+    if (wasCollapsed) {
+      delete document.documentElement.dataset.aceGridCollapsed;
+      try { localStorage.removeItem("ace-grid-collapsed"); } catch (_) {}
+      if (btn) btn.setAttribute("aria-expanded", "true");
+      // Re-render so the ResizeObserver picks up the restored height.
+      if (typeof window._aceRenderSourceGrid === "function") {
+        window._aceRenderSourceGrid();
+      }
+    } else {
+      document.documentElement.dataset.aceGridCollapsed = "1";
+      try { localStorage.setItem("ace-grid-collapsed", "1"); } catch (_) {}
+      if (btn) btn.setAttribute("aria-expanded", "false");
+    }
+  }
+
+  // Event delegation on document — survives HTMX OOB swaps that re-create
+  // the button element.
+  document.addEventListener("click", function (evt) {
+    const btn = evt.target.closest("#ace-grid-collapse-btn");
+    if (btn) {
+      evt.preventDefault();
+      _aceToggleGridCollapse();
     }
   });
 })();
