@@ -644,6 +644,37 @@ def test_coding_context_grid_cells(client_with_codes):
         assert "ace-grid-cell--active" not in second["class_str"]
 
 
+def test_coding_context_emits_sources_json(client_with_codes):
+    """sources_json is a flat per-source array suitable for client rendering."""
+    import sqlite3
+    from ace.routes.pages import _coding_context
+
+    client, coder_id, code_a, _, db_path = client_with_codes
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    try:
+        ctx = _coding_context(conn, coder_id, 0)
+    finally:
+        conn.close()
+
+    assert "sources_json" in ctx
+    data = ctx["sources_json"]
+    assert isinstance(data, list)
+    assert len(data) == ctx["total_sources"]
+
+    first = data[0]
+    for key in ("index", "source_id", "display_id", "count", "flagged", "note"):
+        assert key in first, f"sources_json[0] missing key {key!r}"
+    assert first["index"] == 0
+    assert isinstance(first["count"], int)
+    assert isinstance(first["flagged"], bool)
+    assert isinstance(first["note"], bool)
+    # No annotations yet → count is 0, flags all false
+    assert first["count"] == 0
+    assert first["flagged"] is False
+    assert first["note"] is False
+
+
 def test_sidebar_grid_replaces_popover(client_with_codes):
     """Coding page renders the integrated sidebar grid, not the overlay."""
     client, coder_id, _, _, _ = client_with_codes

@@ -219,6 +219,21 @@ def _coding_context(
             "tabindex": "0" if is_active else "-1",
         })
 
+    # Flat per-source data for the client-rendered sparkline + tile grid.
+    # Coexists with grid_cells during the refactor; grid_cells is removed
+    # in a follow-up task once the template is ported.
+    sources_json = [
+        {
+            "index": i,
+            "source_id": a["source_id"],
+            "display_id": a["display_id"],
+            "count": annotation_counts.get(a["source_id"], 0),
+            "flagged": a["status"] == "flagged",
+            "note": a["source_id"] in notes_present,
+        }
+        for i, a in enumerate(assignments)
+    ]
+
     return {
         "project_name": project["name"],
         "project_file_stem": project_file_stem,
@@ -240,6 +255,7 @@ def _coding_context(
         "source_ids_with_notes": notes_present,
         "assignments": [dict(a) for a in assignments],
         "grid_cells": grid_cells,
+        "sources_json": sources_json,
         "sentence_html": sentence_html,
         "grouped_codes": grouped_codes,
         "ungrouped_codes": ungrouped_codes,
