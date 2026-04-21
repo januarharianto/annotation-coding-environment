@@ -688,7 +688,7 @@
   // ==========================================================
 
   let _aceSourceGridState = {
-    sources: [],      // mutated via setSources()
+    sources: [],
     windowStart: 0,
     visibleCount: 0,
     resizeObs: null,
@@ -1028,8 +1028,14 @@
     } catch (e) {
       _aceSourceGridState.sources = [];
     }
+    // HTMX sidebar swaps (e.g. after code CRUD) detach the old tile host,
+    // so the existing observer would point at a dead node. Re-observe the
+    // current host on every call to stay pointed at live DOM.
     const tiles = document.getElementById("ace-grid-tiles");
-    if (tiles && !_aceSourceGridState.resizeObs) {
+    if (_aceSourceGridState.resizeObs) {
+      _aceSourceGridState.resizeObs.disconnect();
+    }
+    if (tiles) {
       _aceSourceGridState.resizeObs = new ResizeObserver(function () {
         _aceRenderTiles();
         _aceRenderSparkline();
@@ -1270,6 +1276,13 @@
         _updateKeycaps();
         _initGridResize();
       }
+      // Re-render the source grid if its data blob is in the swapped DOM.
+      // Primary swaps don't fire htmx:oobAfterSwap, so without this the
+      // grid would stay empty after a sidebar swap that replaced the hosts.
+      if (document.getElementById("ace-sources-data") &&
+          typeof window._aceRenderSourceGrid === "function") {
+        window._aceRenderSourceGrid();
+      }
 
       // Announce flag state and restore focus after flag toggle
       if (_pendingFlagAnnounce) {
@@ -1288,6 +1301,14 @@
       _restoreCollapseState();
       _updateKeycaps();
       _initGridResize();
+
+      // Re-render source grid after sidebar swap (code CRUD / reorder) —
+      // primary swaps replace #ace-grid-tiles + #ace-sources-data but
+      // don't fire htmx:oobAfterSwap, so bind the renderer here.
+      if (document.getElementById("ace-sources-data") &&
+          typeof window._aceRenderSourceGrid === "function") {
+        window._aceRenderSourceGrid();
+      }
 
       // Restore focus state
       let search = document.getElementById("code-search-input");
