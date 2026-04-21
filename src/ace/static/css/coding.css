@@ -11,12 +11,19 @@
 #coding-workspace {
   display: flex;
   flex-direction: column;
-  /* Reserve space for the fixed #ace-statusbar (ace.css:100 — 24px tall) so
-     sidebar content at the very bottom, such as the source-grid inspector
-     row, isn't occluded by the status bar. */
-  height: calc(100vh - 24px);
+  /* Full viewport height — the global #ace-statusbar is hidden on /code
+     (rule below), so no 24 px reservation is needed. Other pages keep the
+     statusbar via base.html + ace.css. */
+  height: 100vh;
   min-width: 1000px;
   overflow: hidden;
+}
+
+/* Suppress the global statusbar on the coding page — the event channel is
+   rehoused into the text-panel header pill (see .ace-text-event-row below).
+   coding.css is only loaded on /code, so this rule is scoped implicitly. */
+#ace-statusbar {
+  display: none;
 }
 
 /* ---- Sidebar branding ---- */
