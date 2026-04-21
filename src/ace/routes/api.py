@@ -724,6 +724,25 @@ def _render_ann_data_oob(ctx: dict) -> str:
     return f'<div id="ace-ann-data" class="ace-hidden" data-annotations="{ann_json}" hx-swap-oob="outerHTML"></div>'
 
 
+def _render_sources_data_oob(ctx: dict) -> str:
+    """Emit an OOB-swap <script> blob with the sources_json payload so the
+    client's sparkline + tile grid can re-render after an annotation change.
+    """
+    # Inside <script type="application/json"> HTML character refs are NOT decoded,
+    # so html.escape would break JSON.parse at runtime. Use JSON \uXXXX escapes
+    # for < > & — still valid JSON, can't terminate the tag early.
+    payload = (
+        json.dumps(ctx.get("sources_json", []))
+        .replace("<", "\\u003c")
+        .replace(">", "\\u003e")
+        .replace("&", "\\u0026")
+    )
+    return (
+        '<script id="ace-sources-data" type="application/json" '
+        f'hx-swap-oob="outerHTML">{payload}</script>'
+    )
+
+
 def _render_full_coding_oob(request: Request, conn, coder_id: str, target_index: int) -> str:
     """Render all coding swap zones."""
     from ace.routes.pages import _coding_context
@@ -746,6 +765,7 @@ def _render_full_coding_oob(request: Request, conn, coder_id: str, target_index:
 
     parts.append(_render_colour_style_oob(ctx["codes"]))
     parts.append(_render_ann_data_oob(ctx))
+    parts.append(_render_sources_data_oob(ctx))
     return "".join(parts)
 
 
@@ -1303,6 +1323,7 @@ def _render_sidebar_and_text(request: Request, conn, coder_id: str, current_inde
         + _inject_oob(text_html, "text-panel")
         + _render_colour_style_oob(ctx["codes"])
         + _render_ann_data_oob(ctx)
+        + _render_sources_data_oob(ctx)
     )
 
 

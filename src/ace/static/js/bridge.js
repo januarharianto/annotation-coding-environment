@@ -3413,6 +3413,17 @@
     }
   });
 
+  // When the server OOB-swaps a fresh sources payload, re-render the
+  // sparkline + tiles from the new data.
+  document.body.addEventListener("htmx:oobAfterSwap", function (evt) {
+    if (!evt.detail || !evt.detail.target) return;
+    if (evt.detail.target.id === "ace-sources-data") {
+      if (typeof window._aceRenderSourceGrid === "function") {
+        window._aceRenderSourceGrid();
+      }
+    }
+  });
+
   document.addEventListener("DOMContentLoaded", function () {
     _syncHasNoteAttribute();
     if (_isDrawerOpen()) {
