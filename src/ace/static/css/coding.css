@@ -11,7 +11,10 @@
 #coding-workspace {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  /* Reserve space for the fixed #ace-statusbar (ace.css:100 — 24px tall) so
+     sidebar content at the very bottom, such as the source-grid inspector
+     row, isn't occluded by the status bar. */
+  height: calc(100vh - 24px);
   min-width: 1000px;
   overflow: hidden;
 }

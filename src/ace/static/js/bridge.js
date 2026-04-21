@@ -693,6 +693,9 @@
     visibleCount: 0,
     resizeObs: null,
     hoveredIndex: -1, // -1 means "no hover; show active"
+    lastActive: -1,   // last rendered active index; used to decide whether to
+                      // auto-centre the viewport (only on active-source change,
+                      // so sparkline clicks to a distant range aren't snapped back)
   };
 
   function _aceInspectorLine(src) {
@@ -741,18 +744,22 @@
     const rows = Math.max(1, Math.floor((rect.height + GAP) / (TILE + GAP)));
     st.visibleCount = Math.min(st.sources.length, cols * rows);
 
-    // Keep active tile in view; otherwise clamp windowStart
-    if (active < st.windowStart ||
-        active >= st.windowStart + st.visibleCount) {
+    // Auto-centre on active ONLY when the active source has changed since
+    // the previous render (i.e. real navigation). Otherwise respect
+    // st.windowStart so sparkline clicks to a far range aren't snapped back.
+    if (active !== st.lastActive &&
+        (active < st.windowStart ||
+         active >= st.windowStart + st.visibleCount)) {
       st.windowStart = Math.max(0, Math.min(
         st.sources.length - st.visibleCount,
         active - Math.floor(st.visibleCount / 2),
       ));
-    } else {
-      st.windowStart = Math.max(0, Math.min(
-        st.windowStart, st.sources.length - st.visibleCount,
-      ));
     }
+    // Always clamp so windowStart stays in valid range (e.g. after resize).
+    st.windowStart = Math.max(0, Math.min(
+      st.windowStart, Math.max(0, st.sources.length - st.visibleCount),
+    ));
+    st.lastActive = active;
 
     const from = st.windowStart;
     const to   = Math.min(st.sources.length, from + st.visibleCount);
