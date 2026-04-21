@@ -80,3 +80,48 @@ def test_clear_source():
     mgr.record_add("src1", "ann1")
     mgr.clear("src1")
     assert mgr.undo("src1") is None
+
+
+def test_record_merge_add_then_undo():
+    """Merge-add pushes one compound action; undo returns both new + replaced ids."""
+    mgr = UndoManager()
+    mgr.record_merge_add("src1", "new_ann", ["old1", "old2"])
+    assert mgr.can_undo()
+    action = mgr.undo("src1")
+    assert action == {
+        "type": "undo_merge_add",
+        "annotation_id": "new_ann",
+        "replaced_ids": ["old1", "old2"],
+    }
+
+
+def test_merge_add_undo_then_redo():
+    """Redo of a merge-add returns the same structure with redo_ prefix."""
+    mgr = UndoManager()
+    mgr.record_merge_add("src1", "new_ann", ["old1", "old2"])
+    mgr.undo("src1")
+    action = mgr.redo("src1")
+    assert action == {
+        "type": "redo_merge_add",
+        "annotation_id": "new_ann",
+        "replaced_ids": ["old1", "old2"],
+    }
+
+
+def test_new_merge_add_clears_redo():
+    """Recording a new merge-add clears redo stack like other actions."""
+    mgr = UndoManager()
+    mgr.record_add("src1", "ann1")
+    mgr.undo("src1")
+    assert mgr.can_redo()
+    mgr.record_merge_add("src1", "new_ann", ["old1"])
+    assert not mgr.can_redo()
+
+
+def test_merge_add_with_single_replaced():
+    """Single-replacement merge still uses the compound action type."""
+    mgr = UndoManager()
+    mgr.record_merge_add("src1", "new_ann", ["old1"])
+    action = mgr.undo("src1")
+    assert action["type"] == "undo_merge_add"
+    assert action["replaced_ids"] == ["old1"]
