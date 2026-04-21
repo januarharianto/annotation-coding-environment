@@ -1165,7 +1165,10 @@ html[data-ace-note-open="1"] .ace-note-rail {
   transform: rotate(-90deg);
 }
 .ace-grid-title {
+  font-family: var(--ace-font-mono);
   font-weight: var(--ace-weight-medium);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 /* Collapse mechanism: display:contents keeps the wrapper neutral in layout
