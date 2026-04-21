@@ -909,6 +909,99 @@
     host.replaceChildren(svg);
   }
 
+  function _aceTileCols() {
+    const host = document.getElementById("ace-grid-tiles");
+    if (!host) return 1;
+    const rect = host.getBoundingClientRect();
+    const TILE = 22, GAP = 2;
+    return Math.max(1, Math.floor((rect.width + GAP) / (TILE + GAP)));
+  }
+
+  function _aceNavigateFocus(targetIndex) {
+    const st = _aceSourceGridState;
+    const total = st.sources.length;
+    if (total === 0) return;
+    targetIndex = Math.max(0, Math.min(total - 1, targetIndex));
+
+    // Shift window if target is outside; center on target
+    if (targetIndex < st.windowStart ||
+        targetIndex >= st.windowStart + st.visibleCount) {
+      st.windowStart = Math.max(0, Math.min(
+        total - st.visibleCount,
+        targetIndex - Math.floor(st.visibleCount / 2),
+      ));
+      _aceRenderTiles();
+      _aceRenderSparkline();
+    }
+
+    // Focus the destination tile
+    const host = document.getElementById("ace-grid-tiles");
+    if (!host) return;
+    const btn = host.querySelector(
+      '[data-source-index="' + targetIndex + '"]');
+    if (btn) {
+      host.querySelectorAll('.ace-grid-tile').forEach(function (t) {
+        t.tabIndex = -1;
+      });
+      btn.tabIndex = 0;
+      btn.focus();
+      _aceSourceGridState.hoveredIndex = targetIndex;
+      _aceUpdateInspector();
+    }
+  }
+
+  function _aceInitTileKeyboard() {
+    const host = document.getElementById("ace-grid-tiles");
+    if (!host || host.dataset.aceKbdWired) return;
+    host.dataset.aceKbdWired = "1";
+
+    host.addEventListener("keydown", function (e) {
+      const target = e.target.closest(".ace-grid-tile");
+      if (!target) return;
+      const idx = parseInt(target.dataset.sourceIndex, 10);
+      if (Number.isNaN(idx)) return;
+      const st = _aceSourceGridState;
+      const cols = _aceTileCols();
+      const total = st.sources.length;
+
+      let dest = null;
+      switch (e.key) {
+        case "ArrowLeft":  dest = idx - 1; break;
+        case "ArrowRight": dest = idx + 1; break;
+        case "ArrowUp":    dest = idx - cols; break;
+        case "ArrowDown":  dest = idx + cols; break;
+        case "Home":       dest = 0; break;
+        case "End":        dest = total - 1; break;
+        case "PageUp":     dest = idx - Math.max(cols, st.visibleCount); break;
+        case "PageDown":   dest = idx + Math.max(cols, st.visibleCount); break;
+        case "Enter":
+        case " ": {
+          if (typeof window.aceNavigate === "function") {
+            window.aceNavigate(idx);
+          }
+          e.preventDefault();
+          return;
+        }
+        case "Escape": {
+          const panel = document.querySelector(".ace-text-panel");
+          if (panel) panel.focus();
+          e.preventDefault();
+          return;
+        }
+        default:
+          return;
+      }
+
+      // Clamp to valid range; _aceNavigateFocus also clamps but do it here too
+      // so we can tell "key consumed" vs "already at target".
+      const clamped = Math.max(0, Math.min(total - 1, dest));
+      if (clamped !== idx) {
+        _aceNavigateFocus(clamped);
+      }
+      e.preventDefault();
+    });
+  }
+
   window._aceRenderSourceGrid = function () {
     const blob = document.getElementById("ace-sources-data");
     if (!blob) return;
@@ -927,111 +1020,8 @@
     }
     _aceRenderTiles();
     _aceRenderSparkline();
+    _aceInitTileKeyboard();
   };
-
-  function _getGridColumnCount() {
-    const cellsEl = document.querySelector(".ace-grid-cells");
-    if (!cellsEl) return 1;
-    const tracks = getComputedStyle(cellsEl)
-      .getPropertyValue("grid-template-columns").trim();
-    if (!tracks) return 1;
-    return tracks.split(/\s+/).length || 1;
-  }
-
-  function _announceFocus(cellButton) {
-    const live = document.getElementById("ace-grid-live");
-    if (!live || !cellButton) return;
-    const idx = parseInt(cellButton.dataset.sourceIndex, 10);
-    const total = document.querySelectorAll(".ace-grid-cell").length;
-    const title = cellButton.getAttribute("title") || "";
-    // title is "N · K annotation(s)" — pull the "K annotation[s]" part
-    const annPart = title.split("\u00b7")[1] ? title.split("\u00b7")[1].trim() : "";
-    const parts = ["Source " + (idx + 1) + " of " + total];
-    if (annPart) parts.push(annPart);
-    if (cellButton.classList.contains("ace-grid-cell--flagged")) parts.push("flagged");
-    if (cellButton.classList.contains("ace-grid-cell--has-note")) parts.push("has note");
-    live.textContent = parts.join(", ") + ".";
-  }
-
-  function _setRovingFocus(cells, targetIdx) {
-    if (targetIdx < 0 || targetIdx >= cells.length) return;
-    cells.forEach(function (c, i) {
-      c.setAttribute("tabindex", i === targetIdx ? "0" : "-1");
-    });
-    cells[targetIdx].focus();
-    _announceFocus(cells[targetIdx]);
-    cells[targetIdx].scrollIntoView({ block: "nearest", behavior: "auto" });
-  }
-
-  function _initGridKeyboardNav() {
-    const cellsEl = document.querySelector(".ace-grid-cells");
-    if (!cellsEl || cellsEl.dataset.aceKbdWired) return;
-    cellsEl.dataset.aceKbdWired = "1";
-
-    cellsEl.addEventListener("keydown", function (e) {
-      const target = e.target.closest(".ace-grid-cell");
-      if (!target) return;
-      const cells = Array.from(cellsEl.querySelectorAll(".ace-grid-cell"));
-      const idx = cells.indexOf(target);
-      if (idx < 0) return;
-      const cols = _getGridColumnCount();
-      const last = cells.length - 1;
-      let dest = -1;
-
-      switch (e.key) {
-        case "ArrowLeft":  dest = Math.max(0, idx - 1); break;
-        case "ArrowRight": dest = Math.min(last, idx + 1); break;
-        case "ArrowUp":    dest = Math.max(0, idx - cols); break;
-        case "ArrowDown":  dest = Math.min(last, idx + cols); break;
-        case "Home":       dest = 0; break;
-        case "End":        dest = last; break;
-        case "PageUp": {
-          const cellH = target.getBoundingClientRect().height || 1;
-          const visibleRows = Math.max(1, Math.floor(cellsEl.clientHeight / cellH));
-          dest = Math.max(0, idx - visibleRows * cols);
-          break;
-        }
-        case "PageDown": {
-          const cellH = target.getBoundingClientRect().height || 1;
-          const visibleRows = Math.max(1, Math.floor(cellsEl.clientHeight / cellH));
-          dest = Math.min(last, idx + visibleRows * cols);
-          break;
-        }
-        case "Enter":
-        case " ": {
-          const navIdx = parseInt(target.dataset.sourceIndex, 10);
-          if (typeof window.aceNavigate === "function") window.aceNavigate(navIdx);
-          e.preventDefault();
-          return;
-        }
-        case "Escape": {
-          const panel = document.querySelector(".ace-text-panel");
-          if (panel) {
-            if (typeof panel.focus === "function" && panel.tabIndex >= 0) {
-              panel.focus();
-            } else {
-              const firstFocus = panel.querySelector("[tabindex], button, a, input, textarea");
-              if (firstFocus) firstFocus.focus();
-            }
-          }
-          e.preventDefault();
-          return;
-        }
-        default:
-          return;
-      }
-
-      if (dest >= 0) {
-        _setRovingFocus(cells, dest);
-        e.preventDefault();
-      }
-    });
-  }
-
-  function _scrollActiveCellIntoView() {
-    const active = document.querySelector('.ace-grid-cell[aria-current="location"]');
-    if (active) active.scrollIntoView({ block: "nearest", behavior: "auto" });
-  }
 
   /* ================================================================
    * 11. Dialog close cleanup
@@ -1261,7 +1251,6 @@
         _restoreCollapseState();
         _updateKeycaps();
         _initGridResize();
-        _initGridKeyboardNav();
       }
 
       // Announce flag state and restore focus after flag toggle
@@ -1281,8 +1270,6 @@
       _restoreCollapseState();
       _updateKeycaps();
       _initGridResize();
-      _initGridKeyboardNav();
-      _scrollActiveCellIntoView();
 
       // Restore focus state
       let search = document.getElementById("code-search-input");
@@ -3146,7 +3133,6 @@
   document.addEventListener("DOMContentLoaded", function () {
     _initResize();
     _initGridResize();
-    _initGridKeyboardNav();
     _restoreCollapseState();
     _updateKeycaps();
     _initSortable();
