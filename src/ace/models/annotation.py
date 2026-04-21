@@ -210,3 +210,61 @@ def add_annotation_merging(
         raise
 
     return new_id, replaced_ids
+
+
+def reverse_merge_add(
+    conn: sqlite3.Connection,
+    merged_id: str,
+    replaced_ids: list[str],
+) -> None:
+    """Atomically reverse a merge-add: soft-delete the merged row and
+    undelete each replaced original, in a single transaction.
+
+    Used by the /api/code/undo route. The per-call delete_annotation /
+    undelete_annotation helpers each commit independently, which would
+    leave the DB in a partially-undone state if an error occurred
+    mid-sequence. This function commits once.
+    """
+    now = datetime.now(timezone.utc).isoformat()
+    try:
+        conn.execute(
+            "UPDATE annotation SET deleted_at = ? WHERE id = ?",
+            (now, merged_id),
+        )
+        for rid in replaced_ids:
+            conn.execute(
+                "UPDATE annotation SET deleted_at = NULL WHERE id = ?",
+                (rid,),
+            )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+
+
+def replay_merge_add(
+    conn: sqlite3.Connection,
+    merged_id: str,
+    replaced_ids: list[str],
+) -> None:
+    """Atomically replay a previously-undone merge-add: undelete the merged
+    row and soft-delete each original again, in a single transaction.
+
+    Used by the /api/code/redo route. See reverse_merge_add for the
+    atomicity rationale.
+    """
+    now = datetime.now(timezone.utc).isoformat()
+    try:
+        conn.execute(
+            "UPDATE annotation SET deleted_at = NULL WHERE id = ?",
+            (merged_id,),
+        )
+        for rid in replaced_ids:
+            conn.execute(
+                "UPDATE annotation SET deleted_at = ? WHERE id = ?",
+                (now, rid),
+            )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise

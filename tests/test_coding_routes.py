@@ -975,8 +975,30 @@ def test_apply_merge_then_undo_restores_originals(client_with_codes):
     assert _count_active_annotations(client, db_path, 0) == 2
 
 
+def _active_annotation_ranges(db_path: str, source_index: int) -> list[tuple[int, int]]:
+    """Return [(start_offset, end_offset), ...] for active annotations, ordered by start."""
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    try:
+        source_row = conn.execute(
+            "SELECT id FROM source ORDER BY sort_order LIMIT 1 OFFSET ?",
+            (source_index,),
+        ).fetchone()
+        rows = conn.execute(
+            "SELECT start_offset, end_offset FROM annotation "
+            "WHERE source_id = ? AND deleted_at IS NULL "
+            "ORDER BY start_offset",
+            (source_row["id"],),
+        ).fetchall()
+        return [(r["start_offset"], r["end_offset"]) for r in rows]
+    finally:
+        conn.close()
+
+
 def test_apply_merge_then_undo_then_redo(client_with_codes):
-    """Undo + redo returns to merged state."""
+    """Undo + redo returns to merged state. Asserts specific ranges to prove
+    the right annotation survives each transition (count alone would pass even
+    if undo/redo were no-ops)."""
     client, _, code_a, _, db_path = client_with_codes
 
     client.post("/api/code/apply", data={
@@ -987,10 +1009,10 @@ def test_apply_merge_then_undo_then_redo(client_with_codes):
         "code_id": code_a, "current_index": 0,
         "start_offset": 5, "end_offset": 15, "selected_text": "documen",
     })
-    assert _count_active_annotations(client, db_path, 0) == 1
+    assert _active_annotation_ranges(db_path, 0) == [(0, 15)]
 
     client.post("/api/code/undo", data={"current_index": 0})
-    assert _count_active_annotations(client, db_path, 0) == 1  # first apply's annotation
+    assert _active_annotation_ranges(db_path, 0) == [(0, 10)]
 
     client.post("/api/code/redo", data={"current_index": 0})
-    assert _count_active_annotations(client, db_path, 0) == 1  # merged again
+    assert _active_annotation_ranges(db_path, 0) == [(0, 15)]

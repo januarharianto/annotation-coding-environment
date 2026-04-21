@@ -296,3 +296,56 @@ def test_merging_ignores_soft_deleted(tmp_db):
     rows = get_annotations_for_source(conn, source_id, coder_id)
     assert len(rows) == 1
     assert rows[0]["start_offset"] == 5 and rows[0]["end_offset"] == 15
+
+
+# ----------------------------------------------------------------------
+# reverse_merge_add / replay_merge_add — atomic undo/redo of merge-add
+# ----------------------------------------------------------------------
+
+from ace.models.annotation import reverse_merge_add, replay_merge_add
+
+
+def test_reverse_merge_add_restores_originals_and_deletes_merged(tmp_db):
+    """Reversing a merge: merged row becomes soft-deleted, originals undeleted."""
+    conn = create_project(tmp_db, "Test")
+    source_id, coder_id, code_id = _setup(conn)
+    # Simulate a merge-add having happened: two originals are soft-deleted,
+    # one merged row is active
+    old1 = add_annotation(conn, source_id, coder_id, code_id, 0, 4, "Some")
+    old2 = add_annotation(conn, source_id, coder_id, code_id, 10, 14, "cont")
+    delete_annotation(conn, old1)
+    delete_annotation(conn, old2)
+    merged = add_annotation(conn, source_id, coder_id, code_id, 0, 14, "Some text con")
+
+    reverse_merge_add(conn, merged, [old1, old2])
+
+    # Merged row gone, originals restored
+    active = get_annotations_for_source(conn, source_id, coder_id)
+    ids = {r["id"] for r in active}
+    assert ids == {old1, old2}
+    merged_row = conn.execute(
+        "SELECT deleted_at FROM annotation WHERE id = ?", (merged,)
+    ).fetchone()
+    assert merged_row["deleted_at"] is not None
+
+
+def test_replay_merge_add_re_merges(tmp_db):
+    """Replaying a merge: merged row restored, originals re-deleted."""
+    conn = create_project(tmp_db, "Test")
+    source_id, coder_id, code_id = _setup(conn)
+    # After an undo of merge-add: two originals active, merged row soft-deleted
+    old1 = add_annotation(conn, source_id, coder_id, code_id, 0, 4, "Some")
+    old2 = add_annotation(conn, source_id, coder_id, code_id, 10, 14, "cont")
+    merged = add_annotation(conn, source_id, coder_id, code_id, 0, 14, "Some text con")
+    delete_annotation(conn, merged)
+
+    replay_merge_add(conn, merged, [old1, old2])
+
+    active = get_annotations_for_source(conn, source_id, coder_id)
+    ids = {r["id"] for r in active}
+    assert ids == {merged}
+    for orig in (old1, old2):
+        row = conn.execute(
+            "SELECT deleted_at FROM annotation WHERE id = ?", (orig,)
+        ).fetchone()
+        assert row["deleted_at"] is not None

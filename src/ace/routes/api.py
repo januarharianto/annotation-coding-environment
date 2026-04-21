@@ -892,7 +892,9 @@ async def undo_route(
     current_index: int = Form(default=0),
 ):
     """Undo the last annotation action for the current source."""
-    from ace.models.annotation import delete_annotation, undelete_annotation
+    from ace.models.annotation import (
+        delete_annotation, undelete_annotation, reverse_merge_add,
+    )
 
     coder_id = _require_coder_id(request)
     if coder_id is None:
@@ -916,10 +918,8 @@ async def undo_route(
             undelete_annotation(conn, action["annotation_id"])
             msg = "Annotation restored"
         elif action["type"] == "undo_merge_add":
-            # Reverse a merge: delete the merged row, undelete the originals
-            delete_annotation(conn, action["annotation_id"])
-            for rid in action["replaced_ids"]:
-                undelete_annotation(conn, rid)
+            # Atomic: delete merged row + undelete originals in one transaction
+            reverse_merge_add(conn, action["annotation_id"], action["replaced_ids"])
             msg = "Merge undone"
         else:
             msg = "Undo"
@@ -936,7 +936,9 @@ async def redo_route(
     current_index: int = Form(default=0),
 ):
     """Redo the last undone annotation action for the current source."""
-    from ace.models.annotation import delete_annotation, undelete_annotation
+    from ace.models.annotation import (
+        delete_annotation, undelete_annotation, replay_merge_add,
+    )
 
     coder_id = _require_coder_id(request)
     if coder_id is None:
@@ -960,10 +962,8 @@ async def redo_route(
             delete_annotation(conn, action["annotation_id"])
             msg = "Annotation re-removed"
         elif action["type"] == "redo_merge_add":
-            # Replay a merge: undelete the merged row, delete the originals
-            undelete_annotation(conn, action["annotation_id"])
-            for rid in action["replaced_ids"]:
-                delete_annotation(conn, rid)
+            # Atomic: undelete merged row + delete originals in one transaction
+            replay_merge_add(conn, action["annotation_id"], action["replaced_ids"])
             msg = "Merge re-applied"
         else:
             msg = "Redo"
