@@ -22,17 +22,6 @@ from ace.models.source_note import get_note, source_ids_with_notes
 router = APIRouter()
 
 
-def density_class(ann_count: int) -> str:
-    """Map an annotation count to one of four grid-cell density classes."""
-    if ann_count >= 6:
-        return "ace-grid-cell--ann-6"
-    if ann_count >= 3:
-        return "ace-grid-cell--ann-3"
-    if ann_count >= 1:
-        return "ace-grid-cell--ann-1"
-    return ""
-
-
 @router.get("/", response_class=HTMLResponse)
 async def landing(request: Request):
     templates = request.app.state.templates
@@ -181,47 +170,13 @@ def _coding_context(
         if ann["code_id"] in codes_by_id
     ])))
 
-    # Completion stats
-    complete_count = sum(1 for a in assignments if a["status"] == "complete")
-    complete_pct = round(complete_count / total_sources * 100) if total_sources > 0 else 0
-
     # Coder name
     coder_row = conn.execute(
         "SELECT name FROM coder WHERE id = ?", (coder_id,),
     ).fetchone()
     coder_name = coder_row["name"] if coder_row else "Unknown"
 
-    # Pre-compute grid cells
-    grid_cells = []
-    for i, a in enumerate(assignments):
-        ann_count = annotation_counts.get(a["source_id"], 0)
-        density = density_class(ann_count)
-        is_active = (i == current_index)
-        classes = ["ace-grid-cell"]
-        if density:
-            classes.append(density)
-        if is_active:
-            classes.append("ace-grid-cell--active")
-        if a["status"] == "complete":
-            classes.append("ace-grid-cell--complete")
-        if a["status"] == "flagged":
-            classes.append("ace-grid-cell--flagged")
-        if a["source_id"] in notes_present:
-            classes.append("ace-grid-cell--has-note")
-
-        plural = "s" if ann_count != 1 else ""
-        grid_cells.append({
-            "index": i,
-            "source_id": a["source_id"],
-            "class_str": " ".join(classes),
-            "title": f"{i + 1} · {ann_count} annotation{plural}",
-            "is_active": is_active,
-            "tabindex": "0" if is_active else "-1",
-        })
-
     # Flat per-source data for the client-rendered sparkline + tile grid.
-    # Coexists with grid_cells during the refactor; grid_cells is removed
-    # in a follow-up task once the template is ported.
     sources_json = [
         {
             "index": i,
@@ -247,14 +202,11 @@ def _coding_context(
         "annotations": annotations_list,
         "annotation_counts": annotation_counts,
         "code_counts": code_counts,
-        "complete_count": complete_count,
-        "complete_pct": complete_pct,
         "coder_name": coder_name,
         "current_note_text": current_note_text,
         "has_note": bool(current_note_text),
         "source_ids_with_notes": notes_present,
         "assignments": [dict(a) for a in assignments],
-        "grid_cells": grid_cells,
         "sources_json": sources_json,
         "sentence_html": sentence_html,
         "grouped_codes": grouped_codes,
