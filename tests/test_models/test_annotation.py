@@ -155,3 +155,144 @@ def test_get_annotations_for_code_empty(tmp_path):
     rows = get_annotations_for_code(conn, code_a, coder_id)
     assert len(rows) == 0
     conn.close()
+
+
+# ----------------------------------------------------------------------
+# add_annotation_merging — overlap detection + union merge on apply
+# ----------------------------------------------------------------------
+
+from ace.models.annotation import add_annotation_merging
+
+
+def test_merging_no_overlap_creates_new_annotation(tmp_db):
+    conn = create_project(tmp_db, "Test")
+    source_id, coder_id, code_id = _setup(conn)
+
+    new_id, replaced = add_annotation_merging(
+        conn, source_id, coder_id, code_id, 0, 4, "Some",
+    )
+    assert isinstance(new_id, str)
+    assert replaced == []
+    rows = get_annotations_for_source(conn, source_id, coder_id)
+    assert len(rows) == 1
+    assert rows[0]["start_offset"] == 0 and rows[0]["end_offset"] == 4
+
+
+def test_merging_exact_duplicate_range(tmp_db):
+    conn = create_project(tmp_db, "Test")
+    source_id, coder_id, code_id = _setup(conn)
+    old_id = add_annotation(conn, source_id, coder_id, code_id, 0, 4, "Some")
+
+    new_id, replaced = add_annotation_merging(
+        conn, source_id, coder_id, code_id, 0, 4, "Some",
+    )
+    assert new_id != old_id
+    assert replaced == [old_id]
+    rows = get_annotations_for_source(conn, source_id, coder_id)
+    assert len(rows) == 1
+    assert rows[0]["id"] == new_id
+    assert rows[0]["start_offset"] == 0 and rows[0]["end_offset"] == 4
+
+
+def test_merging_new_inside_existing(tmp_db):
+    conn = create_project(tmp_db, "Test")
+    source_id, coder_id, code_id = _setup(conn)
+    old_id = add_annotation(conn, source_id, coder_id, code_id, 0, 15, "Some text conte")
+
+    new_id, replaced = add_annotation_merging(
+        conn, source_id, coder_id, code_id, 5, 9, "text",
+    )
+    assert replaced == [old_id]
+    rows = get_annotations_for_source(conn, source_id, coder_id)
+    assert len(rows) == 1
+    assert rows[0]["start_offset"] == 0 and rows[0]["end_offset"] == 15
+
+
+def test_merging_existing_inside_new(tmp_db):
+    conn = create_project(tmp_db, "Test")
+    source_id, coder_id, code_id = _setup(conn)
+    old_id = add_annotation(conn, source_id, coder_id, code_id, 5, 9, "text")
+
+    new_id, replaced = add_annotation_merging(
+        conn, source_id, coder_id, code_id, 0, 15, "Some text conte",
+    )
+    assert replaced == [old_id]
+    rows = get_annotations_for_source(conn, source_id, coder_id)
+    assert len(rows) == 1
+    assert rows[0]["start_offset"] == 0 and rows[0]["end_offset"] == 15
+
+
+def test_merging_touching_boundary(tmp_db):
+    conn = create_project(tmp_db, "Test")
+    source_id, coder_id, code_id = _setup(conn)
+    old_id = add_annotation(conn, source_id, coder_id, code_id, 0, 10, "Some text ")
+
+    new_id, replaced = add_annotation_merging(
+        conn, source_id, coder_id, code_id, 10, 20, "content he",
+    )
+    assert replaced == [old_id]
+    rows = get_annotations_for_source(conn, source_id, coder_id)
+    assert len(rows) == 1
+    assert rows[0]["start_offset"] == 0 and rows[0]["end_offset"] == 20
+
+
+def test_merging_multiple_disjoint_annotations(tmp_db):
+    conn = create_project(tmp_db, "Test")
+    source_id, coder_id, code_id = _setup(conn)
+    old1 = add_annotation(conn, source_id, coder_id, code_id, 0, 4, "Some")
+    old2 = add_annotation(conn, source_id, coder_id, code_id, 10, 17, "content")
+
+    new_id, replaced = add_annotation_merging(
+        conn, source_id, coder_id, code_id, 2, 15, "me text conten",
+    )
+    assert set(replaced) == {old1, old2}
+    rows = get_annotations_for_source(conn, source_id, coder_id)
+    assert len(rows) == 1
+    assert rows[0]["start_offset"] == 0 and rows[0]["end_offset"] == 17
+
+
+def test_merging_different_code_untouched(tmp_db):
+    conn = create_project(tmp_db, "Test")
+    source_id, coder_id, code_id = _setup(conn)
+    other_code_id = add_code(conn, "Theme B", "#00FF00")
+    other_id = add_annotation(conn, source_id, coder_id, other_code_id, 0, 10, "Some text ")
+
+    new_id, replaced = add_annotation_merging(
+        conn, source_id, coder_id, code_id, 5, 15, "text conten",
+    )
+    assert replaced == []
+    rows = get_annotations_for_source(conn, source_id, coder_id)
+    assert len(rows) == 2
+    code_ids = {r["code_id"] for r in rows}
+    assert code_ids == {code_id, other_code_id}
+
+
+def test_merging_different_coder_untouched(tmp_db):
+    conn = create_project(tmp_db, "Test")
+    source_id, coder_id, code_id = _setup(conn)
+    other_coder = add_coder(conn, "Bob")
+    bobs_id = add_annotation(conn, source_id, other_coder, code_id, 0, 10, "Some text ")
+
+    new_id, replaced = add_annotation_merging(
+        conn, source_id, coder_id, code_id, 5, 15, "text conten",
+    )
+    assert replaced == []
+    bobs_row = conn.execute(
+        "SELECT * FROM annotation WHERE id = ? AND deleted_at IS NULL", (bobs_id,)
+    ).fetchone()
+    assert bobs_row is not None
+
+
+def test_merging_ignores_soft_deleted(tmp_db):
+    conn = create_project(tmp_db, "Test")
+    source_id, coder_id, code_id = _setup(conn)
+    old_id = add_annotation(conn, source_id, coder_id, code_id, 0, 10, "Some text ")
+    delete_annotation(conn, old_id)
+
+    new_id, replaced = add_annotation_merging(
+        conn, source_id, coder_id, code_id, 5, 15, "text conten",
+    )
+    assert replaced == []
+    rows = get_annotations_for_source(conn, source_id, coder_id)
+    assert len(rows) == 1
+    assert rows[0]["start_offset"] == 5 and rows[0]["end_offset"] == 15
