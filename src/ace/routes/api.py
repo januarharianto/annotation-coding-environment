@@ -199,21 +199,34 @@ def _oob_announce(message: str, assertive: bool = False) -> str:
 
 
 def _oob_status(message: str, kind: str = "err") -> HTMLResponse:
-    """Return an OOB-swap fragment that sets the status-bar event segment.
+    """Return OOB-swap fragments that set the event channel on all pages.
 
-    Emits two OOB fragments — the visible status-bar span plus a sibling
-    update into the assertive ARIA live region (because the status bar itself
-    is aria-hidden, so screen-reader users would otherwise miss the error).
-    kind is "err" for sticky errors, "ok" for 2-second ephemeral success.
+    Emits three fragments:
+      1. Statusbar event span (visible on /, /import, /agreement — hidden by
+         CSS on /code but still DOM-present).
+      2. Text-panel event pill (only exists on /code — HTMX silently drops
+         the fragment on other pages).
+      3. Assertive ARIA live region (because the statusbar and pill are
+         aria-hidden / role=status, so screen-reader users would otherwise
+         miss errors).
+
+    kind is "err" for sticky errors, "ok" for 2-second ephemeral success
+    (client-side timer in _setStatus clears ok pills).
     """
     escaped = html.escape(message)
     status_fragment = (
         f'<span class="ace-statusbar-event ace-statusbar-event--{kind}" '
         f'id="ace-statusbar-event" hx-swap-oob="outerHTML">{escaped}</span>'
     )
+    # Same message, second target — only present on /code.
+    pill_fragment = (
+        f'<span class="ace-text-event-pill ace-text-event-pill--{kind}" '
+        f'id="ace-text-event-pill" role="status" aria-live="polite" '
+        f'hx-swap-oob="outerHTML">{escaped}</span>'
+    )
     # Assertive region for errors (sticky), polite for ok (ephemeral).
     announce = _oob_announce(message, assertive=(kind == "err"))
-    return HTMLResponse(status_fragment + announce)
+    return HTMLResponse(status_fragment + pill_fragment + announce)
 
 
 # ---------------------------------------------------------------------------

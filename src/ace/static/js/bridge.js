@@ -2498,20 +2498,38 @@
    */
   function _setStatus(text, kind) {
     kind = kind || "ok";
-    const el = document.querySelector(".ace-statusbar-event");
-    if (!el) return;
+    const sbEl = document.querySelector(".ace-statusbar-event");
+    const pillEl = document.getElementById("ace-text-event-pill");
+    if (!sbEl && !pillEl) return;
+
     if (_statusEventClearTimer) {
       clearTimeout(_statusEventClearTimer);
       _statusEventClearTimer = null;
     }
-    el.textContent = text || "";
-    el.classList.remove("ace-statusbar-event--ok", "ace-statusbar-event--err");
-    if (text) el.classList.add("ace-statusbar-event--" + kind);
+
+    if (sbEl) {
+      sbEl.textContent = text || "";
+      sbEl.classList.remove("ace-statusbar-event--ok", "ace-statusbar-event--err");
+      if (text) sbEl.classList.add("ace-statusbar-event--" + kind);
+    }
+    if (pillEl) {
+      pillEl.textContent = text || "";
+      pillEl.classList.remove("ace-text-event-pill--ok", "ace-text-event-pill--err");
+      if (text) pillEl.classList.add("ace-text-event-pill--" + kind);
+    }
+
     if (text) _announce(text, kind === "err");
+
     if (kind === "ok" && text) {
       _statusEventClearTimer = setTimeout(function () {
-        el.textContent = "";
-        el.classList.remove("ace-statusbar-event--ok");
+        if (sbEl) {
+          sbEl.textContent = "";
+          sbEl.classList.remove("ace-statusbar-event--ok");
+        }
+        if (pillEl) {
+          pillEl.textContent = "";
+          pillEl.classList.remove("ace-text-event-pill--ok");
+        }
       }, 2000);
     }
   }
