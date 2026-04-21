@@ -683,6 +683,252 @@
     });
   }
 
+  // ==========================================================
+  // Source-grid renderer: sparkline minimap + tile viewport
+  // ==========================================================
+
+  let _aceSourceGridState = {
+    sources: [],      // mutated via setSources()
+    windowStart: 0,
+    visibleCount: 0,
+    resizeObs: null,
+    hoveredIndex: -1, // -1 means "no hover; show active"
+  };
+
+  function _aceInspectorLine(src) {
+    if (!src) return "";
+    const n = src.index + 1;
+    const flags = [];
+    if (src.flagged) flags.push("flagged");
+    if (src.note)    flags.push("has note");
+    const plural = src.count === 1 ? "" : "s";
+    const parts = [
+      "#" + n,
+      src.display_id,
+      src.count + " annotation" + plural,
+    ];
+    if (flags.length) parts.push(flags.join(" · "));
+    return parts.join(" · ");
+  }
+
+  function _aceUpdateInspector() {
+    const el = document.getElementById("ace-grid-inspector");
+    if (!el) return;
+    const st = _aceSourceGridState;
+    let src = null;
+    if (st.hoveredIndex >= 0 && st.hoveredIndex < st.sources.length) {
+      src = st.sources[st.hoveredIndex];
+    } else if (typeof window.__aceCurrentIndex === "number" &&
+               window.__aceCurrentIndex >= 0 &&
+               window.__aceCurrentIndex < st.sources.length) {
+      src = st.sources[window.__aceCurrentIndex];
+    }
+    el.textContent = _aceInspectorLine(src);
+  }
+
+  function _aceRenderTiles() {
+    const host = document.getElementById("ace-grid-tiles");
+    const label = document.getElementById("ace-grid-range-label");
+    if (!host) return;
+    const st = _aceSourceGridState;
+    const active = typeof window.__aceCurrentIndex === "number"
+      ? window.__aceCurrentIndex : 0;
+
+    // Compute visible count from measured dimensions
+    const rect = host.getBoundingClientRect();
+    const TILE = 22, GAP = 2;
+    const cols = Math.max(1, Math.floor((rect.width  + GAP) / (TILE + GAP)));
+    const rows = Math.max(1, Math.floor((rect.height + GAP) / (TILE + GAP)));
+    st.visibleCount = Math.min(st.sources.length, cols * rows);
+
+    // Keep active tile in view; otherwise clamp windowStart
+    if (active < st.windowStart ||
+        active >= st.windowStart + st.visibleCount) {
+      st.windowStart = Math.max(0, Math.min(
+        st.sources.length - st.visibleCount,
+        active - Math.floor(st.visibleCount / 2),
+      ));
+    } else {
+      st.windowStart = Math.max(0, Math.min(
+        st.windowStart, st.sources.length - st.visibleCount,
+      ));
+    }
+
+    const from = st.windowStart;
+    const to   = Math.min(st.sources.length, from + st.visibleCount);
+
+    if (label) {
+      label.textContent = "Sources " + (from + 1) + "–" + to +
+        " of " + st.sources.length;
+    }
+
+    const frag = document.createDocumentFragment();
+    for (let i = from; i < to; i++) {
+      const s = st.sources[i];
+      const cls = ["ace-grid-tile"];
+      if (s.count >= 6) cls.push("hot");
+      else if (s.count >= 3) cls.push("warm");
+      if (i === active)  cls.push("active");
+      if (s.flagged)     cls.push("flagged");
+      if (s.note)        cls.push("note");
+
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = cls.join(" ");
+      btn.setAttribute("role", "gridcell");
+      btn.dataset.sourceIndex = String(i);
+      btn.dataset.count = String(s.count);
+      btn.tabIndex = (i === active) ? 0 : -1;
+      if (i === active) btn.setAttribute("aria-current", "location");
+      btn.title = "#" + (i + 1) + " · " + s.display_id +
+        " · " + s.count + " annotation" + (s.count === 1 ? "" : "s");
+
+      const span = document.createElement("span");
+      span.textContent = String(s.count);
+      btn.appendChild(span);
+
+      btn.addEventListener("click", function () {
+        if (typeof window.aceNavigate === "function") {
+          window.aceNavigate(i);
+        }
+      });
+      btn.addEventListener("mouseenter", function () {
+        _aceSourceGridState.hoveredIndex = i;
+        _aceUpdateInspector();
+      });
+      btn.addEventListener("focus", function () {
+        _aceSourceGridState.hoveredIndex = i;
+        _aceUpdateInspector();
+      });
+
+      frag.appendChild(btn);
+    }
+    host.replaceChildren(frag);
+
+    // Mouse leaving the tile grid clears hover → inspector falls back to active
+    if (!host.dataset.aceMouseleaveWired) {
+      host.addEventListener("mouseleave", function () {
+        _aceSourceGridState.hoveredIndex = -1;
+        _aceUpdateInspector();
+      });
+      host.dataset.aceMouseleaveWired = "1";
+    }
+
+    _aceUpdateInspector();
+  }
+
+  function _aceRenderSparkline() {
+    const host = document.getElementById("ace-grid-spark");
+    if (!host) return;
+    const st = _aceSourceGridState;
+    const total = st.sources.length;
+    if (total === 0) { host.replaceChildren(); return; }
+
+    const W = host.clientWidth || 240;
+    const H = 38;
+    const padX = 2;
+    const innerW = Math.max(1, W - 2 * padX);
+
+    const nPoints = Math.max(40, Math.min(160, Math.floor(innerW / 4)));
+    const step = total / nPoints;
+    let maxCount = 1;
+    for (let k = 0; k < total; k++) {
+      if (st.sources[k].count > maxCount) maxCount = st.sources[k].count;
+    }
+
+    const density = new Array(nPoints);
+    for (let i = 0; i < nPoints; i++) {
+      const from = Math.floor(i * step);
+      const toEx = Math.floor((i + 1) * step);
+      let sum = 0, cnt = 0;
+      for (let k = from; k < toEx && k < total; k++) {
+        sum += st.sources[k].count; cnt++;
+      }
+      density[i] = cnt > 0 ? sum / cnt : 0;
+    }
+
+    const pts = density.map(function (d, i) {
+      const x = padX + (nPoints === 1 ? 0 : (i / (nPoints - 1)) * innerW);
+      const y = H - (d / maxCount) * (H - 4) - 2;
+      return [x, y];
+    });
+    const line = "M" + pts.map(function (p) {
+      return p[0].toFixed(1) + "," + p[1].toFixed(1);
+    }).join(" L");
+    const area = line + " L" + (W - padX).toFixed(1) + "," + H +
+                        " L" + padX.toFixed(1) + "," + H + " Z";
+
+    const denom = Math.max(1, total - 1);
+    const vpX1 = padX + (st.windowStart / denom) * innerW;
+    const vpEnd = Math.min(total, st.windowStart + st.visibleCount) - 1;
+    const vpX2 = padX + (Math.max(vpEnd, 0) / denom) * innerW;
+    const vpW  = Math.max(6, vpX2 - vpX1);
+    const active = typeof window.__aceCurrentIndex === "number"
+      ? window.__aceCurrentIndex : 0;
+    const playX = padX + (active / denom) * innerW;
+
+    const NS = "http://www.w3.org/2000/svg";
+    const svg = document.createElementNS(NS, "svg");
+    svg.setAttribute("viewBox", "0 0 " + W + " " + (H + 4));
+    svg.setAttribute("preserveAspectRatio", "none");
+
+    function mk(tag, attrs) {
+      const el = document.createElementNS(NS, tag);
+      for (const k in attrs) el.setAttribute(k, attrs[k]);
+      return el;
+    }
+    svg.appendChild(mk("path", { class: "spark-area", d: area }));
+    svg.appendChild(mk("path", { class: "spark-line", d: line }));
+    svg.appendChild(mk("rect", {
+      class: "spark-viewport",
+      x: vpX1.toFixed(1), y: 0,
+      width: vpW.toFixed(1), height: H,
+    }));
+    svg.appendChild(mk("line", {
+      class: "spark-playhead",
+      x1: playX, x2: playX, y1: 0, y2: H,
+    }));
+    svg.appendChild(mk("circle", {
+      class: "spark-playhead-cap",
+      cx: playX, cy: H + 2, r: 2,
+    }));
+
+    svg.addEventListener("click", function (ev) {
+      const r = svg.getBoundingClientRect();
+      const x = ev.clientX - r.left;
+      const normalised = (x - padX) / innerW;
+      const idx = Math.round(Math.max(0, Math.min(1, normalised)) * denom);
+      _aceSourceGridState.windowStart = Math.max(0, Math.min(
+        total - _aceSourceGridState.visibleCount,
+        idx - Math.floor(_aceSourceGridState.visibleCount / 2),
+      ));
+      _aceRenderSparkline();
+      _aceRenderTiles();
+    });
+
+    host.replaceChildren(svg);
+  }
+
+  window._aceRenderSourceGrid = function () {
+    const blob = document.getElementById("ace-sources-data");
+    if (!blob) return;
+    try {
+      _aceSourceGridState.sources = JSON.parse(blob.textContent || "[]");
+    } catch (e) {
+      _aceSourceGridState.sources = [];
+    }
+    const tiles = document.getElementById("ace-grid-tiles");
+    if (tiles && !_aceSourceGridState.resizeObs) {
+      _aceSourceGridState.resizeObs = new ResizeObserver(function () {
+        _aceRenderTiles();
+        _aceRenderSparkline();
+      });
+      _aceSourceGridState.resizeObs.observe(tiles);
+    }
+    _aceRenderTiles();
+    _aceRenderSparkline();
+  };
+
   function _getGridColumnCount() {
     const cellsEl = document.querySelector(".ace-grid-cells");
     if (!cellsEl) return 1;

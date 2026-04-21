@@ -150,20 +150,17 @@ rect.ace-flash-{{ code["id"] }} {
       <section id="ace-sidebar-grid" class="ace-sidebar-grid" aria-label="Sources">
         <header class="ace-grid-header">
           <span class="ace-grid-title">Sources</span>
-          <span class="ace-grid-meta">{{ complete_count }} / {{ total_sources }}</span>
+          <span class="ace-grid-meta">{{ total_sources }}</span>
         </header>
-        <div class="ace-grid-cells" role="grid"
-             aria-label="Source grid">
-          {% for cell in grid_cells %}
-            <button type="button" role="gridcell"
-                    class="{{ cell.class_str }}"
-                    title="{{ cell.title }}"
-                    tabindex="{{ cell.tabindex }}"
-                    {% if cell.is_active %}aria-current="location"{% endif %}
-                    data-source-index="{{ cell.index }}"
-                    onclick="aceNavigate({{ cell.index }})"></button>
-          {% endfor %}
+        <div id="ace-grid-spark" class="ace-grid-spark" aria-hidden="true"></div>
+        <div class="ace-grid-sub-header">
+          <span class="ace-grid-sub-label" id="ace-grid-range-label">—</span>
         </div>
+        <div id="ace-grid-tiles" class="ace-grid-tiles" role="grid"
+             aria-label="Source grid"></div>
+        <div id="ace-grid-inspector" class="ace-grid-inspector"
+             aria-live="polite" aria-atomic="true"></div>
+        <script id="ace-sources-data" type="application/json">{{ sources_json | tojson }}</script>
         <div id="ace-grid-live" class="ace-sr-only" aria-live="polite"></div>
       </section>
       <div aria-live="polite" class="ace-sr-only" id="ace-live-region"></div>
@@ -287,6 +284,12 @@ rect.ace-flash-{{ code["id"] }} {
   window.__aceLastCodeId = null;
   // Save current index for resume on return
   localStorage.setItem("ace-last-index", {{ current_index }});
+  // Kick off the client-rendered source grid once bridge.js is available
+  document.addEventListener("DOMContentLoaded", function () {
+    if (typeof window._aceRenderSourceGrid === "function") {
+      window._aceRenderSourceGrid();
+    }
+  });
   (function() {
     var params = new URLSearchParams(window.location.search);
     var hl = params.get("highlight");
