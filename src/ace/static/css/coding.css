@@ -427,8 +427,8 @@
   outline-offset: 1px;
 }
 
-/* ---- Hotkey hints ---- *
- * Smaller sibling of .ace-keycap. Always visible on search + sources header,
+/* ---- Hotkey hints ---- */
+/* Smaller sibling of .ace-keycap. Always visible on search + sources header,
  * hover/focus-revealed on flag/note buttons. */
 .ace-hint {
   display: inline-flex;
