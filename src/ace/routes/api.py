@@ -10,6 +10,8 @@ import re
 import sqlite3
 import subprocess
 import tempfile
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from urllib.parse import quote
 
@@ -658,16 +660,13 @@ async def export_annotations(request: Request):
     from ace.models.project import get_project
     from datetime import datetime
 
-    conn = _open_project_db(request)
-    try:
+    with _project_db(request) as conn:
         project = get_project(conn)
         tmp = tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False, encoding="utf-8")
         tmp.close()
         count = export_annotations_csv(conn, tmp.name)
         content = Path(tmp.name).read_text(encoding="utf-8")
         Path(tmp.name).unlink(missing_ok=True)
-    finally:
-        conn.close()
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M")
     filename = _safe_filename(f"{project['name']}_annotations_{timestamp}.csv")
@@ -695,13 +694,22 @@ def _get_undo_manager(request: Request):
     return managers[project_path]
 
 
-def _open_project_db(request: Request) -> sqlite3.Connection:
-    """Open a direct SQLite connection to the current project."""
+@contextmanager
+def _project_db(request: Request) -> Iterator[sqlite3.Connection]:
+    """Context-manager form: yields a direct SQLite connection to the
+    current project and closes it on exit.
+
+    Replaces the old `_open_project_db` + `try/finally: conn.close()`
+    scaffold that appeared at ~20 call sites.
+    """
     conn = sqlite3.connect(request.app.state.project_path)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     conn.execute("PRAGMA journal_mode = WAL")
-    return conn
+    try:
+        yield conn
+    finally:
+        conn.close()
 
 
 def _hex_to_rgb(hex_col: str) -> tuple[int, int, int]:
@@ -824,8 +832,7 @@ async def annotate(
     if start_offset < 0 or end_offset < 0 or not selected_text:
         return HTMLResponse("", status_code=400)
 
-    conn = _open_project_db(request)
-    try:
+    with _project_db(request) as conn:
         source_id = _resolve_source_id(conn, coder_id, current_index)
         if source_id is None:
             return HTMLResponse("", status_code=400)
@@ -852,8 +859,6 @@ async def annotate(
 
         content = _render_sidebar_and_text(request, conn, coder_id, current_index)
         return HTMLResponse(content)
-    finally:
-        conn.close()
 
 
 @router.post("/code/delete-annotation")
@@ -867,8 +872,7 @@ async def delete_annotation_route(
 
     coder_id = _require_coder(request)
 
-    conn = _open_project_db(request)
-    try:
+    with _project_db(request) as conn:
         # Look up source_id from the annotation before deleting
         ann_row = conn.execute(
             "SELECT source_id FROM annotation WHERE id = ?",
@@ -886,8 +890,6 @@ async def delete_annotation_route(
 
         content = _render_sidebar_and_text(request, conn, coder_id, current_index)
         return HTMLResponse(content)
-    finally:
-        conn.close()
 
 
 @router.post("/code/undo")
@@ -902,8 +904,7 @@ async def undo_route(
 
     coder_id = _require_coder(request)
 
-    conn = _open_project_db(request)
-    try:
+    with _project_db(request) as conn:
         source_id = _resolve_source_id(conn, coder_id, current_index)
         if source_id is None:
             return HTMLResponse("", status_code=400)
@@ -928,8 +929,6 @@ async def undo_route(
 
         content = _render_sidebar_and_text(request, conn, coder_id, current_index) + _oob_announce(msg)
         return HTMLResponse(content)
-    finally:
-        conn.close()
 
 
 @router.post("/code/redo")
@@ -944,8 +943,7 @@ async def redo_route(
 
     coder_id = _require_coder(request)
 
-    conn = _open_project_db(request)
-    try:
+    with _project_db(request) as conn:
         source_id = _resolve_source_id(conn, coder_id, current_index)
         if source_id is None:
             return HTMLResponse("", status_code=400)
@@ -970,8 +968,6 @@ async def redo_route(
 
         content = _render_sidebar_and_text(request, conn, coder_id, current_index) + _oob_announce(msg)
         return HTMLResponse(content)
-    finally:
-        conn.close()
 
 
 # ---------------------------------------------------------------------------
@@ -990,8 +986,7 @@ async def navigate_route(
 
     coder_id = _require_coder(request)
 
-    conn = _open_project_db(request)
-    try:
+    with _project_db(request) as conn:
         assignments = get_assignments_for_coder(conn, coder_id)
         if not assignments:
             return HTMLResponse("", status_code=400)
@@ -1018,8 +1013,6 @@ async def navigate_route(
         content = _render_full_coding_oob(request, conn, coder_id, target_index)
         trigger = json.dumps({"ace-navigate": {"index": target_index, "total": total}})
         return HTMLResponse(content, headers={"HX-Trigger": trigger})
-    finally:
-        conn.close()
 
 
 @router.post("/code/flag")
@@ -1032,8 +1025,7 @@ async def flag_route(
 
     coder_id = _require_coder(request)
 
-    conn = _open_project_db(request)
-    try:
+    with _project_db(request) as conn:
         assignments = get_assignments_for_coder(conn, coder_id)
         if not assignments or source_index >= len(assignments):
             return HTMLResponse("", status_code=400)
@@ -1048,8 +1040,6 @@ async def flag_route(
         msg = "Source flagged" if new_status == "flagged" else "Source unflagged"
         content = _render_full_coding_oob(request, conn, coder_id, source_index) + _oob_announce(msg)
         return HTMLResponse(content)
-    finally:
-        conn.close()
 
 
 # ---------------------------------------------------------------------------
@@ -1064,15 +1054,12 @@ async def get_source_note(request: Request, source_id: str):
 
     coder_id = _require_coder(request)
 
-    conn = _open_project_db(request)
-    try:
+    with _project_db(request) as conn:
         row = conn.execute("SELECT id FROM source WHERE id = ?", (source_id,)).fetchone()
         if row is None:
             return JSONResponse({"error": "source not found"}, status_code=404)
         text = get_note(conn, source_id, coder_id) or ""
         return JSONResponse({"note_text": text})
-    finally:
-        conn.close()
 
 
 @router.put("/source-note/{source_id}")
@@ -1093,8 +1080,7 @@ async def put_source_note(
 
     coder_id = _require_coder(request)
 
-    conn = _open_project_db(request)
-    try:
+    with _project_db(request) as conn:
         assignments = get_assignments_for_coder(conn, coder_id)
         found = False
         current_status = None
@@ -1114,8 +1100,6 @@ async def put_source_note(
             promoted = True
 
         return JSONResponse({"ok": True, "has_note": bool(note_text.strip()), "promoted": promoted})
-    finally:
-        conn.close()
 
 
 @router.get("/export/notes")
@@ -1128,16 +1112,13 @@ async def export_notes_route(request: Request):
 
     coder_id = _require_coder(request)
 
-    conn = _open_project_db(request)
-    try:
+    with _project_db(request) as conn:
         project = get_project(conn)
         tmp = tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False, encoding="utf-8")
         tmp.close()
         export_notes_csv(conn, coder_id, tmp.name)
         content = Path(tmp.name).read_text(encoding="utf-8")
         Path(tmp.name).unlink(missing_ok=True)
-    finally:
-        conn.close()
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M")
     filename = _safe_filename(f"{project['name']}_notes_{timestamp}.csv")
@@ -1172,8 +1153,7 @@ async def annotate_sentence(
 
     coder_id = _require_coder(request)
 
-    conn = _open_project_db(request)
-    try:
+    with _project_db(request) as conn:
         source_id = _resolve_source_id(conn, coder_id, current_index)
         if source_id is None:
             return HTMLResponse("", status_code=400)
@@ -1244,8 +1224,6 @@ async def annotate_sentence(
 
         content = _render_sidebar_and_text(request, conn, coder_id, current_index)
         return HTMLResponse(content)
-    finally:
-        conn.close()
 
 
 @router.post("/code/delete-sentence")
@@ -1264,8 +1242,7 @@ async def delete_sentence_annotations(
 
     coder_id = _require_coder(request)
 
-    conn = _open_project_db(request)
-    try:
+    with _project_db(request) as conn:
         source_id = _resolve_source_id(conn, coder_id, current_index)
         if source_id is None:
             return HTMLResponse("", status_code=400)
@@ -1300,8 +1277,6 @@ async def delete_sentence_annotations(
         if most_recent:
             content += _oob_announce("Annotation removed")
         return HTMLResponse(content)
-    finally:
-        conn.close()
 
 
 # ---------------------------------------------------------------------------
@@ -1362,8 +1337,7 @@ async def create_code(
     if not name:
         return _oob_status("Code name cannot be empty.")
 
-    conn = _open_project_db(request)
-    try:
+    with _project_db(request) as conn:
         existing = list_codes(conn)
         colour = next_colour(len(existing))
         gn = group_name.strip() if group_name else None
@@ -1373,8 +1347,6 @@ async def create_code(
             return _oob_status(f"A code named '{name}' already exists.")
         content = _render_code_sidebar(request, conn, coder_id, current_index)
         return HTMLResponse(content)
-    finally:
-        conn.close()
 
 
 @router.post("/codes/reorder")
@@ -1393,13 +1365,10 @@ async def reorder_codes_route(
     except (json.JSONDecodeError, TypeError):
         return _oob_status("Invalid code_ids format.")
 
-    conn = _open_project_db(request)
-    try:
+    with _project_db(request) as conn:
         reorder_codes(conn, ids_list)
         content = _render_code_sidebar(request, conn, coder_id, current_index)
         return HTMLResponse(content)
-    finally:
-        conn.close()
 
 
 # ---------------------------------------------------------------------------
@@ -1412,13 +1381,10 @@ async def export_codebook(request: Request):
     """Export the codebook as a CSV file download."""
     from ace.models.codebook import export_codebook_to_csv
 
-    conn = _open_project_db(request)
-    try:
+    with _project_db(request) as conn:
         tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".csv")
         tmp.close()
         export_codebook_to_csv(conn, tmp.name)
-    finally:
-        conn.close()
 
     return FileResponse(
         tmp.name,
@@ -1442,13 +1408,11 @@ async def import_codebook_preview_path(
     if file_path.suffix.lower() != ".csv":
         return _oob_status("Please select a valid CSV file.")
 
-    conn = _open_project_db(request)
     try:
-        previewed = preview_codebook_csv(conn, str(file_path))
+        with _project_db(request) as conn:
+            previewed = preview_codebook_csv(conn, str(file_path))
     except Exception as e:
         return _oob_status(f"Could not parse CSV: {e}")
-    finally:
-        conn.close()
 
     new_codes = [c for c in previewed if not c["exists"]]
     existing_codes = [c for c in previewed if c["exists"]]
@@ -1554,12 +1518,9 @@ async def import_codebook(
     except (json.JSONDecodeError, TypeError):
         return _oob_status("Invalid codes_json format.")
 
-    conn = _open_project_db(request)
-    try:
+    with _project_db(request) as conn:
         import_selected_codes(conn, codes_list)
         content = _render_code_sidebar(request, conn, coder_id, current_index)
-    finally:
-        conn.close()
 
     # Clean up temp file
     tmp_path = getattr(request.app.state, "codebook_import_tmp", None)
@@ -1591,13 +1552,10 @@ async def rename_group_route(
     if not new_name:
         return _oob_status("Group name cannot be empty.")
 
-    conn = _open_project_db(request)
-    try:
+    with _project_db(request) as conn:
         rename_group(conn, old_name, new_name)
         content = _render_sidebar_and_text(request, conn, coder_id, current_index)
         return HTMLResponse(content)
-    finally:
-        conn.close()
 
 
 @router.put("/codes/{code_id}")
@@ -1614,8 +1572,7 @@ async def update_code_route(
 
     coder_id = _require_coder(request)
 
-    conn = _open_project_db(request)
-    try:
+    with _project_db(request) as conn:
         kwargs: dict = {}
         if name is not None:
             name = name.strip()
@@ -1636,8 +1593,6 @@ async def update_code_route(
 
         content = _render_sidebar_and_text(request, conn, coder_id, current_index)
         return HTMLResponse(content)
-    finally:
-        conn.close()
 
 
 @router.delete("/codes/{code_id}")
@@ -1651,13 +1606,10 @@ async def delete_code_route(
 
     coder_id = _require_coder(request)
 
-    conn = _open_project_db(request)
-    try:
+    with _project_db(request) as conn:
         delete_code(conn, code_id)
         content = _render_sidebar_and_text(request, conn, coder_id, current_index)
         return HTMLResponse(content)
-    finally:
-        conn.close()
 
 
 # ---------------------------------------------------------------------------
