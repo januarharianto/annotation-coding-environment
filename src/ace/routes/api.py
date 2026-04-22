@@ -675,9 +675,12 @@ def _csv_download(
             mode="w", suffix=".csv", delete=False, encoding="utf-8"
         )
         tmp.close()
-        write_csv(conn, tmp.name)
-        content = Path(tmp.name).read_text(encoding="utf-8")
-        Path(tmp.name).unlink(missing_ok=True)
+        tmp_path = Path(tmp.name)
+        try:
+            write_csv(conn, tmp.name)
+            content = tmp_path.read_text(encoding="utf-8")
+        finally:
+            tmp_path.unlink(missing_ok=True)
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M")
     filename = _safe_filename(f"{project['name']}_{suffix}_{timestamp}.csv")
