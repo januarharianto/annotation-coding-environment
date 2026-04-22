@@ -33,15 +33,13 @@ def get_annotations_for_source(
     source_id: str,
     coder_id: str | None = None,
 ) -> list[sqlite3.Row]:
+    sql = "SELECT * FROM annotation WHERE source_id = ? AND deleted_at IS NULL"
+    params: tuple = (source_id,)
     if coder_id is not None:
-        return conn.execute(
-            "SELECT * FROM annotation WHERE source_id = ? AND coder_id = ? AND deleted_at IS NULL ORDER BY start_offset",
-            (source_id, coder_id),
-        ).fetchall()
-    return conn.execute(
-        "SELECT * FROM annotation WHERE source_id = ? AND deleted_at IS NULL ORDER BY start_offset",
-        (source_id,),
-    ).fetchall()
+        sql += " AND coder_id = ?"
+        params += (coder_id,)
+    sql += " ORDER BY start_offset"
+    return conn.execute(sql, params).fetchall()
 
 
 def get_annotations_for_code(
@@ -54,21 +52,17 @@ def get_annotations_for_code(
     Results include source.display_id and are ordered by
     source.sort_order then annotation.start_offset.
     """
-    if coder_id is not None:
-        return conn.execute(
-            "SELECT a.*, s.display_id, s.sort_order "
-            "FROM annotation a JOIN source s ON a.source_id = s.id "
-            "WHERE a.code_id = ? AND a.coder_id = ? AND a.deleted_at IS NULL "
-            "ORDER BY s.sort_order, a.start_offset",
-            (code_id, coder_id),
-        ).fetchall()
-    return conn.execute(
+    sql = (
         "SELECT a.*, s.display_id, s.sort_order "
         "FROM annotation a JOIN source s ON a.source_id = s.id "
-        "WHERE a.code_id = ? AND a.deleted_at IS NULL "
-        "ORDER BY s.sort_order, a.start_offset",
-        (code_id,),
-    ).fetchall()
+        "WHERE a.code_id = ? AND a.deleted_at IS NULL"
+    )
+    params: tuple = (code_id,)
+    if coder_id is not None:
+        sql += " AND a.coder_id = ?"
+        params += (coder_id,)
+    sql += " ORDER BY s.sort_order, a.start_offset"
+    return conn.execute(sql, params).fetchall()
 
 
 def list_annotations(conn: sqlite3.Connection) -> list[sqlite3.Row]:
