@@ -1295,12 +1295,13 @@
   // and refresh the ambient status-bar segment. Use afterSettle (not
   // afterSwap) — fires after HTMX finishes all DOM changes.
   document.addEventListener("htmx:afterSettle", function (evt) {
-    const target = evt.detail.target;
-    if (!target) return;
-
     // Keep the ambient left segment of the statusbar in sync on every
-    // swap, regardless of target.
+    // afterSettle, including target-less events — preserves the
+    // behaviour of the previously-standalone listener this replaced.
     _setAmbient();
+
+    const target = (evt.detail || {}).target;
+    if (!target) return;
 
     if (target.id === "text-panel" || target.id === "coding-workspace") {
       window.__aceExcerptListActive = false;
