@@ -182,7 +182,7 @@ def test_sidebar_has_brand_and_nav_has_source(client_with_sources):
     html = resp.text
     assert "ace-sidebar-brand" in html
     assert "ACE" in html
-    assert 'aria-label="Toggle flag"' in html
+    assert 'aria-label="Toggle flag (Shift+F)"' in html
 
 
 def test_sidebar_has_aria_tree_roles(client_with_sources):

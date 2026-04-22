@@ -427,6 +427,41 @@
   outline-offset: 1px;
 }
 
+/* ---- Hotkey hints ---- *
+ * Smaller sibling of .ace-keycap. Always visible on search + sources header,
+ * hover/focus-revealed on flag/note buttons. */
+.ace-hint {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--ace-font-mono);
+  font-size: 11px;
+  line-height: 1;
+  padding: 0 4px;
+  min-width: 16px;
+  height: 16px;
+  border: 1px solid var(--ace-border-light);
+  border-radius: 3px;
+  background: var(--ace-bg);
+  color: var(--ace-text-muted);
+  letter-spacing: 0.2px;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+/* Hover-reveal variant — reserved space, opacity-only transition (no layout
+ * shift). Keyboard users see it via focus-visible. */
+.ace-hint--hover {
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+.ace-flag-btn:hover .ace-hint--hover,
+.ace-flag-btn:focus-visible .ace-hint--hover,
+.ace-note-pill:hover .ace-hint--hover,
+.ace-note-pill:focus-visible .ace-hint--hover {
+  opacity: 1;
+}
+
 .ace-sidebar-empty {
   padding: var(--ace-space-4);
   color: var(--ace-text-muted);
@@ -757,14 +792,29 @@ dialog::backdrop {
   flex-shrink: 0;
 }
 
-.ace-sidebar-search {
+/* Wraps the search input + its absolute hint keycap. */
+.ace-sidebar-search-wrap {
+  position: relative;
   flex: 1;
-  padding: var(--ace-space-2) var(--ace-space-2);
+}
+
+.ace-sidebar-search {
+  width: 100%;
+  padding: var(--ace-space-2) 30px var(--ace-space-2) var(--ace-space-2);
   font-size: var(--ace-font-size-sm);
   border: 1px solid transparent;
   background: var(--ace-bg-muted);
   color: var(--ace-text);
   border-radius: 0;
+}
+
+/* Absolute keycap on the right edge of the search input. */
+.ace-sidebar-search-hint {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
 }
 
 .ace-sidebar-search:focus {
@@ -1117,7 +1167,6 @@ html[data-ace-note-open="1"] .ace-note-rail {
   background-clip: content-box;
   background-color: transparent;
   cursor: row-resize;
-  border-top: 1px solid var(--ace-border);
   transition: background-color var(--ace-transition);
 }
 .ace-sidebar-vsplit:hover,
@@ -1133,6 +1182,8 @@ html[data-ace-note-open="1"] .ace-note-rail {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  /* Soft wash demarcates the sources zone in place of a horizontal border. */
+  background: #fafafa;
 }
 
 .ace-grid-header {
@@ -1169,6 +1220,13 @@ html[data-ace-note-open="1"] .ace-note-rail {
   font-weight: var(--ace-weight-medium);
   text-transform: uppercase;
   letter-spacing: 0.5px;
+}
+
+/* Hint for the Shift+Arrow source-nav shortcut, right-aligned inside the
+ * sources header button. */
+.ace-grid-header-hint {
+  margin-left: auto;
+  letter-spacing: 0;
 }
 
 /* Collapse mechanism: display:contents keeps the wrapper neutral in layout
@@ -1273,11 +1331,11 @@ html[data-ace-grid-collapsed="1"] .ace-sidebar-grid {
   z-index: 2;
 }
 .ace-grid-tile.warm {
-  background: #fafafa;
+  background: #f0f0f0;
   color: #555;
 }
 .ace-grid-tile.hot {
-  background: #f0f0f0;
+  background: #e0e0e0;
   color: #222;
   font-weight: var(--ace-weight-semibold);
 }
