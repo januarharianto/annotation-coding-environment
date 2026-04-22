@@ -849,25 +849,33 @@
     const innerW = Math.max(1, W - 2 * padX);
 
     const nPoints = Math.max(40, Math.min(160, Math.floor(innerW / 4)));
-    const step = total / nPoints;
     let maxCount = 1;
     for (let k = 0; k < total; k++) {
       if (st.sources[k].count > maxCount) maxCount = st.sources[k].count;
     }
 
-    const density = new Array(nPoints);
-    for (let i = 0; i < nPoints; i++) {
-      const from = Math.floor(i * step);
-      const toEx = Math.floor((i + 1) * step);
-      let sum = 0, cnt = 0;
-      for (let k = from; k < toEx && k < total; k++) {
-        sum += st.sources[k].count; cnt++;
+    // One vertex per source so peaks land exactly at playhead positions.
+    // Downsample with interpolation only when total exceeds the render
+    // budget, bounding path length for large datasets.
+    const renderPoints = Math.min(total, nPoints);
+    const density = new Array(renderPoints);
+    if (renderPoints === total) {
+      for (let i = 0; i < total; i++) density[i] = st.sources[i].count;
+    } else {
+      const span = total - 1;
+      for (let i = 0; i < renderPoints; i++) {
+        const pos = (i / (renderPoints - 1)) * span;
+        const lo = Math.floor(pos);
+        const hi = Math.min(total - 1, lo + 1);
+        const frac = pos - lo;
+        density[i] = st.sources[lo].count * (1 - frac) +
+                     st.sources[hi].count * frac;
       }
-      density[i] = cnt > 0 ? sum / cnt : 0;
     }
 
+    const xDenom = Math.max(1, renderPoints - 1);
     const pts = density.map(function (d, i) {
-      const x = padX + (nPoints === 1 ? 0 : (i / (nPoints - 1)) * innerW);
+      const x = padX + (i / xDenom) * innerW;
       const y = H - (d / maxCount) * (H - 4) - 2;
       return [x, y];
     });
