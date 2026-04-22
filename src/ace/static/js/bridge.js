@@ -1269,6 +1269,28 @@
     _sidebarFocusState.scrollTop = tree ? tree.scrollTop : 0;
   });
 
+  // Re-bind sidebar event wiring after an HTMX swap replaces sidebar DOM.
+  // opts: { sortable: bool, gridResize: bool } — both default false.
+  // Sortable re-init is skipped while a drag is in progress.
+  function _syncSidebarAfterSwap(opts) {
+    opts = opts || {};
+    if (opts.sortable && !_isDragging) _initSortable();
+    _restoreCollapseState();
+    _updateKeycaps();
+    if (opts.gridResize) _initGridResize();
+  }
+
+  // Re-render the source grid if its data blob is present in the swapped
+  // DOM. Primary HTMX swaps don't fire htmx:oobAfterSwap for OOB targets,
+  // so call this explicitly from afterSettle to keep the tile grid in
+  // sync with the server-rendered `ace-sources-data` JSON.
+  function _rerenderSourceGridIfPresent() {
+    if (document.getElementById("ace-sources-data") &&
+        typeof window._aceRenderSourceGrid === "function") {
+      window._aceRenderSourceGrid();
+    }
+  }
+
   // After HTMX swap: restore focus, rebuild tabs, update keycaps
   // Use afterSettle (not afterSwap) — fires after HTMX finishes all DOM changes
   document.addEventListener("htmx:afterSettle", function (evt) {
@@ -1284,17 +1306,9 @@
       // restore sidebar state here since afterSettle only fires for the
       // primary target, not OOB targets.
       if (document.getElementById("code-tree")) {
-        _restoreCollapseState();
-        _updateKeycaps();
-        _initGridResize();
+        _syncSidebarAfterSwap({ gridResize: true });
       }
-      // Re-render the source grid if its data blob is in the swapped DOM.
-      // Primary swaps don't fire htmx:oobAfterSwap, so without this the
-      // grid would stay empty after a sidebar swap that replaced the hosts.
-      if (document.getElementById("ace-sources-data") &&
-          typeof window._aceRenderSourceGrid === "function") {
-        window._aceRenderSourceGrid();
-      }
+      _rerenderSourceGridIfPresent();
 
       // Announce flag state and restore focus after flag toggle
       if (_pendingFlagAnnounce) {
@@ -1309,18 +1323,8 @@
     }
 
     if (target.id === "code-sidebar" || target.id === "coding-workspace") {
-      if (!_isDragging) _initSortable();
-      _restoreCollapseState();
-      _updateKeycaps();
-      _initGridResize();
-
-      // Re-render source grid after sidebar swap (code CRUD / reorder) —
-      // primary swaps replace #ace-grid-tiles + #ace-sources-data but
-      // don't fire htmx:oobAfterSwap, so bind the renderer here.
-      if (document.getElementById("ace-sources-data") &&
-          typeof window._aceRenderSourceGrid === "function") {
-        window._aceRenderSourceGrid();
-      }
+      _syncSidebarAfterSwap({ sortable: true, gridResize: true });
+      _rerenderSourceGridIfPresent();
 
       // Restore focus state
       let search = document.getElementById("code-search-input");
@@ -1479,9 +1483,7 @@
       swap: "outerHTML",
       values: { code_ids: "[]", current_index: window.__aceCurrentIndex },
     }).then(function () {
-      _initSortable();
-      _restoreCollapseState();
-      _updateKeycaps();
+      _syncSidebarAfterSwap({ sortable: true });
     });
   }
 
@@ -3201,10 +3203,7 @@
 
   document.addEventListener("DOMContentLoaded", function () {
     _initResize();
-    _initGridResize();
-    _restoreCollapseState();
-    _updateKeycaps();
-    _initSortable();
+    _syncSidebarAfterSwap({ sortable: true, gridResize: true });
     _paintSvg();
     _setAmbient();
 
