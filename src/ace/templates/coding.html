@@ -104,9 +104,13 @@ rect.ace-flash-{{ code["id"] }} {
         </div>
       </div>
       <div class="ace-sidebar-toolbar">
-        <input type="search" class="ace-sidebar-search" placeholder="Filter codes (/)"
-               id="code-search-input" autocomplete="off"
-               aria-controls="code-tree" aria-label="Filter codes">
+        <div class="ace-sidebar-search-wrap">
+          <input type="search" class="ace-sidebar-search" placeholder="Filter codes"
+                 id="code-search-input" autocomplete="off"
+                 aria-controls="code-tree" aria-label="Filter codes"
+                 aria-keyshortcuts="/">
+          <span class="ace-hint ace-sidebar-search-hint" aria-hidden="true">/</span>
+        </div>
       </div>
       <div id="code-tree" role="tree" aria-label="Code list" class="ace-sidebar-codes">
         {% for group_name, group_codes in grouped_codes %}
@@ -166,6 +170,9 @@ rect.ace-flash-{{ code["id"] }} {
                   stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
           <span class="ace-grid-title">Sources</span>
+          <span class="ace-sr-only"> &mdash; press Shift plus arrow keys to navigate between sources</span>
+          <span class="ace-hint ace-grid-header-hint" aria-hidden="true"
+                title="Shift + arrows to navigate">&#8679;&nbsp;&larr;&nbsp;&rarr;</span>
         </button>
         <div id="ace-grid-content" class="ace-grid-content">
           <div id="ace-grid-spark" class="ace-grid-spark"
@@ -218,19 +225,22 @@ rect.ace-flash-{{ code["id"] }} {
           </div>
           <div class="ace-flag-row">
             <button type="button" class="ace-flag-btn{% if current_status == 'flagged' %} ace-flag-btn--active{% endif %}"
-                    aria-label="Toggle flag" aria-pressed="{{ 'true' if current_status == 'flagged' else 'false' }}"
+                    aria-label="Toggle flag (Shift+F)" aria-pressed="{{ 'true' if current_status == 'flagged' else 'false' }}"
+                    aria-keyshortcuts="Shift+F"
                     id="nav-flag-btn">
-              <span class="ace-flag-chip{% if current_status == 'flagged' %} ace-flag-chip--active{% endif %}">&#9873; {{ 'Flagged' if current_status == 'flagged' else 'Flag' }}</span>
+              <span class="ace-flag-chip{% if current_status == 'flagged' %} ace-flag-chip--active{% endif %}">&#9873; {{ 'Flagged' if current_status == 'flagged' else 'Flag' }}<span class="ace-hint ace-hint--hover" aria-hidden="true">&#8679;F</span></span>
             </button>
             <button type="button"
                     id="note-pill"
                     class="ace-note-pill{% if has_note %} ace-note-pill--has-note{% endif %}"
-                    aria-label="Open source note"
+                    aria-label="Open source note (N)"
+                    aria-keyshortcuts="N"
                     aria-controls="note-drawer"
                     aria-expanded="false"
-                    title="Open source note (n)">
+                    title="Open source note (N)">
               <span class="ace-note-icon">&#9998;</span>
               <span class="ace-note-label">Note</span>
+              <span class="ace-hint ace-hint--hover" aria-hidden="true">N</span>
             </button>
           </div>
         </div>
