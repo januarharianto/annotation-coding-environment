@@ -849,21 +849,24 @@
     const innerW = Math.max(1, W - 2 * padX);
 
     const nPoints = Math.max(40, Math.min(160, Math.floor(innerW / 4)));
-    const step = total / nPoints;
     let maxCount = 1;
     for (let k = 0; k < total; k++) {
       if (st.sources[k].count > maxCount) maxCount = st.sources[k].count;
     }
 
+    // Linear interpolation over source counts using the same X mapping the
+    // playhead uses (t = i/(nPoints-1), pos = t*(total-1)). This keeps
+    // density peaks aligned with source positions for any total.
     const density = new Array(nPoints);
+    const span = Math.max(0, total - 1);
     for (let i = 0; i < nPoints; i++) {
-      const from = Math.floor(i * step);
-      const toEx = Math.floor((i + 1) * step);
-      let sum = 0, cnt = 0;
-      for (let k = from; k < toEx && k < total; k++) {
-        sum += st.sources[k].count; cnt++;
-      }
-      density[i] = cnt > 0 ? sum / cnt : 0;
+      const t = nPoints === 1 ? 0 : i / (nPoints - 1);
+      const pos = t * span;
+      const lo = Math.floor(pos);
+      const hi = Math.min(total - 1, lo + 1);
+      const frac = pos - lo;
+      density[i] = st.sources[lo].count * (1 - frac) +
+                   st.sources[hi].count * frac;
     }
 
     const pts = density.map(function (d, i) {
