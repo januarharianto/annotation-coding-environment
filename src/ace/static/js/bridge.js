@@ -854,23 +854,28 @@
       if (st.sources[k].count > maxCount) maxCount = st.sources[k].count;
     }
 
-    // Linear interpolation over source counts using the same X mapping the
-    // playhead uses (t = i/(nPoints-1), pos = t*(total-1)). This keeps
-    // density peaks aligned with source positions for any total.
-    const density = new Array(nPoints);
-    const span = Math.max(0, total - 1);
-    for (let i = 0; i < nPoints; i++) {
-      const t = nPoints === 1 ? 0 : i / (nPoints - 1);
-      const pos = t * span;
-      const lo = Math.floor(pos);
-      const hi = Math.min(total - 1, lo + 1);
-      const frac = pos - lo;
-      density[i] = st.sources[lo].count * (1 - frac) +
-                   st.sources[hi].count * frac;
+    // One vertex per source so peaks land exactly at playhead positions.
+    // Downsample with interpolation only when total exceeds the render
+    // budget, bounding path length for large datasets.
+    const renderPoints = Math.min(total, nPoints);
+    const density = new Array(renderPoints);
+    if (renderPoints === total) {
+      for (let i = 0; i < total; i++) density[i] = st.sources[i].count;
+    } else {
+      const span = total - 1;
+      for (let i = 0; i < renderPoints; i++) {
+        const pos = (i / (renderPoints - 1)) * span;
+        const lo = Math.floor(pos);
+        const hi = Math.min(total - 1, lo + 1);
+        const frac = pos - lo;
+        density[i] = st.sources[lo].count * (1 - frac) +
+                     st.sources[hi].count * frac;
+      }
     }
 
+    const xDenom = Math.max(1, renderPoints - 1);
     const pts = density.map(function (d, i) {
-      const x = padX + (nPoints === 1 ? 0 : (i / (nPoints - 1)) * innerW);
+      const x = padX + (i / xDenom) * innerW;
       const y = H - (d / maxCount) * (H - 4) - 2;
       return [x, y];
     });
