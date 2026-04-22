@@ -649,33 +649,51 @@ async def code_excerpts(request: Request, code_id: str):
 
 
 # ---------------------------------------------------------------------------
-# Annotation export
+# CSV-download helper + annotation/notes exports
 # ---------------------------------------------------------------------------
+
+
+def _csv_download(
+    request: Request,
+    suffix: str,
+    write_csv,
+) -> Response:
+    """Run `write_csv(conn, tmp_path)` against the project db, read the
+    resulting CSV back and return it as an attachment download named
+    `<project>_<suffix>_<timestamp>.csv`.
+
+    Shared by the annotations and notes export routes — both follow the
+    same open-db / write-to-tempfile / read-back / delete flow.
+    """
+    from datetime import datetime
+
+    from ace.models.project import get_project
+
+    with _project_db(request) as conn:
+        project = get_project(conn)
+        tmp = tempfile.NamedTemporaryFile(
+            mode="w", suffix=".csv", delete=False, encoding="utf-8"
+        )
+        tmp.close()
+        write_csv(conn, tmp.name)
+        content = Path(tmp.name).read_text(encoding="utf-8")
+        Path(tmp.name).unlink(missing_ok=True)
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M")
+    filename = _safe_filename(f"{project['name']}_{suffix}_{timestamp}.csv")
+    return Response(
+        content=content,
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.get("/export/annotations")
 async def export_annotations(request: Request):
     """Export all annotations as CSV download."""
     from ace.services.exporter import export_annotations_csv
-    from ace.models.project import get_project
-    from datetime import datetime
 
-    with _project_db(request) as conn:
-        project = get_project(conn)
-        tmp = tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False, encoding="utf-8")
-        tmp.close()
-        count = export_annotations_csv(conn, tmp.name)
-        content = Path(tmp.name).read_text(encoding="utf-8")
-        Path(tmp.name).unlink(missing_ok=True)
-
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M")
-    filename = _safe_filename(f"{project['name']}_annotations_{timestamp}.csv")
-
-    return Response(
-        content=content,
-        media_type="text/csv",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-    )
+    return _csv_download(request, "annotations", export_annotations_csv)
 
 
 # ---------------------------------------------------------------------------
@@ -1105,28 +1123,13 @@ async def put_source_note(
 @router.get("/export/notes")
 async def export_notes_route(request: Request):
     """Export all source notes for the current coder as a CSV download."""
-    from datetime import datetime
-
-    from ace.models.project import get_project
     from ace.services.notes_exporter import export_notes_csv
 
     coder_id = _require_coder(request)
-
-    with _project_db(request) as conn:
-        project = get_project(conn)
-        tmp = tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False, encoding="utf-8")
-        tmp.close()
-        export_notes_csv(conn, coder_id, tmp.name)
-        content = Path(tmp.name).read_text(encoding="utf-8")
-        Path(tmp.name).unlink(missing_ok=True)
-
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M")
-    filename = _safe_filename(f"{project['name']}_notes_{timestamp}.csv")
-
-    return Response(
-        content=content,
-        media_type="text/csv",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    return _csv_download(
+        request,
+        "notes",
+        lambda conn, path: export_notes_csv(conn, coder_id, path),
     )
 
 
