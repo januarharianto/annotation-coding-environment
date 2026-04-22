@@ -8,9 +8,9 @@
  *  5. Apply code (sentence-based + custom selection)
  *  6. Keyboard shortcuts
  *  7. Navigation (prev/next source)
- *  8. Source grid overlay
- *  9. Cheat sheet overlay
- * 10. Resize handle
+ *  8. Cheat sheet overlay
+ *  9. Resize handle
+ * 10. Source grid overlay
  * 11. Dialog close cleanup
  * 12. HTMX integration (configRequest, afterSwap, afterRequest)
  * 13. Code management helpers
@@ -18,10 +18,10 @@
  * 15. Code search / filter / create / group
  * 16. SVG overlay — annotation rendering
  * 17. Sidebar keyboard navigation (ARIA treeview)
- * 18. DOMContentLoaded init
- * 19. Import form column-role assignment
- * 20. Codebook menu
- * 21. Source note drawer
+ * 18. Codebook menu
+ * 19. Import form column-role assignment (delegated)
+ * 20. DOMContentLoaded init
+ * 21. Source note drawer (READ / EDIT / closed)
  * 22. Source-grid collapse toggle
  */
 
@@ -550,7 +550,7 @@
   }
 
   /* ================================================================
-   * 10. Resize handle
+   * 9. Resize handle
    * ================================================================ */
 
   function _initResize() {
@@ -687,9 +687,9 @@
     });
   }
 
-  // ==========================================================
-  // Source-grid renderer: sparkline minimap + tile viewport
-  // ==========================================================
+  /* ================================================================
+   * 10. Source grid overlay — sparkline minimap + tile viewport
+   * ================================================================ */
 
   let _aceSourceGridState = {
     sources: [],
@@ -1291,11 +1291,16 @@
     }
   }
 
-  // After HTMX swap: restore focus, rebuild tabs, update keycaps
-  // Use afterSettle (not afterSwap) — fires after HTMX finishes all DOM changes
+  // After HTMX swap: restore focus, rebuild tabs, update keycaps,
+  // and refresh the ambient status-bar segment. Use afterSettle (not
+  // afterSwap) — fires after HTMX finishes all DOM changes.
   document.addEventListener("htmx:afterSettle", function (evt) {
     const target = evt.detail.target;
     if (!target) return;
+
+    // Keep the ambient left segment of the statusbar in sync on every
+    // swap, regardless of target.
+    _setAmbient();
 
     if (target.id === "text-panel" || target.id === "coding-workspace") {
       window.__aceExcerptListActive = false;
@@ -1405,9 +1410,6 @@
 
   let _menuOpen = false;
   let _lastSelectedCodeId = null;
-
-  // No-op stubs — replaced by real implementations in later tasks
-  function _closeCodeMenu() {}
 
   const _COLOUR_PALETTE = ["#A91818","#557FE6","#6DA918","#E655D4","#18A991","#E6A455","#3C18A9","#5BE655","#A91848","#55B0E6","#9DA918","#C855E6","#18A960","#E67355","#1824A9","#8CE655","#A91879","#55E1E6","#A98418","#9755E6","#18A930","#E65567","#1855A9","#BCE655","#A918A9","#55E6BB","#A95418","#6755E6","#30A918","#E65598","#1885A9","#E6E055","#7818A9","#55E68B","#A92318","#5574E6"];
 
@@ -1737,8 +1739,7 @@
 
   let _activeCodeMenu = null;
 
-  // Override the no-op stub from section 13
-  _closeCodeMenu = function () {
+  function _closeCodeMenu() {
     if (_activeCodeMenu) {
       _activeCodeMenu.remove();
       _activeCodeMenu = null;
@@ -1746,7 +1747,7 @@
     }
     document.removeEventListener("click", _onMenuOutsideClick);
     document.removeEventListener("keydown", _onMenuEscape);
-  };
+  }
 
   function _openCodeMenu(x, y, codeId) {
     _closeAllPopovers();
@@ -3219,11 +3220,6 @@
       _focusSentence(0);
     }
     _focusTextPanel();
-  });
-
-  // Keep ambient status bar in sync after every HTMX swap.
-  document.addEventListener("htmx:afterSettle", function () {
-    _setAmbient();
   });
 
   /* ================================================================
