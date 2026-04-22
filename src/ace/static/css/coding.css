@@ -449,17 +449,33 @@
   flex-shrink: 0;
 }
 
-/* Hover-reveal variant — reserved space, opacity-only transition (no layout
- * shift). Keyboard users see it via focus-visible. */
+/* Hover-reveal variant — collapses to zero layout footprint when hidden so
+ * the parent chip's border/background doesn't stretch past the text when
+ * the chip is in an "active" state (flagged, has-note). Keyboard users
+ * see it via focus-visible. */
 .ace-hint--hover {
   opacity: 0;
-  transition: opacity 0.12s ease;
+  max-width: 0;
+  min-width: 0;
+  margin-left: 0;
+  padding-left: 0;
+  padding-right: 0;
+  border-width: 0;
+  overflow: hidden;
+  transition: max-width 0.14s ease, margin-left 0.14s ease,
+              padding 0.14s ease, border-width 0.14s ease,
+              opacity 0.1s ease 0.04s;
 }
 .ace-flag-btn:hover .ace-hint--hover,
 .ace-flag-btn:focus-visible .ace-hint--hover,
 .ace-note-pill:hover .ace-hint--hover,
 .ace-note-pill:focus-visible .ace-hint--hover {
   opacity: 1;
+  max-width: 40px;
+  min-width: 16px;
+  margin-left: 6px;
+  padding: 0 4px;
+  border-width: 1px;
 }
 
 .ace-sidebar-empty {
