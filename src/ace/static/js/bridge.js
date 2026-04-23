@@ -2912,19 +2912,23 @@
     }
   });
 
-  // V — open the coded-text view for the focused sidebar code.
+  // V — open the coded-text view. Uses the focused sidebar code when one is
+  // focused, otherwise falls back to the top code in the sidebar. The fallback
+  // keeps keyboard-first nav working without having to land on a row first.
   // Same precedent as n/q/x/z: reserved letter for a global action.
   document.addEventListener("keydown", function (evt) {
     if (evt.key !== "v" && evt.key !== "V") return;
     if (evt.metaKey || evt.ctrlKey || evt.altKey || evt.shiftKey) return;
-    // Don't hijack typing in form fields
     const tag = (evt.target.tagName || "").toLowerCase();
     if (tag === "input" || tag === "textarea" || evt.target.isContentEditable) return;
-    // Only act when focus is on a sidebar code row
     const active = document.activeElement;
-    if (!active) return;
-    const treeItem = active.closest("#code-tree [role='treeitem'][data-code-id]");
-    if (!treeItem) return;
+    let treeItem = active && active.closest
+      ? active.closest("#code-tree [role='treeitem'][data-code-id]")
+      : null;
+    if (!treeItem) {
+      treeItem = document.querySelector("#code-tree [role='treeitem'][data-code-id]");
+    }
+    if (!treeItem) return;  // empty codebook
     const codeId = treeItem.getAttribute("data-code-id");
     if (!codeId) return;
     evt.preventDefault();
