@@ -58,16 +58,48 @@
     </div>`;
   }).join("");
 
-  const displayOrder = sources.map((s) => s.idx);
+  // displayOrder drives both tracks order (left column) and table grouping.
+  // Rebuilt whenever `sortBy` changes so the two columns read top-to-bottom
+  // in the same order.
+  let displayOrder = computeDisplayOrder();
 
   function bySrcIdx(idx) { return sources.find((s) => s.idx === idx); }
+
+  function computeDisplayOrder() {
+    const entries = sources.slice();
+    if (sortBy === "length") {
+      // Longest single excerpt per source, desc.
+      entries.sort((a, b) => {
+        const aMax = a.excerpts.reduce((m, e) => Math.max(m, e.text.length), 0);
+        const bMax = b.excerpts.reduce((m, e) => Math.max(m, e.text.length), 0);
+        return bMax - aMax;
+      });
+    } else if (sortBy === "position") {
+      // Earliest excerpt start (pos_pct), asc.
+      entries.sort((a, b) => {
+        const aMin = a.excerpts.reduce((m, e) => Math.min(m, e.pos_pct), Infinity);
+        const bMin = b.excerpts.reduce((m, e) => Math.min(m, e.pos_pct), Infinity);
+        return aMin - bMin;
+      });
+    }
+    return entries.map((s) => s.idx);
+  }
+
+  // Reorder track rows in-place to match displayOrder. appendChild on an
+  // already-attached node moves it; listeners and per-row state survive.
+  function renderTracks() {
+    displayOrder.forEach((idx) => {
+      const row = tracksEl.querySelector(`.cv-track-row[data-src-idx="${idx}"]`);
+      if (row) tracksEl.appendChild(row);
+    });
+  }
 
   // --- Table rendering (respects selection + sort + filter) ---
   function renderTable() {
     let srcSet;
     if (selectedExcerpt) srcSet = [selectedExcerpt.srcIdx];
     else if (selectedSources.size === 0) srcSet = displayOrder.slice();
-    else srcSet = [...selectedSources].sort((a, b) => a - b);
+    else srcSet = displayOrder.filter((idx) => selectedSources.has(idx));
 
     // Flatten to {src, excerpt, localIdx}
     let items = [];
@@ -393,6 +425,8 @@
           c.setAttribute("aria-pressed", "false"));
         chip.setAttribute("aria-pressed", "true");
         sortBy = chip.getAttribute("data-sort");
+        displayOrder = computeDisplayOrder();
+        renderTracks();
         updateUI();
       });
     });
