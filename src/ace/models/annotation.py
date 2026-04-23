@@ -310,11 +310,10 @@ def get_code_view_data(
         sid = r["source_id"]
         if sid not in groups:
             groups[sid] = {
-                "idx": r["sort_order"] + 1,
+                "idx": r["sort_order"],  # source's 1-based project sort_order (see source.add_source)
                 "display_id": r["display_id"],
                 "name": r["display_id"],
                 "count": 0,
-                "source_length": r["source_length"],
                 "excerpts": [],
             }
         src_entry = groups[sid]
@@ -331,10 +330,7 @@ def get_code_view_data(
             "text": r["selected_text"] or "",
         })
 
-    sources = []
-    for s in groups.values():
-        s.pop("source_length", None)
-        sources.append(s)
+    sources = list(groups.values())
 
     return {
         "code": {

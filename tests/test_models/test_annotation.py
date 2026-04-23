@@ -393,8 +393,12 @@ def test_get_code_view_data_shape_and_stats():
     assert data["code"] == {"id": code, "name": "Theme A", "colour": "#123456"}
     assert data["stats"] == {"excerpts": 3, "sources_with_hits": 2, "total_sources": 3}
     assert len(data["sources"]) == 2
+    # Source idxes match their 1-based sort_order; S003 has no hits so only S001+S002 appear
+    idxes = sorted(s["idx"] for s in data["sources"])
+    assert idxes == [1, 2]
     s1_entry = next(s for s in data["sources"] if s["display_id"] == "S001")
     assert s1_entry["count"] == 2
+    assert s1_entry["idx"] == 1  # S001 is the first source added, sort_order == 1
     assert len(s1_entry["excerpts"]) == 2
     # First excerpt: start 0/100 = 0.0%, width 10/100 = 10.0%
     assert s1_entry["excerpts"][0]["pos_pct"] == pytest.approx(0.0)
