@@ -431,13 +431,57 @@
       window.location.href = `/code/${id}/view`;
     }, true);
 
-    // Suppress the right-click context menu on code rows — bridge.js's menu
-    // offers rename/colour/move/delete actions that belong on /code, not here.
+    // Replace the codebook-edit context menu with a read-only info popover.
+    // Editing actions (rename / colour / move / delete) belong on /code.
     document.addEventListener("contextmenu", (evt) => {
       if (!evt.target.closest("#code-sidebar .ace-code-row[data-code-id]")) return;
       evt.preventDefault();
       evt.stopImmediatePropagation();
+      _showInfoMenu(evt.clientX, evt.clientY);
     }, true);
+
+    function _showInfoMenu(x, y) {
+      document.querySelectorAll(".cv-info-menu").forEach((el) => el.remove());
+      const menu = document.createElement("div");
+      menu.className = "cv-info-menu";
+      menu.setAttribute("role", "dialog");
+      menu.setAttribute("aria-label", "Coded text view — info");
+      menu.innerHTML = `
+        <div class="cv-info-menu-title">Coded text view</div>
+        <div class="cv-info-menu-body">
+          Code editing is disabled here.<br>
+          Open the <a href="/code">source view</a> to rename, recolour,
+          reorder, or delete codes.
+        </div>`;
+      menu.style.left = x + "px";
+      menu.style.top = y + "px";
+      document.body.appendChild(menu);
+
+      // Clamp to viewport so edge right-clicks don't overflow
+      const rect = menu.getBoundingClientRect();
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      if (x + rect.width > vw - 4) menu.style.left = (vw - rect.width - 8) + "px";
+      if (y + rect.height > vh - 4) menu.style.top = (vh - rect.height - 8) + "px";
+
+      const dismiss = (e) => {
+        if (e && e.target && menu.contains(e.target)) return;
+        menu.remove();
+        document.removeEventListener("click", dismiss, true);
+        document.removeEventListener("contextmenu", dismiss, true);
+        document.removeEventListener("keydown", keyDismiss, true);
+      };
+      const keyDismiss = (e) => {
+        if (e.key === "Escape") { dismiss(); e.preventDefault(); }
+      };
+      // Delay registration so the triggering contextmenu event doesn't
+      // immediately dismiss the popover it just created.
+      setTimeout(() => {
+        document.addEventListener("click", dismiss, true);
+        document.addEventListener("contextmenu", dismiss, true);
+        document.addEventListener("keydown", keyDismiss, true);
+      }, 0);
+    }
   })();
 
   // --- Sidebar resize — shared ace-sidebar-width localStorage with /code ---

@@ -79,9 +79,35 @@
   cursor: not-allowed;
   pointer-events: none;
 }
-/* Right-click context menu (bridge.js) is suppressed in code_view.js too,
-   but dim the hover affordance so users don't expect a menu. */
+/* Right-click on a code row shows a small info popover (not the edit menu).
+   The popover is rendered by code_view.js. */
 #code-sidebar .ace-code-row { -webkit-user-select: none; user-select: none; }
+
+.cv-info-menu {
+  position: fixed;
+  z-index: 1000;
+  background: var(--ace-bg);
+  border: 1px solid var(--ace-border);
+  border-radius: 4px;
+  padding: 10px 12px;
+  font-size: 12px;
+  line-height: 1.5;
+  max-width: 260px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.14);
+}
+.cv-info-menu-title {
+  font-weight: 600;
+  margin-bottom: 4px;
+  color: var(--ace-text);
+}
+.cv-info-menu-body {
+  color: var(--ace-text-muted);
+}
+.cv-info-menu-body a {
+  color: var(--ace-text);
+  text-decoration: underline;
+}
+.cv-info-menu-body a:hover { color: var(--ace-focus); }
 
 .cv-main {
   display: flex;
