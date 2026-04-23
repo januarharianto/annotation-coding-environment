@@ -2931,6 +2931,25 @@
     }
   });
 
+  // V — open the coded-text view for the focused sidebar code.
+  // Same precedent as n/q/x/z: reserved letter for a global action.
+  document.addEventListener("keydown", function (evt) {
+    if (evt.key !== "v" && evt.key !== "V") return;
+    if (evt.metaKey || evt.ctrlKey || evt.altKey) return;
+    // Don't hijack typing in form fields
+    const tag = (evt.target.tagName || "").toLowerCase();
+    if (tag === "input" || tag === "textarea" || evt.target.isContentEditable) return;
+    // Only act when focus is on a sidebar code row
+    const active = document.activeElement;
+    if (!active) return;
+    const treeItem = active.closest("#code-tree [role='treeitem'][data-code-id]");
+    if (!treeItem) return;
+    const codeId = treeItem.getAttribute("data-code-id");
+    if (!codeId) return;
+    evt.preventDefault();
+    window.location.href = `/code/${codeId}/view`;
+  });
+
   // --- Group expand / collapse ---
 
   function _promptNewGroupForCode(codeRow) {

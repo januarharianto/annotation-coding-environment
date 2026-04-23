@@ -228,6 +228,7 @@ async def coding_page(
     request: Request,
     index: int = Query(default=0),
     open_path: str | None = Query(default=None, alias="open"),
+    note: int = Query(default=0),
 ):
     # Tauri file association: open a project before rendering the coding page
     if open_path:
@@ -263,6 +264,7 @@ async def coding_page(
             raise HtmxRedirect("/import")
 
         context = _coding_context(conn, coder_id, index, project_path=project_path)
+        context["open_note_drawer"] = bool(note)
     finally:
         db_gen.close()
 

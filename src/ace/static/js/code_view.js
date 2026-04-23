@@ -336,6 +336,53 @@
     updateUI();
   });
 
+  // --- Global key handlers (Esc two-stage + N exits-and-opens-notes) ---
+  // Registered on the capturing phase with stopImmediatePropagation so the
+  // page's bridge.js (which also handles N and Esc on the coding page) never
+  // sees these events when we're on /code/{id}/view.
+  document.addEventListener("keydown", (evt) => {
+    // Don't hijack keys while the user is typing in the filter field — but
+    // still let Esc clear the field even there.
+    const searchEl = document.getElementById("cv-search");
+    if (evt.target === searchEl) {
+      if (evt.key === "Escape") {
+        evt.target.value = "";
+        filterText = "";
+        evt.target.blur();
+        updateUI();
+        evt.preventDefault();
+        evt.stopImmediatePropagation();
+      }
+      return;
+    }
+
+    if (evt.key === "Escape") {
+      if (filterText || selectedSources.size > 0 || selectedExcerpt) {
+        filterText = "";
+        selectedSources.clear();
+        selectedExcerpt = null;
+        anchorIdx = null;
+        if (searchEl) searchEl.value = "";
+        updateUI();
+      } else {
+        window.location.href = "/code";
+      }
+      evt.preventDefault();
+      evt.stopImmediatePropagation();
+      return;
+    }
+
+    if (evt.key === "n" || evt.key === "N") {
+      // Don't hijack letter-typing in form fields
+      const tag = (evt.target.tagName || "").toLowerCase();
+      if (tag === "input" || tag === "textarea" || evt.target.isContentEditable) return;
+      window.location.href = "/code?note=1";
+      evt.preventDefault();
+      evt.stopImmediatePropagation();
+      return;
+    }
+  }, true); // capture phase — wins over bridge.js
+
   // --- Sort chips ---
   const toolbarEl = document.getElementById("cv-toolbar");
   if (toolbarEl) {

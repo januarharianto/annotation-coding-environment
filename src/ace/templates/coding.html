@@ -23,10 +23,12 @@
   if (_gh) document.documentElement.style.setProperty("--ace-grid-height", _gh);
 </script>
 <script>
-  // Restore note drawer state before CSS loads to prevent flash on reload
+  // Restore note drawer state before CSS loads to prevent flash on reload.
+  // Also honour ?note=1 (set when arriving from /code/{id}/view via N key).
   try {
-    if (localStorage.getItem("ace-note-open") === "1") {
+    if ({{ open_note_drawer|default(false)|tojson }} || localStorage.getItem("ace-note-open") === "1") {
       document.documentElement.dataset.aceNoteOpen = "1";
+      if ({{ open_note_drawer|default(false)|tojson }}) localStorage.setItem("ace-note-open", "1");
     }
   } catch (_) {}
 </script>
