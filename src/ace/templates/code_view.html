@@ -5,14 +5,65 @@
 {% block head %}
 <link rel="stylesheet" href="/static/css/code_view.css">
 <style id="code-colour">
-  :root { --code-colour: {{ code_view_data.code.colour }}; }
+  :root {
+    --code-colour: {{ code_view_data.code.colour }};
+    --code-bg: {{ code_view_data.code.colour }}22; /* 0.13 alpha */
+  }
 </style>
 {% endblock %}
 
 {% block content %}
 <div id="code-view" data-code-id="{{ code_view_data.code.id }}">
-  <h1 class="ace-sr-only">Coded text: {{ code_view_data.code.name }}</h1>
-  <!-- Shell filled in Task 3 -->
+  <aside class="cv-sidebar" aria-label="Codebook">
+    <div class="cv-sidebar-brand">ACE</div>
+    <a class="cv-sidebar-back" href="/code">← Codebook</a>
+  </aside>
+
+  <main class="cv-main">
+    <header class="cv-header">
+      <a class="cv-back" href="/code">← Back to source</a>
+      <div class="cv-title">
+        <span class="cv-dot" aria-hidden="true"></span>
+        <span class="cv-code-name">{{ code_view_data.code.name }}</span>
+      </div>
+      <div class="cv-summary">
+        <b>{{ code_view_data.stats.excerpts }}</b> excerpts across
+        <b>{{ code_view_data.stats.sources_with_hits }} of {{ code_view_data.stats.total_sources }}</b> sources
+      </div>
+      <div class="cv-live" aria-live="polite" aria-atomic="true" id="cv-live"></div>
+    </header>
+
+    <div class="cv-body">
+      <section class="cv-tracks-col" aria-label="Source tracks">
+        <div class="cv-tracks" id="cv-tracks" role="listbox"
+             aria-multiselectable="true"
+             aria-label="Sources with '{{ code_view_data.code.name }}' excerpts">
+          <!-- populated by code_view.js -->
+        </div>
+      </section>
+
+      <section class="cv-excerpts-col" aria-label="Excerpts">
+        <div class="cv-context">
+          <span class="cv-ctx-text" id="cv-ctx">
+            Showing <b>all</b> sources ·
+            <b>{{ code_view_data.stats.excerpts }}</b> excerpts
+          </span>
+          <button class="cv-clear" id="cv-clear" disabled>Clear</button>
+        </div>
+        <div class="cv-toolbar" id="cv-toolbar" role="group" aria-label="Sort excerpts by">
+          <span class="cv-tb-label">Sort</span>
+          <button class="cv-tb-chip" data-sort="source" aria-pressed="true">Source</button>
+          <button class="cv-tb-chip" data-sort="length" aria-pressed="false">Length</button>
+          <button class="cv-tb-chip" data-sort="position" aria-pressed="false">Position</button>
+          <input class="cv-tb-search" id="cv-search" type="search"
+                 placeholder="Filter excerpt text…" aria-label="Filter excerpts by text">
+        </div>
+        <div class="cv-table" id="cv-table">
+          <!-- populated by code_view.js -->
+        </div>
+      </section>
+    </div>
+  </main>
 </div>
 <script id="ace-codeview-data" type="application/json">{{ code_view_data|tojson }}</script>
 {% endblock %}
