@@ -1,0 +1,74 @@
+{# Shared codebook sidebar: brand + toolbar + tree.
+   Used by /code (coding.html) and /code/{id}/view (code_view.html).
+   Required context: version, project_file_stem, grouped_codes,
+                     ungrouped_codes, codes (for empty-state check). #}
+<div class="ace-sidebar-brand" role="banner">
+  <a href="/" class="ace-sidebar-brand-link" title="ACE v{{ version }}"><img src="/static/logo-light.svg" alt="ACE" class="ace-sidebar-logo"></a>
+  <span class="ace-sidebar-brand-project" title="{{ project_file_stem }}">{{ project_file_stem }}</span>
+  <div class="ace-sidebar-brand-actions">
+    <button type="button" class="ace-sidebar-help-btn" aria-label="Keyboard shortcuts" id="sidebar-help-btn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></button>
+    <div class="ace-codebook-menu" id="codebook-menu-wrapper">
+      <button type="button" class="ace-codebook-menu-btn" id="codebook-menu-btn"
+              aria-label="Settings"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
+      <div class="ace-codebook-dropdown" id="codebook-dropdown" style="display:none">
+        <button type="button" class="ace-codebook-dropdown-item" id="codebook-menu-import-btn">Import codebook (CSV)</button>
+        <button type="button" class="ace-codebook-dropdown-item" id="codebook-export-btn">Export codebook (CSV)</button>
+        <hr class="ace-codebook-dropdown-sep">
+        <button type="button" class="ace-codebook-dropdown-item" id="export-annotations-btn">Export all annotations (CSV)</button>
+        <button type="button" class="ace-codebook-dropdown-item" id="export-notes-btn">Export source notes (CSV)</button>
+        <hr class="ace-codebook-dropdown-sep">
+        <button type="button" class="ace-codebook-dropdown-item" id="fullscreen-btn">Fullscreen</button>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="ace-sidebar-toolbar">
+  <div class="ace-sidebar-search-wrap">
+    <input type="search" class="ace-sidebar-search" placeholder="Filter codes"
+           id="code-search-input" autocomplete="off"
+           aria-controls="code-tree" aria-label="Filter codes"
+           aria-keyshortcuts="/">
+    <span class="ace-hint ace-sidebar-search-hint" aria-hidden="true">/</span>
+  </div>
+</div>
+<div id="code-tree" role="tree" aria-label="Code list" class="ace-sidebar-codes">
+  {% for group_name, group_codes in grouped_codes %}
+  <div role="treeitem" aria-expanded="true" aria-level="1"
+       class="ace-code-group-header" data-group="{{ group_name }}"
+       tabindex="-1"><span class="ace-group-toggle"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5l4 4 4-4"/></svg></span> <span class="ace-group-label">{{ group_name }}</span></div>
+  <div role="group">
+    {% for code in group_codes %}
+    <div role="treeitem" aria-level="2"
+         class="ace-code-row" data-code-id="{{ code['id'] }}"
+         style="border-left-color: {{ code['colour'] }}"
+         tabindex="-1">
+      <span class="ace-code-name">{{ code['name'] }}</span>
+      <span class="ace-keycap" title="Click to apply"></span>
+    </div>
+    {% endfor %}
+  </div>
+  {% endfor %}
+  {% if ungrouped_codes %}
+  <div role="treeitem" aria-expanded="true" aria-level="1"
+       class="ace-code-group-header" data-group=""
+       tabindex="-1"><span class="ace-group-toggle"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5l4 4 4-4"/></svg></span> <span class="ace-group-label">Ungrouped</span></div>
+  <div role="group">
+    {% for code in ungrouped_codes %}
+    <div role="treeitem" aria-level="2"
+         class="ace-code-row" data-code-id="{{ code['id'] }}"
+         style="border-left-color: {{ code['colour'] }}"
+         tabindex="-1">
+      <span class="ace-code-name">{{ code['name'] }}</span>
+      <span class="ace-keycap" title="Click to apply"></span>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+  {% if not codes %}
+  <div class="ace-sidebar-empty">
+    No codes yet. Type a name above and press Enter,
+    or <a href="#" style="color:var(--ace-text);text-decoration:underline"
+          onclick="event.preventDefault();document.getElementById('codebook-menu-import-btn').click()">import from CSV</a>.
+  </div>
+  {% endif %}
+</div>

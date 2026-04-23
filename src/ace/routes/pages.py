@@ -12,7 +12,7 @@ from fastapi.responses import HTMLResponse
 
 from ace import __version__
 from ace.app import HtmxRedirect, get_db
-from ace.models.annotation import get_annotation_counts_by_source, get_annotations_for_source
+from ace.models.annotation import get_annotation_counts_by_source, get_annotations_for_source, get_code_view_data
 from ace.models.assignment import add_assignment, get_assignments_for_coder
 from ace.models.codebook import list_codes
 from ace.models.project import get_project
@@ -228,6 +228,7 @@ async def coding_page(
     request: Request,
     index: int = Query(default=0),
     open_path: str | None = Query(default=None, alias="open"),
+    note: int = Query(default=0),
 ):
     # Tauri file association: open a project before rendering the coding page
     if open_path:
@@ -263,8 +264,60 @@ async def coding_page(
             raise HtmxRedirect("/import")
 
         context = _coding_context(conn, coder_id, index, project_path=project_path)
+        context["open_note_drawer"] = bool(note)
     finally:
         db_gen.close()
 
     templates = request.app.state.templates
     return templates.TemplateResponse(request, "coding.html", context)
+
+
+@router.get("/code/{code_id}/view", response_class=HTMLResponse)
+async def code_view_page(request: Request, code_id: str):
+    project_path: str | None = getattr(request.app.state, "project_path", None)
+    if project_path is None or not Path(project_path).exists():
+        raise HtmxRedirect("/")
+
+    coder_id: str | None = getattr(request.app.state, "coder_id", None)
+    if coder_id is None:
+        raise HtmxRedirect("/")
+
+    db_gen = get_db(request)
+    conn = next(db_gen)
+    try:
+        data = get_code_view_data(conn, code_id, coder_id)
+        if data is None:
+            raise HtmxRedirect("/code")
+        codes_list = [dict(c) for c in list_codes(conn)]
+    finally:
+        db_gen.close()
+
+    # Group codes for the shared sidebar partial (same shape as _coding_context).
+    group_dict: dict[str, list[dict]] = {}
+    ungrouped_codes: list[dict] = []
+    for code in codes_list:
+        gn = code.get("group_name")
+        if gn:
+            group_dict.setdefault(gn, []).append(code)
+        else:
+            ungrouped_codes.append(code)
+    grouped_codes = sorted(
+        group_dict.items(),
+        key=lambda x: min(c.get("sort_order", 0) for c in x[1]),
+    )
+
+    project_file_stem = Path(project_path).stem
+
+    templates = request.app.state.templates
+    return templates.TemplateResponse(
+        request,
+        "code_view.html",
+        {
+            "code_view_data": data,
+            "codes": codes_list,
+            "grouped_codes": grouped_codes,
+            "ungrouped_codes": ungrouped_codes,
+            "project_file_stem": project_file_stem,
+            "version": __version__,
+        },
+    )

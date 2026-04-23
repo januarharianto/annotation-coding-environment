@@ -2,6 +2,7 @@
 
 import sqlite3
 import uuid
+from collections import OrderedDict
 from datetime import datetime, timezone
 
 
@@ -262,3 +263,85 @@ def replay_merge_add(
     except Exception:
         conn.rollback()
         raise
+
+
+def get_code_view_data(
+    conn: sqlite3.Connection,
+    code_id: str,
+    coder_id: str,
+) -> dict | None:
+    """Return everything the /code/{id}/view page needs in one pass.
+
+    Computes per-source text length via SQL LENGTH(); no stored column.
+    Returns None if the code doesn't exist in the codebook.
+    """
+    code_row = conn.execute(
+        "SELECT id, name, colour FROM codebook_code WHERE id = ?",
+        (code_id,),
+    ).fetchone()
+    if code_row is None:
+        return None
+
+    total_sources = conn.execute("SELECT COUNT(*) FROM source").fetchone()[0]
+
+    rows = conn.execute(
+        """
+        SELECT a.id           AS ann_id,
+               a.start_offset AS start_offset,
+               a.end_offset   AS end_offset,
+               a.selected_text AS selected_text,
+               s.id           AS source_id,
+               s.display_id   AS display_id,
+               s.sort_order   AS sort_order,
+               LENGTH(sc.content_text) AS source_length
+        FROM annotation a
+        JOIN source s         ON a.source_id = s.id
+        JOIN source_content sc ON sc.source_id = s.id
+        WHERE a.code_id = ?
+          AND a.coder_id = ?
+          AND a.deleted_at IS NULL
+        ORDER BY s.sort_order, a.start_offset
+        """,
+        (code_id, coder_id),
+    ).fetchall()
+
+    groups: OrderedDict = OrderedDict()
+    for r in rows:
+        sid = r["source_id"]
+        if sid not in groups:
+            groups[sid] = {
+                "idx": r["sort_order"],  # source's 1-based project sort_order (see source.add_source)
+                "display_id": r["display_id"],
+                "name": r["display_id"],
+                "count": 0,
+                "excerpts": [],
+            }
+        src_entry = groups[sid]
+        src_entry["count"] += 1
+        src_length = r["source_length"] or 1
+        pos_pct = 100.0 * r["start_offset"] / src_length
+        width_pct = 100.0 * (r["end_offset"] - r["start_offset"]) / src_length
+        src_entry["excerpts"].append({
+            "id": r["ann_id"],
+            "start": r["start_offset"],
+            "end": r["end_offset"],
+            "pos_pct": round(pos_pct, 3),
+            "width_pct": round(width_pct, 3),
+            "text": r["selected_text"] or "",
+        })
+
+    sources = list(groups.values())
+
+    return {
+        "code": {
+            "id": code_row["id"],
+            "name": code_row["name"],
+            "colour": code_row["colour"],
+        },
+        "stats": {
+            "excerpts": len(rows),
+            "sources_with_hits": len(groups),
+            "total_sources": total_sources,
+        },
+        "sources": sources,
+    }

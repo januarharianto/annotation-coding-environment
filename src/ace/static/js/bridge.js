@@ -171,11 +171,12 @@
     });
   }
 
-  // Reserved letters: q (repeat), x (delete), z (undo), n (open note panel)
+  // Reserved letters: q (repeat), x (delete), z (undo), n (open note panel),
+  //                   v (open coded text view)
   const _KEYCAP_LABELS = [
     "1","2","3","4","5","6","7","8","9","0",
     "a","b","c","d","e","f","g","h","i","j","k","l","m","o","p",
-    "r","s","t","u","v","w","y"
+    "r","s","t","u","w","y"
   ];
 
   function _keylabel(i) {
@@ -205,8 +206,7 @@
   // to avoid issues with hx-sync queuing and param injection timing.
 
   function _applyCodeToSentence(codeId) {
-    if (window.__aceExcerptListActive) return;
-    if (window.__aceFocusIndex < 0) return;
+    if (!Number.isFinite(window.__aceFocusIndex) || window.__aceFocusIndex < 0) return;
 
     htmx.ajax("POST", "/api/code/apply-sentence", {
       target: "#text-panel",
@@ -285,6 +285,9 @@
     // Only handle keys when text panel (or nothing specific) is focused
     let zone = _activeZone();
     if (zone === "search" || zone === "tree") return;
+    // Skip entirely on pages without the coding surface (e.g. /code/{id}/view
+    // shares bridge.js but has no #text-panel; its shortcuts live in code_view.js).
+    if (!document.getElementById("text-panel")) return;
 
     const key = e.key;
     const ctrl = e.ctrlKey || e.metaKey;
@@ -1218,26 +1221,6 @@
     }
   });
 
-  // Click on excerpt card to navigate to that source + highlight
-  document.addEventListener("click", function(e) {
-    const card = e.target.closest(".ace-excerpt-card");
-    if (!card) return;
-    const sourceIndex = card.getAttribute("data-source-index");
-    const startOffset = card.getAttribute("data-start-offset");
-    if (sourceIndex !== null) {
-      window.location.href = `/code?index=${sourceIndex}&highlight=${startOffset}`;
-    }
-  });
-
-  // Click on back button to return from excerpt list
-  document.addEventListener("click", function(e) {
-    if (!e.target.closest(".ace-excerpt-back")) return;
-    const idx = window.__aceExcerptReturnIndex;
-    if (idx !== undefined && idx !== null) {
-      window.aceNavigate(idx);
-    }
-  });
-
   // --- Focus restoration across HTMX swaps ---
 
   const _sidebarFocusState = {
@@ -1304,7 +1287,6 @@
     if (!target) return;
 
     if (target.id === "text-panel" || target.id === "coding-workspace") {
-      window.__aceExcerptListActive = false;
       _restoreFocus();
       _paintSvg();
 
@@ -1658,6 +1640,10 @@
   let _isDragging = false;
 
   function _initSortable() {
+    // Sortable.min.js only loads on /code (coding.html). On /code/{id}/view the
+    // sidebar partial is shared but drag-to-reorder isn't wired — bail quietly.
+    if (typeof Sortable === "undefined") return;
+
     _sortableInstances.forEach(function (s) { s.destroy(); });
     _sortableInstances = [];
 
@@ -1761,12 +1747,9 @@
     const items = [
       { label: "Rename", hint: "F2", action: function () { _closeCodeMenu(); _startInlineRename(codeId); } },
       { label: "Colour", hint: "", action: function () { _closeCodeMenu(); _openColourPopover(codeId); } },
-      { label: "View coded text", action: function () {
+      { label: "View coded text", hint: "V", action: function () {
           _closeCodeMenu();
-          window.__aceExcerptReturnIndex = window.__aceCurrentIndex;
-          htmx.ajax("GET", `/api/code/${codeId}/excerpts`, {
-            target: "#text-panel", swap: "outerHTML"
-          });
+          window.location.href = `/code/${codeId}/view`;
         }
       },
       { label: "Move Up", hint: "Alt+Shift+\u2191", action: function () { _closeCodeMenu(); _moveCode(codeId, -1); } },
@@ -1876,7 +1859,6 @@
 
   /** Unified apply helper used by keycap click, search Enter, and tree Enter. */
   function _applyCode(codeId) {
-    if (window.__aceExcerptListActive) return;
     let codeName = "";
     let row = document.querySelector(`.ace-code-row[data-code-id="${codeId}"]`);
     if (row) {
@@ -2724,7 +2706,6 @@
     if (!tree || !tree.contains(document.activeElement)) return;
     const active = document.activeElement;
     if (!active || active.getAttribute("role") !== "treeitem") return;
-    if (window.__aceExcerptListActive) return;
     if (active.querySelector('[contenteditable="true"]')) return;
 
     const key = e.key;
@@ -2929,6 +2910,25 @@
       _focusTextPanel();
       return;
     }
+  });
+
+  // V — open the coded-text view for the focused sidebar code.
+  // Same precedent as n/q/x/z: reserved letter for a global action.
+  document.addEventListener("keydown", function (evt) {
+    if (evt.key !== "v" && evt.key !== "V") return;
+    if (evt.metaKey || evt.ctrlKey || evt.altKey || evt.shiftKey) return;
+    // Don't hijack typing in form fields
+    const tag = (evt.target.tagName || "").toLowerCase();
+    if (tag === "input" || tag === "textarea" || evt.target.isContentEditable) return;
+    // Only act when focus is on a sidebar code row
+    const active = document.activeElement;
+    if (!active) return;
+    const treeItem = active.closest("#code-tree [role='treeitem'][data-code-id]");
+    if (!treeItem) return;
+    const codeId = treeItem.getAttribute("data-code-id");
+    if (!codeId) return;
+    evt.preventDefault();
+    window.location.href = `/code/${codeId}/view`;
   });
 
   // --- Group expand / collapse ---

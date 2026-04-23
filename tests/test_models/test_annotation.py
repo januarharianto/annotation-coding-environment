@@ -1,14 +1,20 @@
+import sqlite3
+
+import pytest
+
 from ace.db.connection import create_project
+from ace.db.schema import create_schema
 from ace.models.annotation import (
     add_annotation,
     compact_deleted,
     delete_annotation,
     get_annotations_for_source,
+    get_code_view_data,
     list_annotations,
     undelete_annotation,
 )
-from ace.models.project import add_coder
 from ace.models.codebook import add_code
+from ace.models.project import add_coder
 from ace.models.source import add_source
 
 
@@ -349,3 +355,86 @@ def test_replay_merge_add_re_merges(tmp_db):
             "SELECT deleted_at FROM annotation WHERE id = ?", (orig,)
         ).fetchone()
         assert row["deleted_at"] is not None
+
+
+# ----------------------------------------------------------------------
+# get_code_view_data — page data helper
+# ----------------------------------------------------------------------
+
+
+def _fresh_conn():
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys = ON")
+    create_schema(conn)
+    return conn
+
+
+def test_get_code_view_data_returns_none_for_unknown_code():
+    conn = _fresh_conn()
+    assert get_code_view_data(conn, "does-not-exist", "coder-1") is None
+
+
+def test_get_code_view_data_shape_and_stats():
+    conn = _fresh_conn()
+
+    coder = add_coder(conn, "alice")
+    s1 = add_source(conn, "S001", "a" * 100, "row")
+    s2 = add_source(conn, "S002", "b" * 200, "row")
+    add_source(conn, "S003", "c" * 50, "row")  # no annotations → excluded
+    code = add_code(conn, "Theme A", "#123456")
+
+    add_annotation(conn, s1, coder, code, 0, 10, "aaaaaaaaaa")
+    add_annotation(conn, s1, coder, code, 20, 25, "aaaaa")
+    add_annotation(conn, s2, coder, code, 100, 120, "bbbbbbbbbbbbbbbbbbbb")
+
+    data = get_code_view_data(conn, code, coder)
+
+    assert data["code"] == {"id": code, "name": "Theme A", "colour": "#123456"}
+    assert data["stats"] == {"excerpts": 3, "sources_with_hits": 2, "total_sources": 3}
+    assert len(data["sources"]) == 2
+    # Source idxes match their 1-based sort_order; S003 has no hits so only S001+S002 appear
+    idxes = sorted(s["idx"] for s in data["sources"])
+    assert idxes == [1, 2]
+    s1_entry = next(s for s in data["sources"] if s["display_id"] == "S001")
+    assert s1_entry["count"] == 2
+    assert s1_entry["idx"] == 1  # S001 is the first source added, sort_order == 1
+    assert len(s1_entry["excerpts"]) == 2
+    # First excerpt: start 0/100 = 0.0%, width 10/100 = 10.0%
+    assert s1_entry["excerpts"][0]["pos_pct"] == pytest.approx(0.0)
+    assert s1_entry["excerpts"][0]["width_pct"] == pytest.approx(10.0)
+    assert s1_entry["excerpts"][0]["text"] == "aaaaaaaaaa"
+    # Sorted by start_offset
+    assert s1_entry["excerpts"][0]["start"] == 0
+    assert s1_entry["excerpts"][1]["start"] == 20
+
+
+def test_get_code_view_data_excludes_soft_deleted():
+    conn = _fresh_conn()
+
+    coder = add_coder(conn, "alice")
+    src = add_source(conn, "S001", "x" * 100, "row")
+    code = add_code(conn, "Theme", "#111111")
+    ann1 = add_annotation(conn, src, coder, code, 0, 10, "xxxxxxxxxx")
+    ann2 = add_annotation(conn, src, coder, code, 20, 30, "xxxxxxxxxx")
+    delete_annotation(conn, ann2)
+
+    data = get_code_view_data(conn, code, coder)
+    assert data["stats"]["excerpts"] == 1
+    assert len(data["sources"][0]["excerpts"]) == 1
+    assert data["sources"][0]["excerpts"][0]["id"] == ann1
+
+
+def test_get_code_view_data_filters_by_coder():
+    """Only the requested coder's annotations are returned."""
+    conn = _fresh_conn()
+
+    alice = add_coder(conn, "alice")
+    bob = add_coder(conn, "bob")
+    src = add_source(conn, "S001", "x" * 100, "row")
+    code = add_code(conn, "Theme", "#111111")
+    add_annotation(conn, src, alice, code, 0, 10, "xxxxxxxxxx")
+    add_annotation(conn, src, bob, code, 20, 30, "xxxxxxxxxx")
+
+    data = get_code_view_data(conn, code, alice)
+    assert data["stats"]["excerpts"] == 1
