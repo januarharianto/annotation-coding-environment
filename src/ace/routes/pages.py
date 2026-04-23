@@ -12,7 +12,7 @@ from fastapi.responses import HTMLResponse
 
 from ace import __version__
 from ace.app import HtmxRedirect, get_db
-from ace.models.annotation import get_annotation_counts_by_source, get_annotations_for_source
+from ace.models.annotation import get_annotation_counts_by_source, get_annotations_for_source, get_code_view_data
 from ace.models.assignment import add_assignment, get_assignments_for_coder
 from ace.models.codebook import list_codes
 from ace.models.project import get_project
@@ -268,3 +268,30 @@ async def coding_page(
 
     templates = request.app.state.templates
     return templates.TemplateResponse(request, "coding.html", context)
+
+
+@router.get("/code/{code_id}/view", response_class=HTMLResponse)
+async def code_view_page(request: Request, code_id: str):
+    project_path: str | None = getattr(request.app.state, "project_path", None)
+    if project_path is None or not Path(project_path).exists():
+        raise HtmxRedirect("/")
+
+    coder_id: str | None = getattr(request.app.state, "coder_id", None)
+    if coder_id is None:
+        raise HtmxRedirect("/")
+
+    db_gen = get_db(request)
+    conn = next(db_gen)
+    try:
+        data = get_code_view_data(conn, code_id, coder_id)
+        if data is None:
+            raise HtmxRedirect("/code")
+    finally:
+        db_gen.close()
+
+    templates = request.app.state.templates
+    return templates.TemplateResponse(
+        request,
+        "code_view.html",
+        {"code_view_data": data},
+    )

@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+
+{% block title %}{{ code_view_data.code.name }} — Coded text — ACE{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="/static/css/code_view.css">
+<style id="code-colour">
+  :root { --code-colour: {{ code_view_data.code.colour }}; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div id="code-view" data-code-id="{{ code_view_data.code.id }}">
+  <h1 class="ace-sr-only">Coded text: {{ code_view_data.code.name }}</h1>
+  <!-- Shell filled in Task 3 -->
+</div>
+<script id="ace-codeview-data" type="application/json">{{ code_view_data|tojson }}</script>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/code_view.js"></script>
+{% endblock %}
