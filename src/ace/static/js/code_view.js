@@ -21,6 +21,16 @@
       .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
   }
 
+  // Throttled live-region announcer. Rapid arrow-key extension should
+  // announce once at the end of a stream of changes, not on every key.
+  const liveEl = document.getElementById("cv-live");
+  let liveTimer = null;
+  function announce(msg) {
+    if (!liveEl) return;
+    clearTimeout(liveTimer);
+    liveTimer = setTimeout(() => { liveEl.textContent = msg; }, 120);
+  }
+
   // Selection state
   let selectedSources = new Set();          // Set<source idx>
   let selectedExcerpt = null;               // {srcIdx, excerptIdx} | null
@@ -29,18 +39,22 @@
   let filterText = "";                      // wired in Task 5
 
   // --- Static render: tracks ---
-  tracksEl.innerHTML = sources.map((s) => {
+  tracksEl.innerHTML = sources.map((s, i) => {
     const ticks = s.excerpts.map((e, ei) => {
       return `<span class="tick" data-ex="${ei}"
                     style="left:${e.pos_pct.toFixed(2)}%;width:${e.width_pct.toFixed(2)}%"
-                    title="excerpt ${ei + 1}"></span>`;
+                    title="excerpt ${ei + 1}"
+                    aria-hidden="true"></span>`;
     }).join("");
     const pad = String(s.idx).padStart(2, "0");
+    const tabIdx = i === 0 ? "0" : "-1";
+    const label = `Source ${s.idx} — ${s.name}, ${s.count} excerpts`;
     return `<div class="cv-track-row" role="option" aria-selected="false"
-                 data-src-idx="${s.idx}">
-      <span class="idx">${pad}</span>
-      <span class="ct">${s.count}</span>
-      <span class="track">${ticks}</span>
+                 tabindex="${tabIdx}" data-src-idx="${s.idx}"
+                 aria-label="${escapeHtml(label)}">
+      <span class="idx" aria-hidden="true">${pad}</span>
+      <span class="ct" aria-hidden="true">${s.count}</span>
+      <span class="track" aria-hidden="true">${ticks}</span>
     </div>`;
   }).join("");
 
@@ -86,7 +100,8 @@
         const cls = (selectedExcerpt
                      && selectedExcerpt.srcIdx === it.srcIdx
                      && selectedExcerpt.excerptIdx === it.excerptIdx) ? " selected" : "";
-        html += `<div class="cv-row${cls}" data-src-idx="${it.srcIdx}" data-ex="${it.excerptIdx}">
+        html += `<div class="cv-row${cls}" tabindex="0"
+                      data-src-idx="${it.srcIdx}" data-ex="${it.excerptIdx}">
           <span class="idx">${i + 1}</span>
           <span class="txt">${escapeHtml(it.text)}</span>
         </div>`;
@@ -143,6 +158,9 @@
     clearBtn.disabled = !selectedExcerpt && selectedSources.size === 0;
 
     renderTable();
+
+    // Announce current scope to screen readers (throttled)
+    announce(ctxEl.textContent.replace(/\s+/g, " ").trim());
   }
 
   // --- Mouse handlers on tracks ---
@@ -207,6 +225,108 @@
     const related = evt.relatedTarget;
     if (related && row.contains(related)) return;
     clearHighlight();
+  });
+
+  // Keyboard focus on an excerpt row has the same linkage to tracks as hover.
+  // focus/blur don't bubble, so use capture phase.
+  tableEl.addEventListener("focus", (evt) => {
+    const row = evt.target.closest(".cv-row");
+    if (!row) return;
+    highlightSource(Number(row.getAttribute("data-src-idx")));
+  }, true);
+  tableEl.addEventListener("blur", (evt) => {
+    const row = evt.target.closest(".cv-row");
+    if (!row) return;
+    clearHighlight();
+  }, true);
+
+  // --- Keyboard navigation on tracks (roving tabindex) ---
+  function allRows() {
+    return [...tracksEl.querySelectorAll(".cv-track-row")];
+  }
+  function focusedRowIdx() {
+    const rows = allRows();
+    return rows.indexOf(document.activeElement);
+  }
+  function moveFocus(newPos) {
+    const rows = allRows();
+    if (rows.length === 0) return;
+    if (newPos < 0) newPos = 0;
+    if (newPos > rows.length - 1) newPos = rows.length - 1;
+    rows.forEach((r, i) => r.setAttribute("tabindex", i === newPos ? "0" : "-1"));
+    rows[newPos].focus();
+  }
+  function extendRange(toIdx) {
+    if (anchorIdx === null) return;
+    const aPos = displayOrder.indexOf(anchorIdx);
+    const bPos = displayOrder.indexOf(toIdx);
+    if (aPos < 0 || bPos < 0) return;
+    const [lo, hi] = [Math.min(aPos, bPos), Math.max(aPos, bPos)];
+    selectedSources = new Set(displayOrder.slice(lo, hi + 1));
+    selectedExcerpt = null;
+  }
+
+  tracksEl.addEventListener("keydown", (evt) => {
+    const rows = allRows();
+    if (rows.length === 0) return;
+    const pos = focusedRowIdx();
+    if (pos < 0) return;
+    const focusedSrcIdx = Number(rows[pos].getAttribute("data-src-idx"));
+
+    // Navigation — no selection change
+    if (evt.key === "ArrowDown" && !evt.shiftKey) {
+      evt.preventDefault(); moveFocus(pos + 1); return;
+    }
+    if (evt.key === "ArrowUp" && !evt.shiftKey) {
+      evt.preventDefault(); moveFocus(pos - 1); return;
+    }
+    if (evt.key === "Home") { evt.preventDefault(); moveFocus(0); return; }
+    if (evt.key === "End")  { evt.preventDefault(); moveFocus(rows.length - 1); return; }
+
+    // Shift+Arrow — move focus AND extend range from anchor
+    if (evt.shiftKey && (evt.key === "ArrowUp" || evt.key === "ArrowDown")) {
+      evt.preventDefault();
+      const next = Math.max(0, Math.min(rows.length - 1, pos + (evt.key === "ArrowDown" ? 1 : -1)));
+      moveFocus(next);
+      const targetIdx = Number(rows[next].getAttribute("data-src-idx"));
+      if (anchorIdx === null) anchorIdx = focusedSrcIdx;
+      extendRange(targetIdx);
+      updateUI();
+      return;
+    }
+
+    // Space — toggle focused row like a plain click
+    if ((evt.key === " " || evt.code === "Space") && !evt.shiftKey) {
+      evt.preventDefault();
+      if (selectedSources.size === 1 && selectedSources.has(focusedSrcIdx) && !selectedExcerpt) {
+        selectedSources.clear();
+        anchorIdx = null;
+      } else {
+        selectedSources = new Set([focusedSrcIdx]);
+        selectedExcerpt = null;
+        anchorIdx = focusedSrcIdx;
+      }
+      updateUI();
+      return;
+    }
+
+    // Shift+Space — extend range from anchor to focused (no focus move)
+    if ((evt.key === " " || evt.code === "Space") && evt.shiftKey) {
+      evt.preventDefault();
+      if (anchorIdx === null) anchorIdx = focusedSrcIdx;
+      extendRange(focusedSrcIdx);
+      updateUI();
+      return;
+    }
+
+    // Ctrl/Cmd+A — select all
+    if ((evt.metaKey || evt.ctrlKey) && evt.key.toLowerCase() === "a") {
+      evt.preventDefault();
+      selectedSources = new Set(displayOrder);
+      selectedExcerpt = null;
+      updateUI();
+      return;
+    }
   });
 
   clearBtn.addEventListener("click", () => {
