@@ -72,6 +72,17 @@
 /* Code rows use pointer cursor — clicking navigates */
 #code-sidebar .ace-code-row { cursor: pointer; }
 
+/* Gear / settings menu disabled on this view — the dropdown's actions
+   (import/export/fullscreen) are codebook-wide and belong on /code. */
+#code-sidebar .ace-codebook-menu-btn {
+  opacity: 0.35;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+/* Right-click context menu (bridge.js) is suppressed in code_view.js too,
+   but dim the hover affordance so users don't expect a menu. */
+#code-sidebar .ace-code-row { -webkit-user-select: none; user-select: none; }
+
 .cv-main {
   display: flex;
   flex-direction: column;

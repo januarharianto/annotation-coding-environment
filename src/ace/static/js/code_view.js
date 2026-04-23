@@ -430,6 +430,14 @@
       if (id === currentId) return;   // already here, no-op
       window.location.href = `/code/${id}/view`;
     }, true);
+
+    // Suppress the right-click context menu on code rows — bridge.js's menu
+    // offers rename/colour/move/delete actions that belong on /code, not here.
+    document.addEventListener("contextmenu", (evt) => {
+      if (!evt.target.closest("#code-sidebar .ace-code-row[data-code-id]")) return;
+      evt.preventDefault();
+      evt.stopImmediatePropagation();
+    }, true);
   })();
 
   // --- Sidebar resize — shared ace-sidebar-width localStorage with /code ---
