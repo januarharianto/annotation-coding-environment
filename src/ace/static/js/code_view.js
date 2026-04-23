@@ -406,5 +406,44 @@
     });
   }
 
+  // --- Sidebar resize — shared ace-sidebar-width localStorage with /code ---
+  // Port of bridge.js::_initResize, tailored to this page's container.
+  (function initResize() {
+    const handle = document.getElementById("cv-resize-handle");
+    const container = document.getElementById("code-view");
+    if (!handle || !container) return;
+    let dragging = false;
+    handle.addEventListener("pointerdown", (e) => {
+      dragging = true;
+      document.body.style.cursor = "col-resize";
+      document.body.style.userSelect = "none";
+      e.preventDefault();
+    });
+    document.addEventListener("pointermove", (e) => {
+      if (!dragging) return;
+      const rect = container.getBoundingClientRect();
+      let x = e.clientX - rect.left;
+      const min = 150;
+      const max = rect.width * 0.4;
+      x = Math.max(min, Math.min(max, x));
+      document.documentElement.style.setProperty("--ace-sidebar-width", `${x}px`);
+    });
+    document.addEventListener("pointerup", () => {
+      if (!dragging) return;
+      dragging = false;
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      const width = parseInt(
+        getComputedStyle(document.documentElement).getPropertyValue("--ace-sidebar-width"),
+        10,
+      );
+      if (width) localStorage.setItem("ace-sidebar-width", width);
+    });
+    handle.addEventListener("dblclick", () => {
+      document.documentElement.style.setProperty("--ace-sidebar-width", "360px");
+      localStorage.setItem("ace-sidebar-width", 360);
+    });
+  })();
+
   updateUI();
 })();

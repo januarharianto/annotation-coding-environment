@@ -3,6 +3,14 @@
 {% block title %}{{ code_view_data.code.name }} — Coded text — ACE{% endblock %}
 
 {% block head %}
+<script>
+  // Restore sidebar width from localStorage before CSS evaluates to prevent
+  // layout flash. Shared with /code — same key, values round-trip between views.
+  try {
+    var _sw = localStorage.getItem("ace-sidebar-width");
+    if (_sw) document.documentElement.style.setProperty("--ace-sidebar-width", _sw + "px");
+  } catch (_) {}
+</script>
 <link rel="stylesheet" href="/static/css/code_view.css">
 <style id="code-colour">
   :root {
@@ -29,6 +37,10 @@
       {% endfor %}
     </nav>
   </aside>
+
+  <div class="cv-resize-handle" id="cv-resize-handle"
+       role="separator" aria-orientation="vertical"
+       aria-label="Resize codebook sidebar (double-click to reset)"></div>
 
   <main class="cv-main">
     <header class="cv-header">

@@ -24,20 +24,42 @@
 }
 ::-webkit-scrollbar-corner { background: transparent; }
 
-/* Shell */
+/* Shell — sidebar width shared with /code via --ace-sidebar-width localStorage */
 #code-view {
   display: grid;
-  grid-template-columns: 260px 1fr;
+  grid-template-columns: var(--ace-sidebar-width, 360px) 1px 1fr;
   height: calc(100vh - 24px);
   background: var(--ace-bg);
 }
 
 .cv-sidebar {
-  border-right: 1px solid var(--ace-border);
   background: var(--ace-bg);
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+
+/* Resize handle — same behaviour as coding.css .ace-resize-handle */
+.cv-resize-handle {
+  width: 8px;
+  margin-left: -4px;
+  margin-right: -3px;
+  cursor: col-resize;
+  position: relative;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.cv-resize-handle::after {
+  content: '';
+  width: 1px;
+  height: 100%;
+  background: var(--ace-border);
+}
+.cv-resize-handle:hover::after {
+  width: 3px;
+  background: var(--ace-focus);
 }
 .cv-sidebar-brand {
   font-weight: 600;
