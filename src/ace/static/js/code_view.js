@@ -216,5 +216,28 @@
     updateUI();
   });
 
+  // --- Sort chips ---
+  const toolbarEl = document.getElementById("cv-toolbar");
+  if (toolbarEl) {
+    toolbarEl.querySelectorAll("[data-sort]").forEach((chip) => {
+      chip.addEventListener("click", () => {
+        toolbarEl.querySelectorAll("[data-sort]").forEach((c) =>
+          c.setAttribute("aria-pressed", "false"));
+        chip.setAttribute("aria-pressed", "true");
+        sortBy = chip.getAttribute("data-sort");
+        updateUI();
+      });
+    });
+  }
+
+  // --- Text filter ---
+  const searchEl = document.getElementById("cv-search");
+  if (searchEl) {
+    searchEl.addEventListener("input", (evt) => {
+      filterText = evt.target.value.trim();
+      updateUI();
+    });
+  }
+
   updateUI();
 })();
