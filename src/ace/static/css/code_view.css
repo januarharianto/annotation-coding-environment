@@ -84,12 +84,17 @@
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
   gap: 14px;
-  padding: 10px 24px;
+  padding: 12px 24px;
   border-bottom: 1px solid var(--ace-border);
   background: var(--ace-bg);
 }
-.cv-back {
+.cv-header-left {
   justify-self: start;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.cv-back {
   font-family: var(--ace-font-mono);
   font-size: 11px;
   background: transparent;
@@ -101,35 +106,27 @@
   text-decoration: none;
 }
 .cv-back:hover { background: var(--ace-bg-muted); color: var(--ace-text); }
-
-.cv-heading {
-  justify-self: center;
-  text-align: center;
-  line-height: 1.1;
-}
-.cv-page-title {
-  margin: 0;
-  font-family: var(--ace-font-mono);
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.6px;
-  text-transform: uppercase;
-  color: var(--ace-text-faint);
-}
-.cv-subtitle {
-  display: inline-flex;
+.cv-title {
+  display: flex;
   align-items: center;
-  gap: 8px;
-  margin-top: 3px;
-  font-size: 16px;
+  gap: 10px;
+  font-size: 18px;
   font-weight: 600;
-  color: var(--ace-text);
 }
 .cv-dot {
   width: 10px;
   height: 10px;
   border-radius: 50%;
   background: var(--code-colour);
+}
+
+.cv-page-title {
+  justify-self: center;
+  margin: 0;
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--ace-text);
 }
 
 .cv-summary {
