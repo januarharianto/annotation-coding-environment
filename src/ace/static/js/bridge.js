@@ -206,7 +206,7 @@
   // to avoid issues with hx-sync queuing and param injection timing.
 
   function _applyCodeToSentence(codeId) {
-    if (window.__aceFocusIndex < 0) return;
+    if (!Number.isFinite(window.__aceFocusIndex) || window.__aceFocusIndex < 0) return;
 
     htmx.ajax("POST", "/api/code/apply-sentence", {
       target: "#text-panel",
@@ -285,6 +285,9 @@
     // Only handle keys when text panel (or nothing specific) is focused
     let zone = _activeZone();
     if (zone === "search" || zone === "tree") return;
+    // Skip entirely on pages without the coding surface (e.g. /code/{id}/view
+    // shares bridge.js but has no #text-panel; its shortcuts live in code_view.js).
+    if (!document.getElementById("text-panel")) return;
 
     const key = e.key;
     const ctrl = e.ctrlKey || e.metaKey;

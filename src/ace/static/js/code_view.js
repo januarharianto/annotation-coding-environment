@@ -341,11 +341,15 @@
   // page's bridge.js (which also handles N and Esc on the coding page) never
   // sees these events when we're on /code/{id}/view.
   document.addEventListener("keydown", (evt) => {
-    // Don't hijack keys while the user is typing in the filter field — but
-    // still let Esc clear the field even there.
+    // Don't hijack keys while the user is typing in any form control (filter,
+    // sidebar search, etc). Special case: Esc in #cv-search clears the field
+    // and blurs — other controls handle their own Esc via their own wiring.
     const searchEl = document.getElementById("cv-search");
-    if (evt.target === searchEl) {
-      if (evt.key === "Escape") {
+    const tag = (evt.target.tagName || "").toLowerCase();
+    const inFormControl =
+      tag === "input" || tag === "textarea" || evt.target.isContentEditable;
+    if (inFormControl) {
+      if (evt.target === searchEl && evt.key === "Escape") {
         evt.target.value = "";
         filterText = "";
         evt.target.blur();
@@ -373,9 +377,6 @@
     }
 
     if (evt.key === "n" || evt.key === "N") {
-      // Don't hijack letter-typing in form fields
-      const tag = (evt.target.tagName || "").toLowerCase();
-      if (tag === "input" || tag === "textarea" || evt.target.isContentEditable) return;
       window.location.href = "/code?note=1";
       evt.preventDefault();
       evt.stopImmediatePropagation();
