@@ -2935,7 +2935,7 @@
   // Same precedent as n/q/x/z: reserved letter for a global action.
   document.addEventListener("keydown", function (evt) {
     if (evt.key !== "v" && evt.key !== "V") return;
-    if (evt.metaKey || evt.ctrlKey || evt.altKey) return;
+    if (evt.metaKey || evt.ctrlKey || evt.altKey || evt.shiftKey) return;
     // Don't hijack typing in form fields
     const tag = (evt.target.tagName || "").toLowerCase();
     if (tag === "input" || tag === "textarea" || evt.target.isContentEditable) return;
