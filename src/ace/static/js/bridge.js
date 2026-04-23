@@ -171,11 +171,12 @@
     });
   }
 
-  // Reserved letters: q (repeat), x (delete), z (undo), n (open note panel)
+  // Reserved letters: q (repeat), x (delete), z (undo), n (open note panel),
+  //                   v (open coded text view)
   const _KEYCAP_LABELS = [
     "1","2","3","4","5","6","7","8","9","0",
     "a","b","c","d","e","f","g","h","i","j","k","l","m","o","p",
-    "r","s","t","u","v","w","y"
+    "r","s","t","u","w","y"
   ];
 
   function _keylabel(i) {
@@ -205,7 +206,6 @@
   // to avoid issues with hx-sync queuing and param injection timing.
 
   function _applyCodeToSentence(codeId) {
-    if (window.__aceExcerptListActive) return;
     if (window.__aceFocusIndex < 0) return;
 
     htmx.ajax("POST", "/api/code/apply-sentence", {
@@ -1218,26 +1218,6 @@
     }
   });
 
-  // Click on excerpt card to navigate to that source + highlight
-  document.addEventListener("click", function(e) {
-    const card = e.target.closest(".ace-excerpt-card");
-    if (!card) return;
-    const sourceIndex = card.getAttribute("data-source-index");
-    const startOffset = card.getAttribute("data-start-offset");
-    if (sourceIndex !== null) {
-      window.location.href = `/code?index=${sourceIndex}&highlight=${startOffset}`;
-    }
-  });
-
-  // Click on back button to return from excerpt list
-  document.addEventListener("click", function(e) {
-    if (!e.target.closest(".ace-excerpt-back")) return;
-    const idx = window.__aceExcerptReturnIndex;
-    if (idx !== undefined && idx !== null) {
-      window.aceNavigate(idx);
-    }
-  });
-
   // --- Focus restoration across HTMX swaps ---
 
   const _sidebarFocusState = {
@@ -1304,7 +1284,6 @@
     if (!target) return;
 
     if (target.id === "text-panel" || target.id === "coding-workspace") {
-      window.__aceExcerptListActive = false;
       _restoreFocus();
       _paintSvg();
 
@@ -1761,12 +1740,9 @@
     const items = [
       { label: "Rename", hint: "F2", action: function () { _closeCodeMenu(); _startInlineRename(codeId); } },
       { label: "Colour", hint: "", action: function () { _closeCodeMenu(); _openColourPopover(codeId); } },
-      { label: "View coded text", action: function () {
+      { label: "View coded text", hint: "V", action: function () {
           _closeCodeMenu();
-          window.__aceExcerptReturnIndex = window.__aceCurrentIndex;
-          htmx.ajax("GET", `/api/code/${codeId}/excerpts`, {
-            target: "#text-panel", swap: "outerHTML"
-          });
+          window.location.href = `/code/${codeId}/view`;
         }
       },
       { label: "Move Up", hint: "Alt+Shift+\u2191", action: function () { _closeCodeMenu(); _moveCode(codeId, -1); } },
@@ -1876,7 +1852,6 @@
 
   /** Unified apply helper used by keycap click, search Enter, and tree Enter. */
   function _applyCode(codeId) {
-    if (window.__aceExcerptListActive) return;
     let codeName = "";
     let row = document.querySelector(`.ace-code-row[data-code-id="${codeId}"]`);
     if (row) {
@@ -2724,7 +2699,6 @@
     if (!tree || !tree.contains(document.activeElement)) return;
     const active = document.activeElement;
     if (!active || active.getAttribute("role") !== "treeitem") return;
-    if (window.__aceExcerptListActive) return;
     if (active.querySelector('[contenteditable="true"]')) return;
 
     const key = e.key;
