@@ -2,7 +2,6 @@
 
 import json
 import re
-import sqlite3
 
 import pytest
 from fastapi.testclient import TestClient
@@ -68,9 +67,8 @@ def test_view_redirects_when_no_project(tmp_path):
     app = create_app()
     with TestClient(app, raise_server_exceptions=False) as client:
         resp = client.get("/code/any-id/view", follow_redirects=False)
-        assert resp.status_code in (200, 302, 303, 307, 308)
-        assert (resp.headers.get("hx-redirect") == "/"
-                or resp.headers.get("location") == "/")
+        assert resp.status_code == 302
+        assert resp.headers.get("location") == "/"
 
 
 def test_view_redirects_when_no_coder(tmp_path):
@@ -81,14 +79,12 @@ def test_view_redirects_when_no_coder(tmp_path):
         app.state.project_path = str(db_path)
         # No coder_id set
         resp = client.get("/code/any-id/view", follow_redirects=False)
-        assert resp.status_code in (200, 302, 303, 307, 308)
-        assert (resp.headers.get("hx-redirect") == "/"
-                or resp.headers.get("location") == "/")
+        assert resp.status_code == 302
+        assert resp.headers.get("location") == "/"
 
 
 def test_view_redirects_when_unknown_code(client_with_annotations):
     client, _, _, _ = client_with_annotations
     resp = client.get("/code/does-not-exist/view", follow_redirects=False)
-    assert resp.status_code in (200, 302, 303, 307, 308)
-    assert (resp.headers.get("hx-redirect") == "/code"
-            or resp.headers.get("location") == "/code")
+    assert resp.status_code == 302
+    assert resp.headers.get("location") == "/code"
