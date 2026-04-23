@@ -1637,6 +1637,10 @@
   let _isDragging = false;
 
   function _initSortable() {
+    // Sortable.min.js only loads on /code (coding.html). On /code/{id}/view the
+    // sidebar partial is shared but drag-to-reorder isn't wired — bail quietly.
+    if (typeof Sortable === "undefined") return;
+
     _sortableInstances.forEach(function (s) { s.destroy(); });
     _sortableInstances = [];
 

@@ -11,6 +11,7 @@
     if (_sw) document.documentElement.style.setProperty("--ace-sidebar-width", _sw + "px");
   } catch (_) {}
 </script>
+<link rel="stylesheet" href="/static/css/coding.css">
 <link rel="stylesheet" href="/static/css/code_view.css">
 <style id="code-colour">
   :root {
@@ -24,18 +25,8 @@
 <div id="code-view" data-code-id="{{ code_view_data.code.id }}">
   <h1 class="ace-sr-only">Coded text: {{ code_view_data.code.name }}</h1>
 
-  <aside class="cv-sidebar" aria-label="Codebook">
-    <div class="cv-sidebar-brand">ACE</div>
-    <nav class="cv-code-nav" aria-label="Codes — click to view another code">
-      {% for c in codes %}
-      <a class="cv-code-link{% if c.id == code_view_data.code.id %} active{% endif %}"
-         href="/code/{{ c.id }}/view"
-         {% if c.id == code_view_data.code.id %}aria-current="page"{% endif %}>
-        <span class="cv-code-link-stripe" style="background: {{ c.colour }};" aria-hidden="true"></span>
-        <span class="cv-code-link-name">{{ c.name }}</span>
-      </a>
-      {% endfor %}
-    </nav>
+  <aside id="code-sidebar" class="ace-sidebar" aria-label="Codebook">
+    {% include "_sidebar_codebook.html" %}
   </aside>
 
   <div class="cv-resize-handle" id="cv-resize-handle"

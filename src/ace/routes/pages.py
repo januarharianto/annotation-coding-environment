@@ -288,13 +288,36 @@ async def code_view_page(request: Request, code_id: str):
         data = get_code_view_data(conn, code_id, coder_id)
         if data is None:
             raise HtmxRedirect("/code")
-        codes = list_codes(conn)
+        codes_list = [dict(c) for c in list_codes(conn)]
     finally:
         db_gen.close()
+
+    # Group codes for the shared sidebar partial (same shape as _coding_context).
+    group_dict: dict[str, list[dict]] = {}
+    ungrouped_codes: list[dict] = []
+    for code in codes_list:
+        gn = code.get("group_name")
+        if gn:
+            group_dict.setdefault(gn, []).append(code)
+        else:
+            ungrouped_codes.append(code)
+    grouped_codes = sorted(
+        group_dict.items(),
+        key=lambda x: min(c.get("sort_order", 0) for c in x[1]),
+    )
+
+    project_file_stem = Path(project_path).stem
 
     templates = request.app.state.templates
     return templates.TemplateResponse(
         request,
         "code_view.html",
-        {"code_view_data": data, "codes": codes},
+        {
+            "code_view_data": data,
+            "codes": codes_list,
+            "grouped_codes": grouped_codes,
+            "ungrouped_codes": ungrouped_codes,
+            "project_file_stem": project_file_stem,
+            "version": __version__,
+        },
     )

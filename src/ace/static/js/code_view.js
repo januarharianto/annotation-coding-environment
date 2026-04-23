@@ -406,6 +406,32 @@
     });
   }
 
+  // --- Codebook sidebar wiring ---
+  // The shared codebook partial is rendered here as well. Mark the currently-
+  // viewed code and intercept clicks on rows to navigate instead of apply.
+  (function initSidebar() {
+    const currentId = data.code.id;
+    const currentRow = document.querySelector(
+      `#code-sidebar .ace-code-row[data-code-id="${currentId}"]`,
+    );
+    if (currentRow) currentRow.classList.add("ace-code-row--current");
+
+    // Capture-phase click handler so bridge.js's row handlers don't also act.
+    document.addEventListener("click", (evt) => {
+      const row = evt.target.closest("#code-sidebar .ace-code-row[data-code-id]");
+      if (!row) return;
+      // Ignore clicks inside the right-click menu or on the keycap (there
+      // shouldn't be any — keycaps are display:none here — but be defensive).
+      if (evt.target.closest(".ace-code-menu") || evt.target.closest(".ace-keycap")) return;
+      const id = row.getAttribute("data-code-id");
+      if (!id) return;
+      evt.preventDefault();
+      evt.stopImmediatePropagation();
+      if (id === currentId) return;   // already here, no-op
+      window.location.href = `/code/${id}/view`;
+    }, true);
+  })();
+
   // --- Sidebar resize — shared ace-sidebar-width localStorage with /code ---
   // Port of bridge.js::_initResize, tailored to this page's container.
   (function initResize() {

@@ -61,53 +61,16 @@
   width: 3px;
   background: var(--ace-focus);
 }
-.cv-sidebar-brand {
-  font-weight: 600;
-  letter-spacing: 0.3px;
-  color: var(--ace-text);
-  padding: 14px 14px 10px;
-  border-bottom: 1px solid var(--ace-border-hair);
-  flex-shrink: 0;
-}
-
-.cv-code-nav {
-  flex: 1;
-  overflow-y: auto;
-  padding: 6px 10px 10px;
-}
-.cv-code-link {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 5px 8px 5px 0;
-  margin-bottom: 1px;
-  font-size: 13px;
-  color: var(--ace-text);
-  text-decoration: none;
-  border-radius: 0 3px 3px 0;
-  line-height: 1.3;
-}
-.cv-code-link:hover { background: var(--ace-bg-muted); }
-.cv-code-link.active {
-  background: var(--ace-bg-tint);
+/* Sidebar itself is styled by coding.css (.ace-sidebar). We just mark the
+   currently-viewed code row and hide elements that aren't meaningful here. */
+#code-sidebar .ace-code-row.ace-code-row--current {
+  background: var(--ace-bg-muted);
   font-weight: 600;
 }
-.cv-code-link:focus-visible {
-  outline: 2px solid var(--ace-focus);
-  outline-offset: -1px;
-}
-.cv-code-link-stripe {
-  flex-shrink: 0;
-  width: 3px;
-  height: 18px;
-  border-radius: 0 2px 2px 0;
-}
-.cv-code-link-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  flex: 1;
-}
+/* Keycap badges show the apply-code letter — not meaningful on this page */
+#code-sidebar .ace-keycap { display: none; }
+/* Code rows use pointer cursor — clicking navigates */
+#code-sidebar .ace-code-row { cursor: pointer; }
 
 .cv-main {
   display: flex;
