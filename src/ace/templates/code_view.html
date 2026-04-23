@@ -14,6 +14,8 @@
 
 {% block content %}
 <div id="code-view" data-code-id="{{ code_view_data.code.id }}">
+  <h1 class="ace-sr-only">Coded text: {{ code_view_data.code.name }}</h1>
+
   <aside class="cv-sidebar" aria-label="Codebook">
     <div class="cv-sidebar-brand">ACE</div>
     <a class="cv-sidebar-back" href="/code">← Codebook</a>
@@ -30,7 +32,7 @@
         <b>{{ code_view_data.stats.excerpts }}</b> excerpts across
         <b>{{ code_view_data.stats.sources_with_hits }} of {{ code_view_data.stats.total_sources }}</b> sources
       </div>
-      <div class="cv-live" aria-live="polite" aria-atomic="true" id="cv-live"></div>
+      <div class="ace-sr-only" aria-live="polite" aria-atomic="true" id="cv-live"></div>
     </header>
 
     <div class="cv-body">

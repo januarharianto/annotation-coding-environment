@@ -10,6 +10,15 @@
   const data = JSON.parse(dataEl.textContent);
   const sources = data.sources;
 
+  function escapeHtml(s) {
+    return String(s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
   const tracksEl = document.getElementById("cv-tracks");
   const tableEl = document.getElementById("cv-table");
 
@@ -21,7 +30,8 @@
                     title="excerpt ${ei + 1}"></span>`;
     }).join("");
     const pad = String(s.idx).padStart(2, "0");
-    return `<div class="cv-track-row" data-src-idx="${s.idx}">
+    return `<div class="cv-track-row" role="option" aria-selected="false"
+                 data-src-idx="${s.idx}">
       <span class="idx">${pad}</span>
       <span class="ct">${s.count}</span>
       <span class="track">${ticks}</span>
@@ -52,12 +62,4 @@
   }
   renderTable();
 
-  function escapeHtml(s) {
-    return String(s)
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;")
-      .replace(/'/g, "&#39;");
-  }
 })();
