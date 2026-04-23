@@ -288,6 +288,7 @@ async def code_view_page(request: Request, code_id: str):
         data = get_code_view_data(conn, code_id, coder_id)
         if data is None:
             raise HtmxRedirect("/code")
+        codes = list_codes(conn)
     finally:
         db_gen.close()
 
@@ -295,5 +296,5 @@ async def code_view_page(request: Request, code_id: str):
     return templates.TemplateResponse(
         request,
         "code_view.html",
-        {"code_view_data": data},
+        {"code_view_data": data, "codes": codes},
     )
