@@ -93,13 +93,6 @@
       });
     }
     tableEl.innerHTML = html;
-
-    // Hover linkage: excerpt row → source highlight in tracks
-    tableEl.querySelectorAll(".cv-row").forEach((row) => {
-      const srcIdx = Number(row.getAttribute("data-src-idx"));
-      row.addEventListener("mouseenter", () => highlightSource(srcIdx));
-      row.addEventListener("mouseleave", clearHighlight);
-    });
   }
 
   function highlightSource(idx) {
@@ -157,7 +150,6 @@
     const tick = evt.target.closest(".tick");
     const row = evt.target.closest(".cv-track-row");
     if (tick) {
-      evt.stopPropagation();
       const srcIdx = Number(row.getAttribute("data-src-idx"));
       const excerptIdx = Number(tick.getAttribute("data-ex"));
       selectedExcerpt = { srcIdx, excerptIdx };
@@ -169,6 +161,8 @@
     if (!row) return;
     const idx = Number(row.getAttribute("data-src-idx"));
 
+    // Shift+click with no anchor, or shift+click on the anchor row itself,
+    // falls through to the plain-click branch (matches Finder/File Explorer).
     if (evt.shiftKey && anchorIdx !== null && anchorIdx !== idx) {
       const aPos = displayOrder.indexOf(anchorIdx);
       const bPos = displayOrder.indexOf(idx);
@@ -193,6 +187,26 @@
       }
     }
     updateUI();
+  });
+
+  // Delegated hover linkage — set once; survives every table re-render.
+  // mouseover/mouseout bubble, unlike mouseenter/mouseleave — use those
+  // with a closest() guard so the linkage triggers once per row entry.
+  tableEl.addEventListener("mouseover", (evt) => {
+    const row = evt.target.closest(".cv-row");
+    if (!row || !tableEl.contains(row)) return;
+    // Only fire when entering the row from outside it (mimic mouseenter)
+    const related = evt.relatedTarget;
+    if (related && row.contains(related)) return;
+    highlightSource(Number(row.getAttribute("data-src-idx")));
+  });
+  tableEl.addEventListener("mouseout", (evt) => {
+    const row = evt.target.closest(".cv-row");
+    if (!row) return;
+    // Only fire when leaving the row entirely (mimic mouseleave)
+    const related = evt.relatedTarget;
+    if (related && row.contains(related)) return;
+    clearHighlight();
   });
 
   clearBtn.addEventListener("click", () => {
