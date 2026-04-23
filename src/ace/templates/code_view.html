@@ -23,8 +23,6 @@
 
 {% block content %}
 <div id="code-view" data-code-id="{{ code_view_data.code.id }}">
-  <h1 class="ace-sr-only">Coded text: {{ code_view_data.code.name }}</h1>
-
   <aside id="code-sidebar" class="ace-sidebar" aria-label="Codebook">
     {% include "_sidebar_codebook.html" %}
   </aside>
@@ -36,9 +34,12 @@
   <main class="cv-main">
     <header class="cv-header">
       <a class="cv-back" href="/code">← Back to source</a>
-      <div class="cv-title">
-        <span class="cv-dot" aria-hidden="true"></span>
-        <span class="cv-code-name">{{ code_view_data.code.name }}</span>
+      <div class="cv-heading">
+        <h1 class="cv-page-title">Coded text</h1>
+        <div class="cv-subtitle">
+          <span class="cv-dot" aria-hidden="true"></span>
+          <span class="cv-code-name">{{ code_view_data.code.name }}</span>
+        </div>
       </div>
       <div class="cv-summary">
         <b>{{ code_view_data.stats.excerpts }}</b> excerpts across
