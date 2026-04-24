@@ -455,7 +455,7 @@
   font-size: var(--ace-font-size-2xs);
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  color: var(--ace-text-faint);
+  color: var(--ace-text-muted);
   margin: 0 0 var(--ace-space-2);
 }
 .cv-cheatsheet-body dl {
