@@ -100,3 +100,27 @@ def test_view_page_has_codebook_heading(client_with_annotations):
     resp = client.get(f"/code/{code_id}/view")
     assert resp.status_code == 200
     assert '<h2 class="ace-panel-heading">Codebook</h2>' in resp.text
+
+
+def test_code_view_has_column_headings(client_with_annotations):
+    """Coded-text view shows visible H2 headings on both columns,
+    and each section uses aria-labelledby to point at its visible heading."""
+    client, _, code_id, _ = client_with_annotations
+    resp = client.get(f"/code/{code_id}/view")
+    assert resp.status_code == 200
+    body = resp.text
+
+    # Visible column headings
+    assert '<h2 id="cv-tracks-heading" class="ace-panel-heading">Source tracks</h2>' in body
+    assert '<h2 id="cv-excerpts-heading" class="ace-panel-heading">Excerpts</h2>' in body
+
+    # Sections point at the visible headings rather than carrying redundant aria-label
+    assert 'class="cv-tracks-col" aria-labelledby="cv-tracks-heading"' in body
+    assert 'class="cv-excerpts-col" aria-labelledby="cv-excerpts-heading"' in body
+
+    # Document order: tracks heading inside tracks column; excerpts heading inside excerpts column
+    tracks_col_pos = body.index('class="cv-tracks-col"')
+    tracks_h2_pos = body.index('Source tracks</h2>')
+    excerpts_col_pos = body.index('class="cv-excerpts-col"')
+    excerpts_h2_pos = body.index('Excerpts</h2>')
+    assert tracks_col_pos < tracks_h2_pos < excerpts_col_pos < excerpts_h2_pos

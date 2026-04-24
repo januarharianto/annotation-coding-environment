@@ -49,7 +49,10 @@
     </header>
 
     <div class="cv-body">
-      <section class="cv-tracks-col" aria-label="Source tracks">
+      <section class="cv-tracks-col" aria-labelledby="cv-tracks-heading">
+        <div class="ace-panel-heading-bar">
+          <h2 id="cv-tracks-heading" class="ace-panel-heading">Source tracks</h2>
+        </div>
         <div class="cv-tracks" id="cv-tracks" role="listbox"
              aria-multiselectable="true"
              aria-label="Sources with '{{ code_view_data.code.name }}' excerpts">
@@ -57,7 +60,10 @@
         </div>
       </section>
 
-      <section class="cv-excerpts-col" aria-label="Excerpts">
+      <section class="cv-excerpts-col" aria-labelledby="cv-excerpts-heading">
+        <div class="ace-panel-heading-bar">
+          <h2 id="cv-excerpts-heading" class="ace-panel-heading">Excerpts</h2>
+        </div>
         <div class="cv-context">
           <span class="cv-ctx-text" id="cv-ctx">
             Showing <b>all</b> sources ·
