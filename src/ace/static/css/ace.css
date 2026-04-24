@@ -537,8 +537,8 @@ body {
 /* ────────────────────────────────────────────────────────────────
    Panel headings — visible label for a container/column region.
    Used by Codebook, Source map, Source tracks, Excerpts, Source note.
-   Aligns with existing .ace-grid-title recipe. Distinct from
-   .ace-section-heading (which belongs to /agreement reading flow).
+   Distinct from .ace-section-heading (which belongs to /agreement
+   reading flow).
    ──────────────────────────────────────────────────────────────── */
 .ace-panel-heading {
   font-family: var(--ace-font-mono);

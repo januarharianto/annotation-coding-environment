@@ -94,19 +94,21 @@ rect.ace-flash-{{ code["id"] }} {
            aria-valuetext="35 percent of viewport height"
            tabindex="0"></div>
 
-      <section id="ace-sidebar-grid" class="ace-sidebar-grid" aria-label="Sources">
-        <button type="button" id="ace-grid-collapse-btn" class="ace-grid-header"
-                aria-expanded="true" aria-controls="ace-grid-content">
-          <svg class="ace-grid-chevron" width="12" height="12" viewBox="0 0 12 12"
-               aria-hidden="true" focusable="false">
-            <path d="M3 4.5 L6 7.5 L9 4.5" fill="none" stroke="currentColor"
-                  stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-          <span class="ace-grid-title">Sources</span>
-          <span class="ace-sr-only"> &mdash; press Shift plus arrow keys to navigate between sources</span>
-          <span class="ace-hint ace-grid-header-hint" aria-hidden="true"
-                title="Shift + arrows to navigate">&#8679;&nbsp;&larr;&nbsp;&rarr;</span>
-        </button>
+      <section id="ace-sidebar-grid" class="ace-sidebar-grid" aria-label="Source map">
+        <h2 style="margin:0">
+          <button type="button" id="ace-grid-collapse-btn" class="ace-grid-header"
+                  aria-expanded="true" aria-controls="ace-grid-content">
+            <svg class="ace-grid-chevron" width="12" height="12" viewBox="0 0 12 12"
+                 aria-hidden="true" focusable="false">
+              <path d="M3 4.5 L6 7.5 L9 4.5" fill="none" stroke="currentColor"
+                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <span class="ace-panel-heading">Source map</span>
+            <span class="ace-sr-only"> &mdash; press Shift plus arrow keys to navigate between sources</span>
+            <span class="ace-hint ace-grid-header-hint" aria-hidden="true"
+                  title="Shift + arrows to navigate">&#8679;&nbsp;&larr;&nbsp;&rarr;</span>
+          </button>
+        </h2>
         <div id="ace-grid-content" class="ace-grid-content">
           <div id="ace-grid-spark" class="ace-grid-spark"
                role="img" aria-label="Source density overview — click to jump to a range"></div>

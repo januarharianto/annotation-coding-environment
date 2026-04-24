@@ -1231,12 +1231,6 @@ html[data-ace-note-open="1"] .ace-note-rail {
 .ace-grid-header[aria-expanded="false"] .ace-grid-chevron {
   transform: rotate(-90deg);
 }
-.ace-grid-title {
-  font-family: var(--ace-font-mono);
-  font-weight: var(--ace-weight-medium);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
 
 /* Hint for the Shift+Arrow source-nav shortcut, right-aligned inside the
  * sources header button. */
