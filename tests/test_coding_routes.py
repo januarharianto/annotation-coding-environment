@@ -1004,3 +1004,19 @@ def test_coding_page_has_codebook_heading(client_with_codes):
     heading_pos = body.index('ace-panel-heading">Codebook')
     search_pos = body.index('id="code-search-input"')
     assert heading_pos < search_pos
+
+
+def test_coding_page_has_page_title(client_with_codes):
+    """/code renders a centred H1 'Coding' above the nav cluster."""
+    client, coder_id, _, _, _ = client_with_codes
+    client.cookies.set("coder_id", coder_id)
+    r = client.get("/code?index=0")
+    assert r.status_code == 200
+    body = r.text
+    # H1 with the shared page-title class
+    assert '<h1 class="ace-page-title' in body
+    assert '>Coding</h1>' in body
+    # H1 appears before the nav cluster in document order
+    h1_pos = body.index('>Coding</h1>')
+    nav_pos = body.index('ace-nav-cluster')
+    assert h1_pos < nav_pos

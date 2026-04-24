@@ -139,6 +139,15 @@
   border-radius: var(--ace-radius);
 }
 
+/* Page title on /code — centred above the nav cluster, 14 px gap.
+   The 14 px matches the existing grid-gap on /code/{id}/view's
+   .cv-header, so both pages share a vertical rhythm rule. */
+.ace-text-page-title {
+  text-align: center;
+  padding-top: var(--ace-space-4);
+  margin-bottom: 14px;
+}
+
 .ace-text-header {
   margin: 0 var(--ace-space-8) var(--ace-space-4);
   border-bottom: 1px solid var(--ace-border-light);
