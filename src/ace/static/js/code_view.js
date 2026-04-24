@@ -837,4 +837,127 @@
       }
     }, true); // capture phase for Esc override
   }
+
+  // --- Tab cycle across four stops -------------------------------------
+
+  const ZONE_ORDER = ["tracks", "excerpts", "codebook", "back"];
+
+  // Remembered cursor per zone — stable identifiers so cursors survive DOM
+  // rerenders (the stored idx/id is resolved back to an element at focus time).
+  const rememberedCursor = {
+    tracks: null,    // integer index into displayOrder, or null
+    excerpts: null,  // annotation id string, or null
+    codebook: null,  // code id string, or null
+  };
+
+  function currentZone() {
+    const a = document.activeElement;
+    if (!a || a === document.body || a === document.documentElement) return null;
+    if (a.classList && a.classList.contains("cv-back")) return "back";
+    if (a.id === "code-search-input") return "codebook"; // search is "in" codebook
+    if (a.closest && a.closest("#cv-tracks")) return "tracks";
+    if (a.closest && a.closest("#cv-table")) return "excerpts";
+    if (a.closest && a.closest("#code-sidebar")) return "codebook";
+    return null;
+  }
+
+  function focusTracksZone() {
+    const rows = Array.from(tracksEl.querySelectorAll(".cv-track-row"));
+    if (rows.length === 0) return;
+    let targetIdx = 0;
+    if (rememberedCursor.tracks != null && rememberedCursor.tracks < rows.length) {
+      targetIdx = rememberedCursor.tracks;
+    } else if (tracksCursorIdx >= 0 && tracksCursorIdx < rows.length) {
+      targetIdx = tracksCursorIdx;
+    }
+    // moveFocus sets tabindex, focuses, scrolls, updates tracksCursorIdx, and
+    // calls updateUI. Use silent mode — Tab doesn't need to announce.
+    moveFocus(targetIdx, { announce: false });
+  }
+
+  function focusExcerptsZone() {
+    const rows = excerptRows();
+    if (rows.length === 0) return;
+    let target = null;
+    if (rememberedCursor.excerpts != null) {
+      target = tableEl.querySelector(
+        `.cv-row[data-ann-id="${CSS.escape(rememberedCursor.excerpts)}"]`,
+      );
+    }
+    if (!target) target = rows[0];
+    moveExcerptsCursor(rows.indexOf(target));
+  }
+
+  function focusCodebookZone() {
+    const rows = visibleCodeRows();
+    if (rows.length === 0) return;
+    let target = null;
+    if (rememberedCursor.codebook != null) {
+      target = rows.find((r) => r.dataset.codeId === rememberedCursor.codebook) || null;
+    }
+    if (!target) {
+      // Fall back to the currently-viewed code (has aria-current="page")
+      target = rows.find((r) => r.getAttribute("aria-current") === "page") || rows[0];
+    }
+    moveCodebookCursor(target);
+  }
+
+  function focusBackLink() {
+    const back = document.querySelector(".cv-back");
+    if (back) {
+      back.focus();
+      back.scrollIntoView({ block: "nearest" });
+    }
+  }
+
+  function focusZone(name) {
+    if (name === "tracks")   return focusTracksZone();
+    if (name === "excerpts") return focusExcerptsZone();
+    if (name === "codebook") return focusCodebookZone();
+    if (name === "back")     return focusBackLink();
+  }
+
+  // focusout listener to save remembered cursors (capture phase)
+  document.addEventListener("focusout", (evt) => {
+    const a = evt.target;
+    if (!a || !a.classList) return;
+    if (a.classList.contains("cv-track-row")) {
+      const rows = Array.from(tracksEl.querySelectorAll(".cv-track-row"));
+      const idx = rows.indexOf(a);
+      if (idx >= 0) rememberedCursor.tracks = idx;
+    } else if (a.classList.contains("cv-row")) {
+      if (a.dataset.annId) rememberedCursor.excerpts = a.dataset.annId;
+    } else if (a.classList.contains("ace-code-row")) {
+      if (a.dataset.codeId) rememberedCursor.codebook = a.dataset.codeId;
+    }
+    // back link has no remembered state — not a roving zone
+  }, true); // capture phase
+
+  // Document-level Tab/Shift+Tab intercept at capture phase — runs before the
+  // browser's default Tab action. Does not interfere when focus is inside an
+  // open dialog (native trap preserved — T8 cheat sheet will exercise this).
+  document.addEventListener("keydown", (evt) => {
+    if (evt.key !== "Tab") return;
+
+    // Don't intercept if focus is inside an open dialog — native trap.
+    const active = document.activeElement;
+    const insideDialog = active && active.closest && active.closest("dialog[open]");
+    if (insideDialog) return;
+
+    const zone = currentZone();
+
+    if (!zone) {
+      // Body (or other non-cycle) focus: Tab enters first stop; Shift+Tab enters last.
+      evt.preventDefault();
+      focusZone(evt.shiftKey ? "back" : "tracks");
+      return;
+    }
+
+    evt.preventDefault();
+    const curIdx = ZONE_ORDER.indexOf(zone);
+    const nextIdx = evt.shiftKey
+      ? (curIdx - 1 + ZONE_ORDER.length) % ZONE_ORDER.length
+      : (curIdx + 1) % ZONE_ORDER.length;
+    focusZone(ZONE_ORDER[nextIdx]);
+  }, true); // capture phase
 })();
