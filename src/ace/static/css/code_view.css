@@ -464,5 +464,5 @@
   gap: var(--ace-space-1) var(--ace-space-3);
   margin: 0;
 }
-.cv-cheatsheet-body dt { font-family: var(--ace-font-mono); font-size: 13px; }
-.cv-cheatsheet-body dd { margin: 0; font-size: 13px; }
+.cv-cheatsheet-body dt { font-family: var(--ace-font-mono); font-size: var(--ace-font-size-2xs); }
+.cv-cheatsheet-body dd { margin: 0; font-size: var(--ace-font-size-2xs); }

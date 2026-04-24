@@ -161,12 +161,21 @@ def test_codebook_search_has_slash_keyshortcut_regression(client_with_annotation
 
 
 def test_code_view_has_cheatsheet_dialog(client_with_annotations):
-    """`?` cheat sheet dialog is rendered server-side for /view."""
+    """`?` cheat sheet dialog is rendered server-side for /view with shortcut content."""
     client, _, code_id, _ = client_with_annotations
     resp = client.get(f"/code/{code_id}/view")
     assert resp.status_code == 200
-    assert 'id="cv-cheatsheet-dialog"' in resp.text
-    assert "Coded text shortcuts" in resp.text
-    # Sanity-check a couple of shortcuts are listed
-    assert "Tab" in resp.text
-    assert "Space" in resp.text
+    # Extract the dialog block so the shortcut assertions don't get fooled by
+    # matches elsewhere on the page (e.g. "Tab" appearing in unrelated copy).
+    m = re.search(
+        r'<dialog[^>]*id="cv-cheatsheet-dialog".*?</dialog>',
+        resp.text,
+        re.DOTALL,
+    )
+    assert m is not None, "cheatsheet dialog block not found"
+    dialog = m.group(0)
+    assert "Coded text shortcuts" in dialog
+    # Every zone gets its own section — guard against an empty/truncated body.
+    assert "Cycle Tracks" in dialog
+    assert "Move cursor" in dialog
+    assert "pin / unpin" in dialog.lower()

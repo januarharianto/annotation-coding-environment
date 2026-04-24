@@ -841,6 +841,12 @@
   }, true); // capture phase
 
   // Keydown on the code tree: ↑/↓/Home/End/Enter on code rows.
+  // stopImmediatePropagation on every handled key so bridge.js's tree keydown
+  // (bridge.js:2704, shared across /code and /view) never also fires — it
+  // would double-advance the cursor and its Enter-applies-code path + F2
+  // rename + Delete / Alt-arrow editing commands don't belong on /view.
+  // F2, Delete, Backspace, and Alt+Arrow are explicitly suppressed because
+  // bridge.js binds them as code-editing actions.
   if (treeEl) {
     treeEl.addEventListener("keydown", (evt) => {
       const target = evt.target;
@@ -848,34 +854,53 @@
 
       const rows = visibleCodeRows();
       const pos = rows.indexOf(target);
+      const plainKey = !evt.ctrlKey && !evt.metaKey && !evt.altKey && !evt.shiftKey;
 
-      if (evt.key === "ArrowDown") {
+      // Suppress bridge.js's read/write editing shortcuts that don't belong here.
+      if (plainKey && (evt.key === "F2" || evt.key === "Delete" || evt.key === "Backspace")) {
         evt.preventDefault();
+        evt.stopImmediatePropagation();
+        return;
+      }
+      if (evt.altKey && (evt.key === "ArrowLeft" || evt.key === "ArrowRight"
+          || evt.key === "ArrowUp" || evt.key === "ArrowDown")) {
+        evt.preventDefault();
+        evt.stopImmediatePropagation();
+        return;
+      }
+
+      if (plainKey && evt.key === "ArrowDown") {
+        evt.preventDefault();
+        evt.stopImmediatePropagation();
         moveCodebookCursor(rows[Math.min(pos + 1, rows.length - 1)]);
         return;
       }
-      if (evt.key === "ArrowUp") {
+      if (plainKey && evt.key === "ArrowUp") {
         evt.preventDefault();
+        evt.stopImmediatePropagation();
         moveCodebookCursor(rows[Math.max(pos - 1, 0)]);
         return;
       }
-      if (evt.key === "Home") {
+      if (plainKey && evt.key === "Home") {
         evt.preventDefault();
+        evt.stopImmediatePropagation();
         moveCodebookCursor(rows[0]);
         return;
       }
-      if (evt.key === "End") {
+      if (plainKey && evt.key === "End") {
         evt.preventDefault();
+        evt.stopImmediatePropagation();
         moveCodebookCursor(rows[rows.length - 1]);
         return;
       }
-      if (evt.key === "Enter") {
+      if (plainKey && evt.key === "Enter") {
         evt.preventDefault();
+        evt.stopImmediatePropagation();
         const codeId = target.dataset.codeId;
         if (codeId) window.location.href = `/code/${codeId}/view`;
         return;
       }
-    });
+    }, true); // capture phase — run before bridge.js's tree keydown
   }
 
   // Keydown on the codebook search input: ↓/↑/Esc.
@@ -901,17 +926,19 @@
       }
       if (evt.key === "ArrowDown") {
         evt.preventDefault();
+        evt.stopImmediatePropagation();
         const rows = visibleCodeRows();
         if (rows.length > 0) moveCodebookCursor(rows[0]);
         return;
       }
       if (evt.key === "ArrowUp") {
         evt.preventDefault();
+        evt.stopImmediatePropagation();
         const rows = visibleCodeRows();
         if (rows.length > 0) moveCodebookCursor(rows[rows.length - 1]);
         return;
       }
-    }, true); // capture phase for Esc override
+    }, true); // capture phase — stopImmediatePropagation blocks bridge.js handlers
   }
 
   // --- Tab cycle across four stops -------------------------------------
