@@ -38,6 +38,10 @@
   let sortBy = "source";                    // wired in Task 5
   let filterText = "";                      // wired in Task 5
 
+  // Excerpts cursor — uses annotation id so the cursor survives sort / filter
+  // re-renders. null means "no cursor yet" (initial load).
+  let excerptsCursorId = null;
+
   // --- Static render: tracks ---
   tracksEl.innerHTML = sources.map((s, i) => {
     const ticks = s.excerpts.map((e, ei) => {
@@ -109,7 +113,7 @@
       const excerpts = selectedExcerpt ? [s.excerpts[selectedExcerpt.excerptIdx]] : s.excerpts;
       excerpts.forEach((e, localEi) => {
         const ei = selectedExcerpt ? selectedExcerpt.excerptIdx : localEi;
-        items.push({ srcIdx: idx, excerptIdx: ei, pos: e.pos_pct, len: e.text.length, text: e.text });
+        items.push({ srcIdx: idx, excerptIdx: ei, pos: e.pos_pct, len: e.text.length, text: e.text, annId: e.id });
       });
     });
 
@@ -129,10 +133,17 @@
       html += `<div class="cv-empty">No excerpts match the filter.</div>`;
     } else {
       items.forEach((it, i) => {
-        const cls = (selectedExcerpt
-                     && selectedExcerpt.srcIdx === it.srcIdx
-                     && selectedExcerpt.excerptIdx === it.excerptIdx) ? " selected" : "";
-        html += `<div class="cv-row${cls}" tabindex="0"
+        const isSelected = (selectedExcerpt
+                            && selectedExcerpt.srcIdx === it.srcIdx
+                            && selectedExcerpt.excerptIdx === it.excerptIdx);
+        const cls = isSelected ? " selected" : "";
+        const isCursor = (it.annId != null && it.annId === excerptsCursorId);
+        const ti = isCursor ? "0" : "-1";
+        html += `<div class="cv-row${cls}"
+                      role="option"
+                      tabindex="${ti}"
+                      aria-selected="${isSelected ? "true" : "false"}"
+                      data-ann-id="${escapeHtml(it.annId)}"
                       data-src-idx="${it.srcIdx}" data-ex="${it.excerptIdx}">
           <span class="idx">${i + 1}</span>
           <span class="txt">${escapeHtml(it.text)}</span>
@@ -140,6 +151,30 @@
       });
     }
     tableEl.innerHTML = html;
+  }
+
+  // After renderTable() rebuilds the DOM, make sure exactly one .cv-row has
+  // tabindex="0". Uses annId so the cursor survives sort/filter re-renders.
+  function reconcileExcerptsCursor() {
+    const rows = Array.from(tableEl.querySelectorAll(".cv-row"));
+    if (rows.length === 0) { excerptsCursorId = null; return; }
+    // If we have a tracked cursor, make sure it's still present in the DOM
+    if (excerptsCursorId != null) {
+      const row = tableEl.querySelector(
+        `.cv-row[data-ann-id="${CSS.escape(excerptsCursorId)}"]`,
+      );
+      if (row) {
+        // cursor row still exists — the renderTable template already set tabindex
+        return;
+      }
+      // Cursor no longer in DOM (filtered out / sorted away): reset
+      excerptsCursorId = null;
+    }
+    // No cursor yet (initial load or after cursor loss): mark first row as the
+    // tab stop but leave excerptsCursorId null so T2's "overview on load" rule
+    // is preserved. A user Tab into this zone focuses row 0; first arrow press
+    // promotes it to a real cursor.
+    rows.forEach((r, i) => r.setAttribute("tabindex", i === 0 ? "0" : "-1"));
   }
 
   function highlightSource(idx) {
@@ -190,6 +225,7 @@
     clearBtn.disabled = !selectedExcerpt && selectedSources.size === 0;
 
     renderTable();
+    reconcileExcerptsCursor();
 
     // Announce current scope to screen readers (throttled)
     announce(ctxEl.textContent.replace(/\s+/g, " ").trim());
@@ -366,6 +402,58 @@
     selectedExcerpt = null;
     anchorIdx = null;
     updateUI();
+  });
+
+  // --- Keyboard navigation on excerpts (roving tabindex) ---
+  function excerptRows() {
+    return Array.from(tableEl.querySelectorAll(".cv-row"));
+  }
+
+  function moveExcerptsCursor(newIdx) {
+    const rows = excerptRows();
+    if (rows.length === 0) return;
+    const idx = Math.max(0, Math.min(newIdx, rows.length - 1));
+    rows.forEach((r, i) => r.setAttribute("tabindex", i === idx ? "0" : "-1"));
+    const target = rows[idx];
+    target.focus();
+    target.scrollIntoView({ block: "nearest" });
+    excerptsCursorId = target.dataset.annId || null;
+  }
+
+  function currentExcerptsCursorPos() {
+    const rows = excerptRows();
+    return rows.findIndex((r) => r.getAttribute("tabindex") === "0");
+  }
+
+  tableEl.addEventListener("keydown", (evt) => {
+    // Only handle when the focused element is a .cv-row inside this table.
+    const target = evt.target;
+    if (!target || !target.classList || !target.classList.contains("cv-row")) return;
+
+    const rows = excerptRows();
+    if (rows.length === 0) return;
+    const pos = currentExcerptsCursorPos();
+
+    if (evt.key === "ArrowDown") {
+      evt.preventDefault();
+      moveExcerptsCursor(pos >= 0 ? pos + 1 : 0);
+      return;
+    }
+    if (evt.key === "ArrowUp") {
+      evt.preventDefault();
+      moveExcerptsCursor(pos >= 0 ? pos - 1 : 0);
+      return;
+    }
+    if (evt.key === "Home") {
+      evt.preventDefault();
+      moveExcerptsCursor(0);
+      return;
+    }
+    if (evt.key === "End") {
+      evt.preventDefault();
+      moveExcerptsCursor(rows.length - 1);
+      return;
+    }
   });
 
   // --- Global key handlers (Esc two-stage + N exits-and-opens-notes) ---
