@@ -37,6 +37,25 @@
     return tag === "input" || tag === "textarea" || el.isContentEditable;
   }
 
+  // Mark an event as fully handled — preventDefault + stopImmediatePropagation
+  // so bridge.js's document-level handlers (which share keys like F2, Enter,
+  // V, Escape, Arrows on tree rows) never also fire. Used pervasively in this
+  // file's keydown branches.
+  function claim(evt) {
+    evt.preventDefault();
+    evt.stopImmediatePropagation();
+  }
+
+  // Apply roving-tabindex semantics: exactly one row in `rows` has tabindex="0",
+  // all others "-1". Pass -1 (or a value out of range) to mark every row "-1".
+  function setRovingTabindex(rows, activeIdx) {
+    rows.forEach((r, i) => r.setAttribute("tabindex", i === activeIdx ? "0" : "-1"));
+  }
+
+  function trackRowEls() {
+    return Array.from(tracksEl.querySelectorAll(".cv-track-row"));
+  }
+
   // Selection state
   let selectedSources = new Set();          // Set<source idx>
   let selectedExcerpt = null;               // {srcIdx, excerptIdx} | null
@@ -279,8 +298,7 @@
       // Set cursor to the clicked row's position and give it tabindex="0"
       const clickedPos = displayOrder.indexOf(srcIdx);
       tracksCursorIdx = clickedPos >= 0 ? clickedPos : -1;
-      const allTrackRows = Array.from(tracksEl.querySelectorAll(".cv-track-row"));
-      allTrackRows.forEach((r, i) => r.setAttribute("tabindex", i === tracksCursorIdx ? "0" : "-1"));
+      setRovingTabindex(trackRowEls(), tracksCursorIdx);
       updateUI(); // announce — selectedExcerpt changed
       return;
     }
@@ -290,9 +308,7 @@
     // Set cursor to the clicked row's position in displayOrder
     const clickedPos = displayOrder.indexOf(idx);
     tracksCursorIdx = clickedPos >= 0 ? clickedPos : -1;
-    // Update roving tabindex to reflect new cursor
-    const allTrackRows = Array.from(tracksEl.querySelectorAll(".cv-track-row"));
-    allTrackRows.forEach((r, i) => r.setAttribute("tabindex", i === tracksCursorIdx ? "0" : "-1"));
+    setRovingTabindex(trackRowEls(), tracksCursorIdx);
 
     // Shift+click with no anchor, or shift+click on the anchor row itself,
     // falls through to the plain-click branch (matches Finder/File Explorer).
@@ -356,20 +372,16 @@
   }, true);
 
   // --- Keyboard navigation on tracks (roving tabindex) ---
-  function allRows() {
-    return [...tracksEl.querySelectorAll(".cv-track-row")];
-  }
   function focusedRowIdx() {
-    const rows = allRows();
-    return rows.indexOf(document.activeElement);
+    return trackRowEls().indexOf(document.activeElement);
   }
   function moveFocus(newPos, opts) {
     opts = opts || {};
     const silent = opts.announce === false;
-    const rows = Array.from(tracksEl.querySelectorAll(".cv-track-row"));
+    const rows = trackRowEls();
     if (rows.length === 0) return;
     const idx = Math.max(0, Math.min(newPos, rows.length - 1));
-    rows.forEach((r, i) => r.setAttribute("tabindex", i === idx ? "0" : "-1"));
+    setRovingTabindex(rows, idx);
     const target = rows[idx];
     target.focus();
     target.scrollIntoView({ block: "nearest" });
@@ -387,7 +399,7 @@
   }
 
   tracksEl.addEventListener("keydown", (evt) => {
-    const rows = allRows();
+    const rows = trackRowEls();
     if (rows.length === 0) return;
     const pos = focusedRowIdx();
     if (pos < 0) return;
@@ -458,9 +470,7 @@
     selectedExcerpt = null;
     anchorIdx = null;
     tracksCursorIdx = -1;
-    // Reset all track rows to tabindex="-1" (no cursor)
-    Array.from(tracksEl.querySelectorAll(".cv-track-row")).forEach((r) =>
-      r.setAttribute("tabindex", "-1"));
+    setRovingTabindex(trackRowEls(), -1); // no cursor
     updateUI(); // announce — all state cleared
   });
 
@@ -547,8 +557,7 @@
         filterText = "";
         evt.target.blur();
         updateUI(); // announce — filter cleared, visible excerpts changed
-        evt.preventDefault();
-        evt.stopImmediatePropagation();
+        claim(evt);
       }
       return;
     }
@@ -560,23 +569,19 @@
         selectedExcerpt = null;
         anchorIdx = null;
         tracksCursorIdx = -1;
-        // Reset all track rows to tabindex="-1" (no cursor = overview)
-        Array.from(tracksEl.querySelectorAll(".cv-track-row")).forEach((r) =>
-          r.setAttribute("tabindex", "-1"));
+        setRovingTabindex(trackRowEls(), -1); // no cursor = overview
         if (searchEl) searchEl.value = "";
         updateUI(); // announce — all state cleared, back to overview
       } else {
         window.location.href = "/code";
       }
-      evt.preventDefault();
-      evt.stopImmediatePropagation();
+      claim(evt);
       return;
     }
 
     if (evt.key === "n" || evt.key === "N") {
       window.location.href = "/code?note=1";
-      evt.preventDefault();
-      evt.stopImmediatePropagation();
+      claim(evt);
       return;
     }
   }, true); // capture phase — wins over bridge.js
@@ -794,7 +799,7 @@
     if (evt.shiftKey && !evt.ctrlKey && !evt.metaKey && !evt.altKey
         && (evt.key === "ArrowLeft" || evt.key === "ArrowRight")) {
       if (isEditableElement(document.activeElement)) return;
-      const rows = Array.from(tracksEl.querySelectorAll(".cv-track-row"));
+      const rows = trackRowEls();
       if (rows.length === 0) return;
       const dir = (evt.key === "ArrowRight") ? 1 : -1;
       const base = tracksCursorIdx >= 0 ? tracksCursorIdx : 0;
@@ -805,14 +810,13 @@
     }
 
     // V → polite no-op with announcement.
-    // stopImmediatePropagation is REQUIRED — bridge.js has its own V handler
-    // at document level (bridge.js:2919) that navigates to /code/<id>/view,
-    // which would reload this page and wipe our announcement.
+    // stopImmediatePropagation (via claim) is REQUIRED — bridge.js has its own
+    // V handler at document level (bridge.js:2919) that navigates to
+    // /code/<id>/view, which would reload this page and wipe our announcement.
     if ((evt.key === "v" || evt.key === "V")
         && !evt.ctrlKey && !evt.metaKey && !evt.altKey && !evt.shiftKey) {
       if (isEditableElement(document.activeElement)) return;
-      evt.preventDefault();
-      evt.stopImmediatePropagation();
+      claim(evt);
       announce("Already in code view");
       return;
     }
@@ -826,19 +830,18 @@
       evt.preventDefault();
       return;
     }
-  }, true); // capture phase — matches existing code_view.js convention
 
-  // T6: ↓ bootstrap from body focus → enter tracks.
-  // When no zone is focused and user presses ↓, focus first track row.
-  // Registered at capture phase so zone handlers take precedence.
-  document.addEventListener("keydown", (evt) => {
-    if (evt.key !== "ArrowDown") return;
-    if (evt.ctrlKey || evt.metaKey || evt.altKey || evt.shiftKey) return;
-    if (isEditableElement(document.activeElement)) return; // typing in search etc.
-    if (currentZone() !== null) return; // zone handler owns this keypress
-    evt.preventDefault();
-    focusTracksZone();
-  }, true); // capture phase
+    // T6: ↓ from body focus → enter tracks. Zone handlers own ↓ when focus is
+    // already inside a zone, so we only act when currentZone() is null.
+    if (evt.key === "ArrowDown"
+        && !evt.ctrlKey && !evt.metaKey && !evt.altKey && !evt.shiftKey) {
+      if (isEditableElement(document.activeElement)) return;
+      if (currentZone() !== null) return;
+      evt.preventDefault();
+      focusTracksZone();
+      return;
+    }
+  }, true); // capture phase — matches existing code_view.js convention
 
   // Keydown on the code tree: ↑/↓/Home/End/Enter on code rows.
   // stopImmediatePropagation on every handled key so bridge.js's tree keydown
@@ -858,44 +861,37 @@
 
       // Suppress bridge.js's read/write editing shortcuts that don't belong here.
       if (plainKey && (evt.key === "F2" || evt.key === "Delete" || evt.key === "Backspace")) {
-        evt.preventDefault();
-        evt.stopImmediatePropagation();
+        claim(evt);
         return;
       }
       if (evt.altKey && (evt.key === "ArrowLeft" || evt.key === "ArrowRight"
           || evt.key === "ArrowUp" || evt.key === "ArrowDown")) {
-        evt.preventDefault();
-        evt.stopImmediatePropagation();
+        claim(evt);
         return;
       }
 
       if (plainKey && evt.key === "ArrowDown") {
-        evt.preventDefault();
-        evt.stopImmediatePropagation();
+        claim(evt);
         moveCodebookCursor(rows[Math.min(pos + 1, rows.length - 1)]);
         return;
       }
       if (plainKey && evt.key === "ArrowUp") {
-        evt.preventDefault();
-        evt.stopImmediatePropagation();
+        claim(evt);
         moveCodebookCursor(rows[Math.max(pos - 1, 0)]);
         return;
       }
       if (plainKey && evt.key === "Home") {
-        evt.preventDefault();
-        evt.stopImmediatePropagation();
+        claim(evt);
         moveCodebookCursor(rows[0]);
         return;
       }
       if (plainKey && evt.key === "End") {
-        evt.preventDefault();
-        evt.stopImmediatePropagation();
+        claim(evt);
         moveCodebookCursor(rows[rows.length - 1]);
         return;
       }
       if (plainKey && evt.key === "Enter") {
-        evt.preventDefault();
-        evt.stopImmediatePropagation();
+        claim(evt);
         const codeId = target.dataset.codeId;
         if (codeId) window.location.href = `/code/${codeId}/view`;
         return;
@@ -911,8 +907,7 @@
   if (codeSearchInput) {
     codeSearchInput.addEventListener("keydown", (evt) => {
       if (evt.key === "Escape" && codeSearchInput.value.length > 0) {
-        evt.preventDefault();
-        evt.stopImmediatePropagation();
+        claim(evt);
         codeSearchInput.value = "";
         // Trigger existing filter logic (input listener in _sidebar_codebook.html)
         codeSearchInput.dispatchEvent(new Event("input", { bubbles: true }));
@@ -925,15 +920,13 @@
         return;
       }
       if (evt.key === "ArrowDown") {
-        evt.preventDefault();
-        evt.stopImmediatePropagation();
+        claim(evt);
         const rows = visibleCodeRows();
         if (rows.length > 0) moveCodebookCursor(rows[0]);
         return;
       }
       if (evt.key === "ArrowUp") {
-        evt.preventDefault();
-        evt.stopImmediatePropagation();
+        claim(evt);
         const rows = visibleCodeRows();
         if (rows.length > 0) moveCodebookCursor(rows[rows.length - 1]);
         return;
@@ -965,7 +958,7 @@
   }
 
   function focusTracksZone() {
-    const rows = Array.from(tracksEl.querySelectorAll(".cv-track-row"));
+    const rows = trackRowEls();
     if (rows.length === 0) return;
     let targetIdx = 0;
     if (rememberedCursor.tracks != null && rememberedCursor.tracks < rows.length) {
@@ -1027,8 +1020,7 @@
     const a = evt.target;
     if (!a || !a.classList) return;
     if (a.classList.contains("cv-track-row")) {
-      const rows = Array.from(tracksEl.querySelectorAll(".cv-track-row"));
-      const idx = rows.indexOf(a);
+      const idx = trackRowEls().indexOf(a);
       if (idx >= 0) rememberedCursor.tracks = idx;
     } else if (a.classList.contains("cv-row")) {
       if (a.dataset.annId) rememberedCursor.excerpts = a.dataset.annId;
