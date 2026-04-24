@@ -79,7 +79,8 @@
           <input class="cv-tb-search" id="cv-search" type="search"
                  placeholder="Filter excerpt text…" aria-label="Filter excerpts by text">
         </div>
-        <div class="cv-table" id="cv-table">
+        <div class="cv-table" id="cv-table" role="listbox"
+             aria-label="Excerpts for {{ code_view_data.code.name }}">
           <!-- populated by code_view.js -->
         </div>
       </section>

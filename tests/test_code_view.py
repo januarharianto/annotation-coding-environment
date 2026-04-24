@@ -124,3 +124,37 @@ def test_code_view_has_column_headings(client_with_annotations):
     excerpts_col_pos = body.index('class="cv-excerpts-col"')
     excerpts_h2_pos = body.index('Excerpts</h2>')
     assert tracks_col_pos < tracks_h2_pos < excerpts_col_pos < excerpts_h2_pos
+
+
+def test_cv_table_has_listbox_role(client_with_annotations):
+    """Excerpts container is a listbox so roving tabindex + arrow keys
+    announce correctly to AT."""
+    client, _, code_id, _ = client_with_annotations
+    resp = client.get(f"/code/{code_id}/view")
+    assert resp.status_code == 200
+    assert 'id="cv-table"' in resp.text
+    assert 'role="listbox"' in resp.text
+    # Confirm the role belongs to #cv-table, not just #cv-tracks
+    # (search for role on the cv-table element specifically)
+    m = re.search(r'<div[^>]*\bid="cv-table"[^>]*>', resp.text)
+    assert m is not None, "cv-table div not found"
+    assert 'role="listbox"' in m.group(0), \
+        f"role=listbox not on cv-table div: {m.group(0)}"
+
+
+def test_cv_tracks_has_listbox_role_regression(client_with_annotations):
+    """Sources listbox — regression guard. Already present pre-change."""
+    client, _, code_id, _ = client_with_annotations
+    resp = client.get(f"/code/{code_id}/view")
+    assert 'id="cv-tracks"' in resp.text
+    assert 'role="listbox"' in resp.text
+    assert 'aria-multiselectable="true"' in resp.text
+
+
+def test_codebook_search_has_slash_keyshortcut_regression(client_with_annotations):
+    """Codebook search input advertises `/` hotkey — regression guard.
+    Already present via _sidebar_codebook.html pre-change."""
+    client, _, code_id, _ = client_with_annotations
+    resp = client.get(f"/code/{code_id}/view")
+    assert 'id="code-search-input"' in resp.text
+    assert 'aria-keyshortcuts="/"' in resp.text
