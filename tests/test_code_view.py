@@ -124,3 +124,64 @@ def test_code_view_has_column_headings(client_with_annotations):
     excerpts_col_pos = body.index('class="cv-excerpts-col"')
     excerpts_h2_pos = body.index('Excerpts</h2>')
     assert tracks_col_pos < tracks_h2_pos < excerpts_col_pos < excerpts_h2_pos
+
+
+def test_cv_table_has_listbox_role(client_with_annotations):
+    """Excerpts container is a listbox so roving tabindex + arrow keys
+    announce correctly to AT."""
+    client, _, code_id, _ = client_with_annotations
+    resp = client.get(f"/code/{code_id}/view")
+    assert resp.status_code == 200
+    assert 'id="cv-table"' in resp.text
+    assert 'role="listbox"' in resp.text
+    # Confirm the role belongs to #cv-table, not just #cv-tracks
+    # (search for role on the cv-table element specifically)
+    m = re.search(r'<div[^>]*\bid="cv-table"[^>]*>', resp.text)
+    assert m is not None, "cv-table div not found"
+    assert 'role="listbox"' in m.group(0), \
+        f"role=listbox not on cv-table div: {m.group(0)}"
+
+
+def test_cv_tracks_has_listbox_role_regression(client_with_annotations):
+    """Sources listbox — regression guard. Already present pre-change."""
+    client, _, code_id, _ = client_with_annotations
+    resp = client.get(f"/code/{code_id}/view")
+    assert resp.status_code == 200
+    # Confirm role + aria-multiselectable belong to #cv-tracks specifically,
+    # not just any element in the response.
+    m = re.search(r'<div[^>]*\bid="cv-tracks"[^>]*>', resp.text)
+    assert m is not None, "cv-tracks div not found"
+    assert 'role="listbox"' in m.group(0), \
+        f"role=listbox not on cv-tracks div: {m.group(0)}"
+    assert 'aria-multiselectable="true"' in m.group(0), \
+        f'aria-multiselectable="true" not on cv-tracks div: {m.group(0)}'
+
+
+def test_codebook_search_has_slash_keyshortcut_regression(client_with_annotations):
+    """Codebook search input advertises `/` hotkey — regression guard.
+    Already present via _sidebar_codebook.html pre-change."""
+    client, _, code_id, _ = client_with_annotations
+    resp = client.get(f"/code/{code_id}/view")
+    assert 'id="code-search-input"' in resp.text
+    assert 'aria-keyshortcuts="/"' in resp.text
+
+
+def test_code_view_has_cheatsheet_dialog(client_with_annotations):
+    """`?` cheat sheet dialog is rendered server-side for /view with shortcut content."""
+    client, _, code_id, _ = client_with_annotations
+    resp = client.get(f"/code/{code_id}/view")
+    assert resp.status_code == 200
+    # Extract the dialog block so the shortcut assertions don't get fooled by
+    # matches elsewhere on the page (e.g. "Tab" appearing in unrelated copy).
+    m = re.search(
+        r'<dialog[^>]*id="cv-cheatsheet-dialog".*?</dialog>',
+        resp.text,
+        re.DOTALL,
+    )
+    assert m is not None, "cheatsheet dialog block not found"
+    dialog = m.group(0)
+    assert "Coded text shortcuts" in dialog
+    # Every zone gets its own section — guard against an empty/truncated body.
+    assert "Cycle Tracks" in dialog
+    assert "Move cursor" in dialog
+    assert "pin / unpin" in dialog.lower()
