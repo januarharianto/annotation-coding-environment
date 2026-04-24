@@ -1063,15 +1063,9 @@ body:has(#note-textarea:focus) .ace-note-drawer {
   flex-shrink: 0;
 }
 
-.ace-note-drawer #note-drawer-title {
-  margin: 0;
-  font-size: var(--ace-font-size-2xs);
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: #888;
-  flex-shrink: 0;
-}
+/* Only drawer-specific property not covered by .ace-panel-heading — prevents
+   the title from shrinking inside the flex-based .ace-note-drawer-header. */
+.ace-note-drawer #note-drawer-title { flex-shrink: 0; }
 
 .ace-note-mode-indicator {
   font-size: var(--ace-font-size-2xs);
