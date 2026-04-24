@@ -94,19 +94,21 @@ rect.ace-flash-{{ code["id"] }} {
            aria-valuetext="35 percent of viewport height"
            tabindex="0"></div>
 
-      <section id="ace-sidebar-grid" class="ace-sidebar-grid" aria-label="Sources">
-        <button type="button" id="ace-grid-collapse-btn" class="ace-grid-header"
-                aria-expanded="true" aria-controls="ace-grid-content">
-          <svg class="ace-grid-chevron" width="12" height="12" viewBox="0 0 12 12"
-               aria-hidden="true" focusable="false">
-            <path d="M3 4.5 L6 7.5 L9 4.5" fill="none" stroke="currentColor"
-                  stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-          <span class="ace-grid-title">Sources</span>
-          <span class="ace-sr-only"> &mdash; press Shift plus arrow keys to navigate between sources</span>
-          <span class="ace-hint ace-grid-header-hint" aria-hidden="true"
-                title="Shift + arrows to navigate">&#8679;&nbsp;&larr;&nbsp;&rarr;</span>
-        </button>
+      <section id="ace-sidebar-grid" class="ace-sidebar-grid" aria-labelledby="ace-sidebar-grid-heading">
+        <h2 class="ace-panel-heading-wrap">
+          <button type="button" id="ace-grid-collapse-btn" class="ace-grid-header"
+                  aria-expanded="true" aria-controls="ace-grid-content">
+            <svg class="ace-grid-chevron" width="12" height="12" viewBox="0 0 12 12"
+                 aria-hidden="true" focusable="false">
+              <path d="M3 4.5 L6 7.5 L9 4.5" fill="none" stroke="currentColor"
+                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <span id="ace-sidebar-grid-heading" class="ace-panel-heading">Source map</span>
+            <span class="ace-sr-only"> &mdash; press Shift plus arrow keys to navigate between sources</span>
+            <span class="ace-hint ace-grid-header-hint" aria-hidden="true"
+                  title="Shift + arrows to navigate">&#8679;&nbsp;&larr;&nbsp;&rarr;</span>
+          </button>
+        </h2>
         <div id="ace-grid-content" class="ace-grid-content">
           <div id="ace-grid-spark" class="ace-grid-spark"
                role="img" aria-label="Source density overview — click to jump to a range"></div>
@@ -136,6 +138,7 @@ rect.ace-flash-{{ code["id"] }} {
       {% block text_panel %}
       <main id="text-panel" class="ace-text-panel" tabindex="0">
         <div class="ace-text-header">
+          <h1 class="ace-page-title ace-text-page-title">Coding</h1>
           <div class="ace-text-nav">
             <div class="ace-nav-cluster">
               <button class="ace-nav-btn" id="btn-prev"
@@ -192,7 +195,7 @@ rect.ace-flash-{{ code["id"] }} {
         {% endif %}
         {% if margin_codes %}
         <div class="ace-code-bar">
-          {% for code in margin_codes %}{% if not loop.first %}<span class="ace-code-sep"> · </span>{% endif %}<span class="ace-code-chip" data-code-id="{{ code['code_id'] }}" data-colour="{{ code['colour'] }}" style="color: {{ code['colour'] }};">{{ code['code_name'] }}</span>{% endfor %}
+          <span class="ace-code-bar-label">Applied codes</span><span class="ace-code-sep"> · </span>{% for code in margin_codes %}{% if not loop.first %}<span class="ace-code-sep"> · </span>{% endif %}<span class="ace-code-chip" data-code-id="{{ code['code_id'] }}" data-colour="{{ code['colour'] }}" style="color: {{ code['colour'] }};">{{ code['code_name'] }}</span>{% endfor %}
         </div>
         {% endif %}
         <div class="ace-legend" aria-hidden="true"><span class="k">&uarr;&darr;</span> sentences &middot; <span class="k">&#8679;&larr;&#8679;&rarr;</span> sources &middot; <span class="k">Q</span> repeat &middot; <span class="k">Z</span> undo &middot; <span class="k">X</span> delete &middot; <span class="k">N</span> note</div>
@@ -217,7 +220,7 @@ rect.ace-flash-{{ code["id"] }} {
              aria-labelledby="note-drawer-title"
              aria-hidden="true">
         <header class="ace-note-drawer-header">
-          <h2 id="note-drawer-title">Source note</h2>
+          <h2 id="note-drawer-title" class="ace-panel-heading">Source note</h2>
           <span id="note-mode" class="ace-note-mode-indicator" aria-hidden="true"></span>
           <span id="note-status" aria-live="polite" class="ace-note-drawer-status"></span>
         </header>

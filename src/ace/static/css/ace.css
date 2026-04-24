@@ -534,3 +534,50 @@ body {
   border: 0;
 }
 
+/* ────────────────────────────────────────────────────────────────
+   Panel headings — visible label for a container/column region.
+   Used by Codebook, Source map, Source tracks, Excerpts, Source note.
+   Distinct from .ace-section-heading (which belongs to /agreement
+   reading flow).
+   ──────────────────────────────────────────────────────────────── */
+.ace-panel-heading {
+  font-family: var(--ace-font-mono);
+  font-size: var(--ace-font-size-2xs);      /* 13px */
+  font-weight: var(--ace-weight-medium);    /* 500 */
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: rgba(0, 0, 0, 0.62);
+  margin: 0;
+}
+
+/* Static (non-collapsible) container for a panel heading.
+   Gives the heading a consistent padded bar with optional
+   right-aligned metadata slot (reuses .ace-grid-header-hint). */
+.ace-panel-heading-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--ace-space-2);
+  padding: var(--ace-space-2) var(--ace-space-3);
+  flex-shrink: 0;
+}
+
+/* Neutralises user-agent H2 margins when an h2 is used purely as a
+   document-outline wrapper (e.g. the W3C accordion pattern wrapping
+   a <button>, or column-label h2s inside flex/grid layouts). */
+.ace-panel-heading-wrap {
+  margin: 0;
+}
+
+/* Page identity — used on /code/{id}/view (H1 "Coded text") and
+   /code (H1 "Coding", added in a later task). `justify-self: center`
+   takes effect only inside a grid container (e.g. .cv-header); it is
+   ignored outside one, so this class works in both contexts. */
+.ace-page-title {
+  justify-self: center;
+  margin: 0;
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--ace-text);
+}
+

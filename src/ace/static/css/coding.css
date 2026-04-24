@@ -139,6 +139,15 @@
   border-radius: var(--ace-radius);
 }
 
+/* Page title on /code — centred above the nav cluster, 14 px gap.
+   The 14 px matches the existing grid-gap on /code/{id}/view's
+   .cv-header, so both pages share a vertical rhythm rule. */
+.ace-text-page-title {
+  text-align: center;
+  padding-top: var(--ace-space-4);
+  margin-bottom: 14px;
+}
+
 .ace-text-header {
   margin: 0 var(--ace-space-8) var(--ace-space-4);
   border-bottom: 1px solid var(--ace-border-light);
@@ -647,6 +656,17 @@ rect.ace-flash {
   color: var(--ace-border);
 }
 
+.ace-code-bar-label {
+  font-family: var(--ace-font-mono);
+  font-size: var(--ace-font-size-2xs);
+  font-weight: var(--ace-weight-medium);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: rgba(0, 0, 0, 0.48);
+  white-space: nowrap;
+  user-select: none;
+}
+
 .ace-code-chip {
   padding: 1px 6px;
   border-radius: 3px;
@@ -1043,15 +1063,9 @@ body:has(#note-textarea:focus) .ace-note-drawer {
   flex-shrink: 0;
 }
 
-.ace-note-drawer #note-drawer-title {
-  margin: 0;
-  font-size: var(--ace-font-size-2xs);
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: #888;
-  flex-shrink: 0;
-}
+/* Only drawer-specific property not covered by .ace-panel-heading — prevents
+   the title from shrinking inside the flex-based .ace-note-drawer-header. */
+.ace-note-drawer #note-drawer-title { flex-shrink: 0; }
 
 .ace-note-mode-indicator {
   font-size: var(--ace-font-size-2xs);
@@ -1230,12 +1244,6 @@ html[data-ace-note-open="1"] .ace-note-rail {
 }
 .ace-grid-header[aria-expanded="false"] .ace-grid-chevron {
   transform: rotate(-90deg);
-}
-.ace-grid-title {
-  font-family: var(--ace-font-mono);
-  font-weight: var(--ace-weight-medium);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
 }
 
 /* Hint for the Shift+Arrow source-nav shortcut, right-aligned inside the
