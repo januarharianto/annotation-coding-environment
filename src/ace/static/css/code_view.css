@@ -157,15 +157,6 @@
   background: var(--code-colour);
 }
 
-.cv-page-title {
-  justify-self: center;
-  margin: 0;
-  font-size: 22px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  color: var(--ace-text);
-}
-
 .cv-summary {
   justify-self: end;
   font-family: var(--ace-font-mono);
