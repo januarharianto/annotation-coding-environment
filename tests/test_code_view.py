@@ -88,3 +88,15 @@ def test_view_redirects_when_unknown_code(client_with_annotations):
     resp = client.get("/code/does-not-exist/view", follow_redirects=False)
     assert resp.status_code == 302
     assert resp.headers.get("location") == "/code"
+
+
+def test_view_page_has_codebook_heading(client_with_annotations):
+    """Coded-text-view shares the Codebook panel heading with /code.
+
+    Guards against someone inlining the shared sidebar partial on only
+    one of the two routes that render it.
+    """
+    client, _, code_id, _ = client_with_annotations
+    resp = client.get(f"/code/{code_id}/view")
+    assert resp.status_code == 200
+    assert '<h2 class="ace-panel-heading">Codebook</h2>' in resp.text
