@@ -804,11 +804,15 @@
       return;
     }
 
-    // V → polite no-op with announcement
+    // V → polite no-op with announcement.
+    // stopImmediatePropagation is REQUIRED — bridge.js has its own V handler
+    // at document level (bridge.js:2919) that navigates to /code/<id>/view,
+    // which would reload this page and wipe our announcement.
     if ((evt.key === "v" || evt.key === "V")
         && !evt.ctrlKey && !evt.metaKey && !evt.altKey && !evt.shiftKey) {
       if (isEditableElement(document.activeElement)) return;
       evt.preventDefault();
+      evt.stopImmediatePropagation();
       announce("Already in code view");
       return;
     }
