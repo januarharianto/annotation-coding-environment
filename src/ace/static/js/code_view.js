@@ -31,6 +31,12 @@
     liveTimer = setTimeout(() => { liveEl.textContent = msg; }, 120);
   }
 
+  function isEditableElement(el) {
+    if (!el) return false;
+    const tag = (el.tagName || "").toLowerCase();
+    return tag === "input" || tag === "textarea" || el.isContentEditable;
+  }
+
   // Selection state
   let selectedSources = new Set();          // Set<source idx>
   let selectedExcerpt = null;               // {srcIdx, excerptIdx} | null
@@ -595,7 +601,10 @@
     const currentRow = document.querySelector(
       `#code-sidebar .ace-code-row[data-code-id="${currentId}"]`,
     );
-    if (currentRow) currentRow.classList.add("ace-code-row--current");
+    if (currentRow) {
+      currentRow.classList.add("ace-code-row--current");
+      currentRow.setAttribute("aria-current", "page");
+    }
 
     // Capture-phase click handler so bridge.js's row handlers don't also act.
     document.addEventListener("click", (evt) => {
@@ -705,4 +714,127 @@
   })();
 
   updateUI(); // announce initial overview state
+
+  // --- Codebook keyboard navigation -------------------------------------
+  // T4: `/` → focus search; ↑/↓/Home/End on code rows (roving tabindex,
+  // skipping collapsed-group contents); Enter → navigate; search ↓/↑/Esc.
+  // T7 will extend the document-level keydown listener here with `?`.
+
+  const treeEl = document.getElementById("code-tree");
+  const codeSearchInput = document.getElementById("code-search-input");
+  let previousFocusBeforeSearch = null;
+
+  function visibleCodeRows() {
+    if (!treeEl) return [];
+    const all = Array.from(treeEl.querySelectorAll(".ace-code-row"));
+    return all.filter((row) => {
+      const group = row.closest("[role='group']");
+      if (!group) return true; // ungrouped rows are always visible
+      const header = group.previousElementSibling;
+      if (!header || !header.classList.contains("ace-code-group-header")) return true;
+      return header.getAttribute("aria-expanded") !== "false";
+    });
+  }
+
+  function moveCodebookCursor(targetRow) {
+    const rows = visibleCodeRows();
+    rows.forEach((r) => r.setAttribute("tabindex", "-1"));
+    if (!targetRow) return;
+    targetRow.setAttribute("tabindex", "0");
+    targetRow.focus();
+    targetRow.scrollIntoView({ block: "nearest" });
+  }
+
+  // Document-level `/` → focus codebook search.
+  // Registered at capture phase, matching the existing code_view.js convention.
+  // T7 can add more keys to this same listener.
+  document.addEventListener("keydown", (evt) => {
+    if (evt.key === "/") {
+      if (evt.ctrlKey || evt.metaKey || evt.altKey) return;
+      if (isEditableElement(document.activeElement)) return;
+      if (!codeSearchInput) return;
+      evt.preventDefault();
+      previousFocusBeforeSearch =
+        document.activeElement && document.activeElement.isConnected
+          ? document.activeElement
+          : null;
+      codeSearchInput.focus();
+      codeSearchInput.select();
+    }
+    // T7: add `?` handler here
+  }, true); // capture phase — matches existing code_view.js convention
+
+  // Keydown on the code tree: ↑/↓/Home/End/Enter on code rows.
+  if (treeEl) {
+    treeEl.addEventListener("keydown", (evt) => {
+      const target = evt.target;
+      if (!target || !target.classList || !target.classList.contains("ace-code-row")) return;
+
+      const rows = visibleCodeRows();
+      const pos = rows.indexOf(target);
+
+      if (evt.key === "ArrowDown") {
+        evt.preventDefault();
+        moveCodebookCursor(rows[Math.min(pos + 1, rows.length - 1)]);
+        return;
+      }
+      if (evt.key === "ArrowUp") {
+        evt.preventDefault();
+        moveCodebookCursor(rows[Math.max(pos - 1, 0)]);
+        return;
+      }
+      if (evt.key === "Home") {
+        evt.preventDefault();
+        moveCodebookCursor(rows[0]);
+        return;
+      }
+      if (evt.key === "End") {
+        evt.preventDefault();
+        moveCodebookCursor(rows[rows.length - 1]);
+        return;
+      }
+      if (evt.key === "Enter") {
+        evt.preventDefault();
+        const codeId = target.dataset.codeId;
+        if (codeId) window.location.href = `/code/${codeId}/view`;
+        return;
+      }
+    });
+  }
+
+  // Keydown on the codebook search input: ↓/↑/Esc.
+  // Registered at capture phase so Esc (when search has content) fires before
+  // the document-level Esc handler (which navigates to /code on second Esc).
+  // stopImmediatePropagation is only called when we're actually clearing the
+  // search — an empty-search Esc falls through to the existing doc handler.
+  if (codeSearchInput) {
+    codeSearchInput.addEventListener("keydown", (evt) => {
+      if (evt.key === "Escape" && codeSearchInput.value.length > 0) {
+        evt.preventDefault();
+        evt.stopImmediatePropagation();
+        codeSearchInput.value = "";
+        // Trigger existing filter logic (input listener in _sidebar_codebook.html)
+        codeSearchInput.dispatchEvent(new Event("input", { bubbles: true }));
+        if (previousFocusBeforeSearch && previousFocusBeforeSearch.isConnected) {
+          previousFocusBeforeSearch.focus();
+          previousFocusBeforeSearch = null;
+        } else {
+          codeSearchInput.blur();
+        }
+        return;
+      }
+      if (evt.key === "ArrowDown") {
+        evt.preventDefault();
+        const rows = visibleCodeRows();
+        if (rows.length > 0) moveCodebookCursor(rows[0]);
+        return;
+      }
+      if (evt.key === "ArrowUp") {
+        evt.preventDefault();
+        const rows = visibleCodeRows();
+        if (rows.length > 0) moveCodebookCursor(rows[rows.length - 1]);
+        return;
+      }
+    }, true); // capture phase for Esc override
+  }
 })();
