@@ -207,7 +207,10 @@
   }
 
   // --- Update all UI to match state ---
-  function updateUI() {
+  function updateUI(opts) {
+    opts = opts || {};
+    const shouldAnnounce = opts.announce !== false; // default true
+
     // Track row selection + aria-selected
     tracksEl.querySelectorAll(".cv-track-row").forEach((r) => {
       const idx = Number(r.getAttribute("data-src-idx"));
@@ -252,7 +255,9 @@
     reconcileExcerptsCursor();
 
     // Announce current scope to screen readers (throttled)
-    announce(ctxEl.textContent.replace(/\s+/g, " ").trim());
+    if (shouldAnnounce) {
+      announce(ctxEl.textContent.replace(/\s+/g, " ").trim());
+    }
   }
 
   // --- Mouse handlers on tracks ---
@@ -270,7 +275,7 @@
       tracksCursorIdx = clickedPos >= 0 ? clickedPos : -1;
       const allTrackRows = Array.from(tracksEl.querySelectorAll(".cv-track-row"));
       allTrackRows.forEach((r, i) => r.setAttribute("tabindex", i === tracksCursorIdx ? "0" : "-1"));
-      updateUI();
+      updateUI(); // announce — selectedExcerpt changed
       return;
     }
     if (!row) return;
@@ -308,7 +313,7 @@
         anchorIdx = idx;
       }
     }
-    updateUI();
+    updateUI(); // announce — selectedSources or selectedExcerpt changed
   });
 
   // Delegated hover linkage — set once; survives every table re-render.
@@ -352,7 +357,9 @@
     const rows = allRows();
     return rows.indexOf(document.activeElement);
   }
-  function moveFocus(newPos) {
+  function moveFocus(newPos, opts) {
+    opts = opts || {};
+    const silent = opts.announce === false;
     const rows = Array.from(tracksEl.querySelectorAll(".cv-track-row"));
     if (rows.length === 0) return;
     const idx = Math.max(0, Math.min(newPos, rows.length - 1));
@@ -361,7 +368,7 @@
     target.focus();
     target.scrollIntoView({ block: "nearest" });
     tracksCursorIdx = idx;
-    updateUI(); // triggers re-render of excerpts with new cursor
+    updateUI(silent ? { announce: false } : undefined);
   }
   function extendRange(toIdx) {
     if (anchorIdx === null) return;
@@ -380,15 +387,15 @@
     if (pos < 0) return;
     const focusedSrcIdx = Number(rows[pos].getAttribute("data-src-idx"));
 
-    // Navigation — no selection change
+    // Navigation — no selection change (silent cursor move)
     if (evt.key === "ArrowDown" && !evt.shiftKey) {
-      evt.preventDefault(); moveFocus(pos + 1); return;
+      evt.preventDefault(); moveFocus(pos + 1, { announce: false }); return;
     }
     if (evt.key === "ArrowUp" && !evt.shiftKey) {
-      evt.preventDefault(); moveFocus(pos - 1); return;
+      evt.preventDefault(); moveFocus(pos - 1, { announce: false }); return;
     }
-    if (evt.key === "Home") { evt.preventDefault(); moveFocus(0); return; }
-    if (evt.key === "End")  { evt.preventDefault(); moveFocus(rows.length - 1); return; }
+    if (evt.key === "Home") { evt.preventDefault(); moveFocus(0, { announce: false }); return; }
+    if (evt.key === "End")  { evt.preventDefault(); moveFocus(rows.length - 1, { announce: false }); return; }
 
     // Shift+Arrow — move focus AND extend range from anchor
     if (evt.shiftKey && (evt.key === "ArrowUp" || evt.key === "ArrowDown")) {
@@ -397,7 +404,7 @@
       const targetIdx = Number(rows[next].getAttribute("data-src-idx"));
       if (anchorIdx === null) anchorIdx = focusedSrcIdx;
       extendRange(targetIdx);
-      moveFocus(next); // owns the updateUI() call
+      moveFocus(next); // announce — selectedSources range extended
       return;
     }
 
@@ -413,7 +420,7 @@
         selectedExcerpt = null;
         anchorIdx = focusedSrcIdx;
       }
-      updateUI();
+      updateUI(); // announce — pin/unpin changed selectedSources
       return;
     }
 
@@ -423,7 +430,7 @@
       tracksCursorIdx = pos; // keep cursor coherent with the row we just acted on
       if (anchorIdx === null) anchorIdx = focusedSrcIdx;
       extendRange(focusedSrcIdx);
-      updateUI();
+      updateUI(); // announce — selectedSources range extended
       return;
     }
 
@@ -435,7 +442,7 @@
       // Cmd/Ctrl+A pins all tracks. tracksCursorIdx is deliberately NOT reset —
       // the cursor row stays where the user last was, and since every source is
       // now pinned, the cursor's contribution is already in the visible set.
-      updateUI();
+      updateUI(); // announce — selectedSources changed to all
       return;
     }
   });
@@ -448,7 +455,7 @@
     // Reset all track rows to tabindex="-1" (no cursor)
     Array.from(tracksEl.querySelectorAll(".cv-track-row")).forEach((r) =>
       r.setAttribute("tabindex", "-1"));
-    updateUI();
+    updateUI(); // announce — all state cleared
   });
 
   // --- Keyboard navigation on excerpts (roving tabindex) ---
@@ -520,7 +527,7 @@
         evt.target.value = "";
         filterText = "";
         evt.target.blur();
-        updateUI();
+        updateUI(); // announce — filter cleared, visible excerpts changed
         evt.preventDefault();
         evt.stopImmediatePropagation();
       }
@@ -538,7 +545,7 @@
         Array.from(tracksEl.querySelectorAll(".cv-track-row")).forEach((r) =>
           r.setAttribute("tabindex", "-1"));
         if (searchEl) searchEl.value = "";
-        updateUI();
+        updateUI(); // announce — all state cleared, back to overview
       } else {
         window.location.href = "/code";
       }
@@ -566,7 +573,7 @@
         sortBy = chip.getAttribute("data-sort");
         displayOrder = computeDisplayOrder();
         renderTracks();
-        updateUI();
+        updateUI(); // announce — display order changed, visible excerpt set updated
       });
     });
   }
@@ -576,7 +583,7 @@
   if (searchEl) {
     searchEl.addEventListener("input", (evt) => {
       filterText = evt.target.value.trim();
-      updateUI();
+      updateUI(); // announce — filter changed, visible excerpt set updated
     });
   }
 
@@ -697,5 +704,5 @@
     });
   })();
 
-  updateUI();
+  updateUI(); // announce initial overview state
 })();
