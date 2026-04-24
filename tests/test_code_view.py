@@ -146,9 +146,15 @@ def test_cv_tracks_has_listbox_role_regression(client_with_annotations):
     """Sources listbox — regression guard. Already present pre-change."""
     client, _, code_id, _ = client_with_annotations
     resp = client.get(f"/code/{code_id}/view")
-    assert 'id="cv-tracks"' in resp.text
-    assert 'role="listbox"' in resp.text
-    assert 'aria-multiselectable="true"' in resp.text
+    assert resp.status_code == 200
+    # Confirm role + aria-multiselectable belong to #cv-tracks specifically,
+    # not just any element in the response.
+    m = re.search(r'<div[^>]*\bid="cv-tracks"[^>]*>', resp.text)
+    assert m is not None, "cv-tracks div not found"
+    assert 'role="listbox"' in m.group(0), \
+        f"role=listbox not on cv-tracks div: {m.group(0)}"
+    assert 'aria-multiselectable="true"' in m.group(0), \
+        f'aria-multiselectable="true" not on cv-tracks div: {m.group(0)}'
 
 
 def test_codebook_search_has_slash_keyshortcut_regression(client_with_annotations):

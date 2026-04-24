@@ -173,9 +173,12 @@
     else if (sortBy === "position") items.sort((a, b) => a.pos - b.pos);
     // 'source' keeps source-then-offset order (already the case from srcSet iteration)
 
-    let html = `<div class="cv-table-head"><span>#</span><span>Excerpt</span></div>`;
+    // role="presentation" on non-option children — the parent #cv-table is a
+    // listbox, so screen readers should only see .cv-row[role="option"] as
+    // child items. The header and empty-state are decorative.
+    let html = `<div class="cv-table-head" role="presentation"><span>#</span><span>Excerpt</span></div>`;
     if (items.length === 0) {
-      html += `<div class="cv-empty">No excerpts match the filter.</div>`;
+      html += `<div class="cv-empty" role="presentation">No excerpts match the filter.</div>`;
     } else {
       items.forEach((it, i) => {
         const isSelected = (selectedExcerpt
@@ -786,12 +789,14 @@
         && !evt.ctrlKey && !evt.metaKey && !evt.altKey) {
       // evt.shiftKey is TRUE for "?" on US layouts — don't reject it
       if (isEditableElement(document.activeElement)) return;
-      evt.preventDefault();
       const dlg = document.getElementById("cv-cheatsheet-dialog");
-      if (dlg && typeof dlg.showModal === "function") {
-        dlg.__opener = document.activeElement;
-        dlg.showModal();
-      }
+      if (!dlg || typeof dlg.showModal !== "function") return;
+      claim(evt);
+      // Guard against re-open: showModal() throws InvalidStateError if the
+      // dialog is already open, which would break subsequent keyboard handling.
+      if (dlg.open) return;
+      dlg.__opener = document.activeElement;
+      dlg.showModal();
       return;
     }
 
@@ -853,13 +858,16 @@
   if (treeEl) {
     treeEl.addEventListener("keydown", (evt) => {
       const target = evt.target;
-      if (!target || !target.classList || !target.classList.contains("ace-code-row")) return;
+      if (!target || !target.getAttribute) return;
+      const isTreeItem = target.getAttribute("role") === "treeitem";
+      if (!isTreeItem) return;
+      const isCodeRow = target.classList && target.classList.contains("ace-code-row");
 
-      const rows = visibleCodeRows();
-      const pos = rows.indexOf(target);
       const plainKey = !evt.ctrlKey && !evt.metaKey && !evt.altKey && !evt.shiftKey;
 
-      // Suppress bridge.js's read/write editing shortcuts that don't belong here.
+      // Suppress bridge.js's read/write editing shortcuts on EVERY treeitem
+      // (group headers as well as code rows). Group-header reorder via
+      // Alt+Shift+arrows and rename via F2 belong on /code, not here.
       if (plainKey && (evt.key === "F2" || evt.key === "Delete" || evt.key === "Backspace")) {
         claim(evt);
         return;
@@ -869,6 +877,13 @@
         claim(evt);
         return;
       }
+
+      // Navigation + activation are code-row-only. Group headers keep
+      // their bridge.js Enter handler for collapse/expand.
+      if (!isCodeRow) return;
+
+      const rows = visibleCodeRows();
+      const pos = rows.indexOf(target);
 
       if (plainKey && evt.key === "ArrowDown") {
         claim(evt);
@@ -1044,7 +1059,12 @@
     const zone = currentZone();
 
     if (!zone) {
-      // Body (or other non-cycle) focus: Tab enters first stop; Shift+Tab enters last.
+      // Only enter the custom cycle from document/body focus — preserves
+      // native Tab for any other focused control (sort chips, excerpt filter,
+      // Clear button) so they remain keyboard-reachable.
+      const atDocumentRoot =
+        !active || active === document.body || active === document.documentElement;
+      if (!atDocumentRoot) return;
       evt.preventDefault();
       focusZone(evt.shiftKey ? "back" : "tracks");
       return;
