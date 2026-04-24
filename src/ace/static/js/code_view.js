@@ -747,7 +747,7 @@
 
   // Document-level `/` → focus codebook search.
   // Registered at capture phase, matching the existing code_view.js convention.
-  // T7 can add more keys to this same listener.
+  // T7: Shift+← / Shift+→ (global), V (polite no-op), q/x/z (reserved no-op).
   document.addEventListener("keydown", (evt) => {
     if (evt.key === "/") {
       if (evt.ctrlKey || evt.metaKey || evt.altKey) return;
@@ -760,8 +760,41 @@
           : null;
       codeSearchInput.focus();
       codeSearchInput.select();
+      return;
     }
-    // T7: add `?` handler here
+
+    // Shift+← / Shift+→ → move tracks cursor (works from any zone)
+    if (evt.shiftKey && !evt.ctrlKey && !evt.metaKey && !evt.altKey
+        && (evt.key === "ArrowLeft" || evt.key === "ArrowRight")) {
+      if (isEditableElement(document.activeElement)) return;
+      const rows = Array.from(tracksEl.querySelectorAll(".cv-track-row"));
+      if (rows.length === 0) return;
+      const dir = (evt.key === "ArrowRight") ? 1 : -1;
+      const base = tracksCursorIdx >= 0 ? tracksCursorIdx : 0;
+      const target = Math.max(0, Math.min(rows.length - 1, base + dir));
+      evt.preventDefault();
+      moveFocus(target, { announce: false });
+      return;
+    }
+
+    // V → polite no-op with announcement
+    if ((evt.key === "v" || evt.key === "V")
+        && !evt.ctrlKey && !evt.metaKey && !evt.altKey && !evt.shiftKey) {
+      if (isEditableElement(document.activeElement)) return;
+      evt.preventDefault();
+      announce("Already in code view");
+      return;
+    }
+
+    // q, x, z → reserved on this page (explicit no-op)
+    if ((evt.key === "q" || evt.key === "Q"
+         || evt.key === "x" || evt.key === "X"
+         || evt.key === "z" || evt.key === "Z")
+        && !evt.ctrlKey && !evt.metaKey && !evt.altKey && !evt.shiftKey) {
+      if (isEditableElement(document.activeElement)) return;
+      evt.preventDefault();
+      return;
+    }
   }, true); // capture phase — matches existing code_view.js convention
 
   // T6: ↓ bootstrap from body focus → enter tracks.
