@@ -534,3 +534,30 @@ body {
   border: 0;
 }
 
+/* ────────────────────────────────────────────────────────────────
+   Panel headings — visible label for a container/column region.
+   Used by Codebook, Source map, Source tracks, Excerpts, Source note.
+   Aligns with existing .ace-grid-title recipe. Distinct from
+   .ace-section-heading (which belongs to /agreement reading flow).
+   ──────────────────────────────────────────────────────────────── */
+.ace-panel-heading {
+  font-family: var(--ace-font-mono);
+  font-size: var(--ace-font-size-2xs);      /* 13px */
+  font-weight: var(--ace-weight-medium);    /* 500 */
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: rgba(0, 0, 0, 0.62);
+  margin: 0;
+}
+
+/* Static (non-collapsible) container for a panel heading.
+   Gives the heading a consistent padded bar with optional
+   right-aligned metadata slot (reuses .ace-grid-header-hint). */
+.ace-panel-heading-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--ace-space-2);
+  padding: var(--ace-space-2) var(--ace-space-3);
+  flex-shrink: 0;
+}
+
