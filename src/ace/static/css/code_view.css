@@ -420,3 +420,49 @@
   font-size: 12px;
   font-family: var(--ace-font-mono);
 }
+
+/* Cheat sheet dialog */
+.cv-cheatsheet-dialog {
+  border: 1px solid var(--ace-border);
+  border-radius: var(--ace-radius);
+  padding: 0;
+  max-width: 560px;
+  width: 90%;
+  background: var(--ace-bg);
+  color: var(--ace-text);
+  box-shadow: var(--ace-shadow);
+}
+.cv-cheatsheet-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.4);
+}
+.cv-cheatsheet-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--ace-space-3) var(--ace-space-4);
+  border-bottom: 1px solid var(--ace-border);
+}
+.cv-cheatsheet-header h2 { margin: 0; font-size: var(--ace-font-size-md); }
+.cv-cheatsheet-close {
+  background: transparent; border: 0; font-size: 20px;
+  cursor: pointer; padding: 0 var(--ace-space-2);
+  color: var(--ace-text);
+}
+.cv-cheatsheet-close:hover { color: var(--ace-focus); }
+.cv-cheatsheet-body { padding: var(--ace-space-3) var(--ace-space-4); }
+.cv-cheatsheet-body section + section { margin-top: var(--ace-space-3); }
+.cv-cheatsheet-body h3 {
+  font-size: var(--ace-font-size-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--ace-text-faint);
+  margin: 0 0 var(--ace-space-2);
+}
+.cv-cheatsheet-body dl {
+  display: grid;
+  grid-template-columns: minmax(120px, auto) 1fr;
+  gap: var(--ace-space-1) var(--ace-space-3);
+  margin: 0;
+}
+.cv-cheatsheet-body dt { font-family: var(--ace-font-mono); font-size: 13px; }
+.cv-cheatsheet-body dd { margin: 0; font-size: 13px; }

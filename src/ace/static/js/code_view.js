@@ -521,6 +521,11 @@
   // page's bridge.js (which also handles N and Esc on the coding page) never
   // sees these events when we're on /code/{id}/view.
   document.addEventListener("keydown", (evt) => {
+    // If the cheat sheet dialog is open, let native dialog handling take over
+    // (Esc closes it natively; our Esc handler must not also navigate away).
+    const _dlg = document.getElementById("cv-cheatsheet-dialog");
+    if (_dlg && _dlg.open) return;
+
     // Don't hijack keys while the user is typing in any form control (filter,
     // sidebar search, etc). Special case: Esc in #cv-search clears the field
     // and blurs — other controls handle their own Esc via their own wiring.
@@ -760,6 +765,20 @@
           : null;
       codeSearchInput.focus();
       codeSearchInput.select();
+      return;
+    }
+
+    // ? → open cheat sheet
+    if (evt.key === "?"
+        && !evt.ctrlKey && !evt.metaKey && !evt.altKey) {
+      // evt.shiftKey is TRUE for "?" on US layouts — don't reject it
+      if (isEditableElement(document.activeElement)) return;
+      evt.preventDefault();
+      const dlg = document.getElementById("cv-cheatsheet-dialog");
+      if (dlg && typeof dlg.showModal === "function") {
+        dlg.__opener = document.activeElement;
+        dlg.showModal();
+      }
       return;
     }
 
@@ -1005,4 +1024,21 @@
       : (curIdx + 1) % ZONE_ORDER.length;
     focusZone(ZONE_ORDER[nextIdx]);
   }, true); // capture phase
+
+  // --- Cheat sheet dialog close + focus restoration ---
+
+  const cheatDlg = document.getElementById("cv-cheatsheet-dialog");
+  const cheatCloseBtn = document.getElementById("cv-cheatsheet-close-btn");
+  if (cheatCloseBtn && cheatDlg) {
+    cheatCloseBtn.addEventListener("click", () => cheatDlg.close());
+  }
+  if (cheatDlg) {
+    cheatDlg.addEventListener("close", () => {
+      const opener = cheatDlg.__opener;
+      if (opener && opener.isConnected && typeof opener.focus === "function") {
+        opener.focus();
+      }
+      cheatDlg.__opener = null;
+    });
+  }
 })();
