@@ -764,6 +764,18 @@
     // T7: add `?` handler here
   }, true); // capture phase — matches existing code_view.js convention
 
+  // T6: ↓ bootstrap from body focus → enter tracks.
+  // When no zone is focused and user presses ↓, focus first track row.
+  // Registered at capture phase so zone handlers take precedence.
+  document.addEventListener("keydown", (evt) => {
+    if (evt.key !== "ArrowDown") return;
+    if (evt.ctrlKey || evt.metaKey || evt.altKey || evt.shiftKey) return;
+    if (isEditableElement(document.activeElement)) return; // typing in search etc.
+    if (currentZone() !== null) return; // zone handler owns this keypress
+    evt.preventDefault();
+    focusTracksZone();
+  }, true); // capture phase
+
   // Keydown on the code tree: ↑/↓/Home/End/Enter on code rows.
   if (treeEl) {
     treeEl.addEventListener("keydown", (evt) => {
