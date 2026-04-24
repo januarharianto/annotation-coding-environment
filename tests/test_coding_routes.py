@@ -1020,3 +1020,40 @@ def test_coding_page_has_page_title(client_with_codes):
     h1_pos = body.index('>Coding</h1>')
     nav_pos = body.index('ace-nav-cluster')
     assert h1_pos < nav_pos
+
+
+def test_applied_codes_caption_hidden_when_empty(client_with_codes):
+    """Applied-codes bar does not render when no codes have been applied to the source."""
+    client, coder_id, _, _, _ = client_with_codes
+    client.cookies.set("coder_id", coder_id)
+    r = client.get("/code?index=0")
+    body = r.text
+    # No chips applied → whole bar (including caption) absent
+    assert 'class="ace-code-bar"' not in body
+    assert 'Applied codes' not in body
+
+
+def test_applied_codes_caption_when_present(client_with_codes):
+    """Applied-codes bar carries a leading 'Applied codes' caption when ≥1 chip is rendered."""
+    client, coder_id, code_a, _, _ = client_with_codes
+    client.cookies.set("coder_id", coder_id)
+    # Apply one code to source 0
+    apply_resp = client.post(
+        "/api/code/apply",
+        data={
+            "code_id": code_a,
+            "current_index": 0,
+            "start_offset": 0,
+            "end_offset": 5,
+            "selected_text": "First",
+        },
+    )
+    assert apply_resp.status_code == 200
+    r = client.get("/code?index=0")
+    body = r.text
+    assert 'class="ace-code-bar"' in body
+    assert '<span class="ace-code-bar-label">Applied codes</span>' in body
+    # Label appears before the first chip
+    label_pos = body.index('Applied codes</span>')
+    chip_pos = body.index('class="ace-code-chip"')
+    assert label_pos < chip_pos

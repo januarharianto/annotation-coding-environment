@@ -656,6 +656,17 @@ rect.ace-flash {
   color: var(--ace-border);
 }
 
+.ace-code-bar-label {
+  font-family: var(--ace-font-mono);
+  font-size: var(--ace-font-size-2xs);
+  font-weight: var(--ace-weight-medium);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: rgba(0, 0, 0, 0.48);
+  white-space: nowrap;
+  user-select: none;
+}
+
 .ace-code-chip {
   padding: 1px 6px;
   border-radius: 3px;
