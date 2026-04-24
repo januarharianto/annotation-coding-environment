@@ -984,3 +984,17 @@ def test_apply_merge_then_undo_then_redo(client_with_codes):
 
     client.post("/api/code/redo", data={"current_index": 0})
     assert _active_annotation_ranges(db_path, 0) == [(0, 15)]
+
+
+def test_coding_page_has_codebook_heading(client_with_codes):
+    """Sidebar shows a visible 'Codebook' panel heading above the search input."""
+    client, coder_id, _, _, _ = client_with_codes
+    client.cookies.set("coder_id", coder_id)
+    r = client.get("/code?index=0")
+    assert r.status_code == 200
+    body = r.text
+    assert '<h2 class="ace-panel-heading">Codebook</h2>' in body
+    # Appears before the search input in document order
+    heading_pos = body.index('ace-panel-heading">Codebook')
+    search_pos = body.index('id="code-search-input"')
+    assert heading_pos < search_pos
