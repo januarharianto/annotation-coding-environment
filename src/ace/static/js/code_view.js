@@ -35,6 +35,10 @@
   let selectedSources = new Set();          // Set<source idx>
   let selectedExcerpt = null;               // {srcIdx, excerptIdx} | null
   let anchorIdx = null;                     // most recent plain/Cmd click target
+
+  // Tracks cursor: -1 on initial load (no cursor, overview shown).
+  // Becomes an index into displayOrder once the user enters the zone.
+  let tracksCursorIdx = -1;
   let sortBy = "source";                    // wired in Task 5
   let filterText = "";                      // wired in Task 5
 
@@ -51,10 +55,9 @@
                     aria-hidden="true"></span>`;
     }).join("");
     const pad = String(s.idx).padStart(2, "0");
-    const tabIdx = i === 0 ? "0" : "-1";
     const label = `Source ${s.idx} — ${s.name}, ${s.count} excerpts`;
     return `<div class="cv-track-row" role="option" aria-selected="false"
-                 tabindex="${tabIdx}" data-src-idx="${s.idx}"
+                 tabindex="-1" data-src-idx="${s.idx}"
                  aria-label="${escapeHtml(label)}">
       <span class="idx" aria-hidden="true">${pad}</span>
       <span class="ct" aria-hidden="true">${s.count}</span>
@@ -101,9 +104,17 @@
   // --- Table rendering (respects selection + sort + filter) ---
   function renderTable() {
     let srcSet;
-    if (selectedExcerpt) srcSet = [selectedExcerpt.srcIdx];
-    else if (selectedSources.size === 0) srcSet = displayOrder.slice();
-    else srcSet = displayOrder.filter((idx) => selectedSources.has(idx));
+    if (selectedExcerpt) {
+      srcSet = [selectedExcerpt.srcIdx];
+    } else if (selectedSources.size === 0 && tracksCursorIdx < 0) {
+      srcSet = displayOrder.slice(); // overview — no pins, no cursor
+    } else {
+      const visible = new Set(selectedSources);
+      if (tracksCursorIdx >= 0 && tracksCursorIdx < displayOrder.length) {
+        visible.add(displayOrder[tracksCursorIdx]);
+      }
+      srcSet = displayOrder.filter((idx) => visible.has(idx));
+    }
 
     // Flatten to {src, excerpt, localIdx}
     let items = [];
@@ -210,19 +221,26 @@
       const s = bySrcIdx(selectedExcerpt.srcIdx);
       ctxEl.innerHTML = `Showing excerpt <b>${selectedExcerpt.excerptIdx + 1}</b>
                          from <b>${escapeHtml(s.name)}</b>`;
-    } else if (selectedSources.size === 0) {
+    } else if (selectedSources.size === 0 && tracksCursorIdx < 0) {
+      // Overview — no cursor, no pins (initial load)
       ctxEl.innerHTML = `Showing <b>all</b> sources ·
                          <b>${data.stats.excerpts}</b> excerpts`;
-    } else if (selectedSources.size === 1) {
-      const s = bySrcIdx([...selectedSources][0]);
-      ctxEl.innerHTML = `Showing <b>${escapeHtml(s.name)}</b> ·
-                         <b>${s.count}</b> excerpts`;
     } else {
-      const total = [...selectedSources].reduce((a, idx) => a + (bySrcIdx(idx)?.count || 0), 0);
-      ctxEl.innerHTML = `Showing <b>${selectedSources.size} sources</b> ·
-                         <b>${total}</b> excerpts`;
+      // Cursor and/or pins contributing (pinned ∪ cursor rule)
+      const visible = new Set(selectedSources);
+      if (tracksCursorIdx >= 0 && tracksCursorIdx < displayOrder.length) {
+        visible.add(displayOrder[tracksCursorIdx]);
+      }
+      const n = visible.size;
+      let excerptCount = 0;
+      visible.forEach((srcIdx) => {
+        const src = bySrcIdx(srcIdx);
+        if (src) excerptCount += src.excerpts.length;
+      });
+      ctxEl.innerHTML = `Showing <b>${excerptCount}</b> excerpt${excerptCount === 1 ? "" : "s"}
+                         from <b>${n}</b> source${n === 1 ? "" : "s"}`;
     }
-    clearBtn.disabled = !selectedExcerpt && selectedSources.size === 0;
+    clearBtn.disabled = !selectedExcerpt && selectedSources.size === 0 && tracksCursorIdx < 0;
 
     renderTable();
     reconcileExcerptsCursor();
@@ -241,11 +259,23 @@
       selectedExcerpt = { srcIdx, excerptIdx };
       selectedSources = new Set([srcIdx]);
       anchorIdx = srcIdx;
+      // Set cursor to the clicked row's position and give it tabindex="0"
+      const clickedPos = displayOrder.indexOf(srcIdx);
+      tracksCursorIdx = clickedPos >= 0 ? clickedPos : -1;
+      const allTrackRows = Array.from(tracksEl.querySelectorAll(".cv-track-row"));
+      allTrackRows.forEach((r, i) => r.setAttribute("tabindex", i === tracksCursorIdx ? "0" : "-1"));
       updateUI();
       return;
     }
     if (!row) return;
     const idx = Number(row.getAttribute("data-src-idx"));
+
+    // Set cursor to the clicked row's position in displayOrder
+    const clickedPos = displayOrder.indexOf(idx);
+    tracksCursorIdx = clickedPos >= 0 ? clickedPos : -1;
+    // Update roving tabindex to reflect new cursor
+    const allTrackRows = Array.from(tracksEl.querySelectorAll(".cv-track-row"));
+    allTrackRows.forEach((r, i) => r.setAttribute("tabindex", i === tracksCursorIdx ? "0" : "-1"));
 
     // Shift+click with no anchor, or shift+click on the anchor row itself,
     // falls through to the plain-click branch (matches Finder/File Explorer).
@@ -317,12 +347,15 @@
     return rows.indexOf(document.activeElement);
   }
   function moveFocus(newPos) {
-    const rows = allRows();
+    const rows = Array.from(tracksEl.querySelectorAll(".cv-track-row"));
     if (rows.length === 0) return;
-    if (newPos < 0) newPos = 0;
-    if (newPos > rows.length - 1) newPos = rows.length - 1;
-    rows.forEach((r, i) => r.setAttribute("tabindex", i === newPos ? "0" : "-1"));
-    rows[newPos].focus();
+    const idx = Math.max(0, Math.min(newPos, rows.length - 1));
+    rows.forEach((r, i) => r.setAttribute("tabindex", i === idx ? "0" : "-1"));
+    const target = rows[idx];
+    target.focus();
+    target.scrollIntoView({ block: "nearest" });
+    tracksCursorIdx = idx;
+    updateUI(); // triggers re-render of excerpts with new cursor
   }
   function extendRange(toIdx) {
     if (anchorIdx === null) return;
@@ -366,6 +399,7 @@
     // Space — toggle focused row like a plain click
     if ((evt.key === " " || evt.code === "Space") && !evt.shiftKey) {
       evt.preventDefault();
+      tracksCursorIdx = pos; // keep cursor coherent with the row we just acted on
       if (selectedSources.size === 1 && selectedSources.has(focusedSrcIdx) && !selectedExcerpt) {
         selectedSources.clear();
         anchorIdx = null;
@@ -381,6 +415,7 @@
     // Shift+Space — extend range from anchor to focused (no focus move)
     if ((evt.key === " " || evt.code === "Space") && evt.shiftKey) {
       evt.preventDefault();
+      tracksCursorIdx = pos; // keep cursor coherent with the row we just acted on
       if (anchorIdx === null) anchorIdx = focusedSrcIdx;
       extendRange(focusedSrcIdx);
       updateUI();
@@ -392,6 +427,7 @@
       evt.preventDefault();
       selectedSources = new Set(displayOrder);
       selectedExcerpt = null;
+      // tracksCursorIdx remains wherever it was — cursor still contributes
       updateUI();
       return;
     }
@@ -401,6 +437,10 @@
     selectedSources.clear();
     selectedExcerpt = null;
     anchorIdx = null;
+    tracksCursorIdx = -1;
+    // Reset all track rows to tabindex="-1" (no cursor)
+    Array.from(tracksEl.querySelectorAll(".cv-track-row")).forEach((r) =>
+      r.setAttribute("tabindex", "-1"));
     updateUI();
   });
 
@@ -481,11 +521,15 @@
     }
 
     if (evt.key === "Escape") {
-      if (filterText || selectedSources.size > 0 || selectedExcerpt) {
+      if (filterText || selectedSources.size > 0 || selectedExcerpt || tracksCursorIdx >= 0) {
         filterText = "";
         selectedSources.clear();
         selectedExcerpt = null;
         anchorIdx = null;
+        tracksCursorIdx = -1;
+        // Reset all track rows to tabindex="-1" (no cursor = overview)
+        Array.from(tracksEl.querySelectorAll(".cv-track-row")).forEach((r) =>
+          r.setAttribute("tabindex", "-1"));
         if (searchEl) searchEl.value = "";
         updateUI();
       } else {
