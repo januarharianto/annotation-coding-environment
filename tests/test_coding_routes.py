@@ -770,10 +770,13 @@ def test_coding_page_has_collapsible_grid_header(client_with_codes):
     assert 'class="ace-grid-header"' in body
     assert "ace-grid-chevron" in body
     # Title is now "Source map" using the shared panel-heading class,
-    # and the button sits inside an <h2> (W3C accordion pattern).
-    assert '<span class="ace-panel-heading">Source map</span>' in body
-    # The button is wrapped in an h2 for document-outline semantics
-    assert body.count("<h2") >= 1
+    # and the button sits inside an <h2> (W3C accordion pattern) with
+    # aria-labelledby on the section pointing at the visible heading.
+    assert '<span id="ace-sidebar-grid-heading" class="ace-panel-heading">Source map</span>' in body
+    # The button is wrapped in an h2 via the shared .ace-panel-heading-wrap utility
+    assert '<h2 class="ace-panel-heading-wrap">' in body
+    # Section landmark references the visible heading, not a redundant aria-label
+    assert 'aria-labelledby="ace-sidebar-grid-heading"' in body
     # Total count no longer in header (it still appears in range label, which is
     # client-rendered)
     assert 'class="ace-grid-meta"' not in body

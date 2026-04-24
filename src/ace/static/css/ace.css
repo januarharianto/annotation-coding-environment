@@ -561,6 +561,13 @@ body {
   flex-shrink: 0;
 }
 
+/* Neutralises user-agent H2 margins when an h2 is used purely as a
+   document-outline wrapper (e.g. the W3C accordion pattern wrapping
+   a <button>, or column-label h2s inside flex/grid layouts). */
+.ace-panel-heading-wrap {
+  margin: 0;
+}
+
 /* Page identity — used on /code/{id}/view (H1 "Coded text") and
    /code (H1 "Coding", added in a later task). `justify-self: center`
    takes effect only inside a grid container (e.g. .cv-header); it is
