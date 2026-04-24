@@ -478,6 +478,14 @@
     target.focus();
     target.scrollIntoView({ block: "nearest" });
     excerptsCursorId = target.dataset.annId || null;
+
+    // Update context bar with "Excerpt N of M in <source>"
+    const srcIdx = parseInt(target.dataset.srcIdx, 10);
+    const src = (data.sources || []).find((s) => s.idx === srcIdx);
+    const srcName = (src && (src.name || src.display_id)) || `Source ${srcIdx}`;
+    if (ctxEl) {
+      ctxEl.innerHTML = `Excerpt <b>${idx + 1}</b> of <b>${rows.length}</b> in <b>${escapeHtml(srcName)}</b>`;
+    }
   }
 
   function currentExcerptsCursorPos() {
@@ -964,6 +972,7 @@
       target = rows.find((r) => r.getAttribute("aria-current") === "page") || rows[0];
     }
     moveCodebookCursor(target);
+    updateUI({ announce: false });
   }
 
   function focusBackLink() {
@@ -972,6 +981,7 @@
       back.focus();
       back.scrollIntoView({ block: "nearest" });
     }
+    updateUI({ announce: false });
   }
 
   function focusZone(name) {
