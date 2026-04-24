@@ -72,6 +72,18 @@
 
   function bySrcIdx(idx) { return sources.find((s) => s.idx === idx); }
 
+  // Returns the set of source idx values currently visible in the excerpts
+  // column, per the pinned ∪ cursor rule. Does NOT account for selectedExcerpt
+  // (which overrides everything) — callers that need to short-circuit on
+  // selectedExcerpt should do so before calling this.
+  function getVisibleSources() {
+    const visible = new Set(selectedSources);
+    if (tracksCursorIdx >= 0 && tracksCursorIdx < displayOrder.length) {
+      visible.add(displayOrder[tracksCursorIdx]);
+    }
+    return visible;
+  }
+
   function computeDisplayOrder() {
     const entries = sources.slice();
     if (sortBy === "length") {
@@ -109,10 +121,7 @@
     } else if (selectedSources.size === 0 && tracksCursorIdx < 0) {
       srcSet = displayOrder.slice(); // overview — no pins, no cursor
     } else {
-      const visible = new Set(selectedSources);
-      if (tracksCursorIdx >= 0 && tracksCursorIdx < displayOrder.length) {
-        visible.add(displayOrder[tracksCursorIdx]);
-      }
+      const visible = getVisibleSources();
       srcSet = displayOrder.filter((idx) => visible.has(idx));
     }
 
@@ -227,10 +236,7 @@
                          <b>${data.stats.excerpts}</b> excerpts`;
     } else {
       // Cursor and/or pins contributing (pinned ∪ cursor rule)
-      const visible = new Set(selectedSources);
-      if (tracksCursorIdx >= 0 && tracksCursorIdx < displayOrder.length) {
-        visible.add(displayOrder[tracksCursorIdx]);
-      }
+      const visible = getVisibleSources();
       const n = visible.size;
       let excerptCount = 0;
       visible.forEach((srcIdx) => {
@@ -388,11 +394,10 @@
     if (evt.shiftKey && (evt.key === "ArrowUp" || evt.key === "ArrowDown")) {
       evt.preventDefault();
       const next = Math.max(0, Math.min(rows.length - 1, pos + (evt.key === "ArrowDown" ? 1 : -1)));
-      moveFocus(next);
       const targetIdx = Number(rows[next].getAttribute("data-src-idx"));
       if (anchorIdx === null) anchorIdx = focusedSrcIdx;
       extendRange(targetIdx);
-      updateUI();
+      moveFocus(next); // owns the updateUI() call
       return;
     }
 
@@ -427,7 +432,9 @@
       evt.preventDefault();
       selectedSources = new Set(displayOrder);
       selectedExcerpt = null;
-      // tracksCursorIdx remains wherever it was — cursor still contributes
+      // Cmd/Ctrl+A pins all tracks. tracksCursorIdx is deliberately NOT reset —
+      // the cursor row stays where the user last was, and since every source is
+      // now pinned, the cursor's contribution is already in the visible set.
       updateUI();
       return;
     }
