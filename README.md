@@ -1,9 +1,5 @@
 # ACE — Annotation Coding Environment
 
-<p align="center">
-  <img src="https://raw.githubusercontent.com/januarharianto/annotation-coding-environment/9519aeabe20780f8fdb1ba8d3288a52a3e4d42e6/brand/logo-light.svg" width="50%" alt="ACE">
-</p>
-
 ACE is a qualitative coding tool that I developed for use with my research group at The University of Sydney. We wanted a way to select sections of text and assign qualitative codes and annotations to them but found existing tools to be unintuitive. Most importantly, I realised that we were using perhaps 5% of the features of expensive commercial software.
 
 As both a research software engineer and data scientist I realised that I may be able to improve my quality of life and started working on a simple text highlight tool that ended up becoming ACE. ACE does only a *few* things right now. **I do not intend to add anything more than the current feature set** (bevause this is a personal project). These are what ACE does:
