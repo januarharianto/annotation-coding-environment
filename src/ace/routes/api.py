@@ -1038,8 +1038,8 @@ async def put_source_note(
     """Upsert (or delete via empty text) the current coder's note for a source.
 
     Returns a minimal JSON response (no HTMX swap) so the save doesn't
-    interfere with the SVG highlight overlay or trigger idiomorph errors.
-    The JS caller updates the pill state client-side.
+    interfere with the SVG highlight overlay. The JS caller updates the
+    pill state client-side.
     """
     from ace.models.assignment import get_assignments_for_coder
     from ace.models.source_note import upsert_note

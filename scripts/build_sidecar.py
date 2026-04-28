@@ -72,16 +72,13 @@ def main() -> None:
 
     subprocess.run(cmd, check=True, env=env)
 
-    # Nuitka may place the binary in output-dir or cwd depending on version
-    candidates = [build_dir / binary_name, Path(binary_name)]
-    for candidate in candidates:
-        if candidate.exists():
-            dest = out_dir / binary_name
-            shutil.copy2(str(candidate), str(dest))
-            print(f"Binary placed at {dest} ({dest.stat().st_size // (1024*1024)} MB)")
-            return
+    binary = build_dir / binary_name
+    if not binary.exists():
+        sys.exit(f"ERROR: compiled binary not found at {binary}")
 
-    sys.exit(f"ERROR: compiled binary '{binary_name}' not found")
+    dest = out_dir / binary_name
+    shutil.copy2(str(binary), str(dest))
+    print(f"Binary placed at {dest} ({dest.stat().st_size // (1024*1024)} MB)")
 
 
 if __name__ == "__main__":

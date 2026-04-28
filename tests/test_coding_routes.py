@@ -167,14 +167,6 @@ def test_coding_page_auto_creates_assignments(client_with_sources):
     assert 'id="ace-sources-data"' in resp.text
 
 
-def test_coding_page_includes_idiomorph(client_with_sources):
-    """The coding page includes the idiomorph extension script."""
-    client, _ = client_with_sources
-    resp = client.get("/code")
-    assert resp.status_code == 200
-    assert "idiomorph-ext.min.js" in resp.text
-
-
 def test_sidebar_has_brand_and_nav_has_source(client_with_sources):
     """Sidebar shows ACE brand, nav shows flag button."""
     client, _ = client_with_sources
