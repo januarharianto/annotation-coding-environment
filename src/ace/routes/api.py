@@ -217,6 +217,35 @@ def _with_headers(response: HTMLResponse, headers: dict[str, str]) -> HTMLRespon
     return response
 
 
+def _oob_status_undo(message: str) -> str:
+    """OOB-swap status with an inline [Z] undo keycap — for soft-delete actions.
+
+    Returns the raw HTML string (not HTMLResponse) so callers can concatenate
+    it with other OOB fragments before wrapping. Only emits the statusbar
+    fragment + ARIA announce — the text-panel pill on /code is populated
+    client-side by bridge.js (its DOM lives inside #text-panel, so an OOB
+    swap to it would be clobbered by the primary swap that re-renders the
+    text panel). Keycap is a real button so mouse users have a click target;
+    pressing Z on the keyboard fires the same /api/undo path via bridge.js.
+    """
+    escaped = html.escape(message)
+    inner = (
+        f'<span class="ace-statusbar-undo-msg">{escaped}</span>'
+        '<span class="ace-statusbar-undo-sep">·</span>'
+        '<button type="button" class="ace-statusbar-undo" '
+        'data-ace-undo-affordance="1" aria-label="Undo (Z)">'
+        '<span class="ace-statusbar-undo-keycap">Z</span>'
+        '<span>undo</span>'
+        '</button>'
+    )
+    status_fragment = (
+        '<span class="ace-statusbar-event ace-statusbar-event--undo" '
+        'id="ace-statusbar-event" hx-swap-oob="outerHTML">' + inner + '</span>'
+    )
+    announce = _oob_announce(message, assertive=False)
+    return status_fragment + announce
+
+
 def _oob_status(message: str, kind: str = "err") -> HTMLResponse:
     """Return OOB-swap fragments that set the event channel on all pages.
 
@@ -1532,9 +1561,25 @@ async def delete_code_route(
     coder_id = _require_coder(request)
 
     with _project_db(request) as conn:
+        # Capture the name before deletion — the row is gone afterwards.
+        name_row = conn.execute(
+            "SELECT name FROM codebook_code WHERE id = ?", (code_id,)
+        ).fetchone()
+        code_name = name_row["name"] if name_row else "(deleted code)"
+
         affected = delete_code(conn, code_id)
         _get_undo_manager(request).record_code_delete(code_id, affected)
         content = _render_full_coding_oob(request, conn, coder_id, current_index)
+
+        # Soft-delete affordance: status bar carries an inline [Z] undo keycap.
+        n = len(affected)
+        if n > 0:
+            unit = "annotation" if n == 1 else "annotations"
+            message = f'Deleted "{code_name}" · {n} {unit} removed'
+        else:
+            message = f'Deleted "{code_name}"'
+        content += _oob_status_undo(message)
+
         return HTMLResponse(content)
 
 
