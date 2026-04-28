@@ -1593,6 +1593,10 @@
 
   let _sortableInstances = [];
   let _isDragging = false;
+  // Original DOM positions of code rows, captured on entry to search mode so
+  // we can restore the codebook to its grouped layout when the query clears.
+  // null = not in search mode; Map<rowEl, {parent, nextSibling}> otherwise.
+  let _origRowPositions = null;
 
   function _initSortable() {
     // Sortable.min.js only loads on /code (coding.html). On /code/{id}/view the
@@ -1882,48 +1886,76 @@
     if (oldPrompt) oldPrompt.remove();
 
     if (query && !query.startsWith("/")) {
-      // Filter mode
+      // Filter + score-rank via fuzzysort. Matched rows are flattened to
+      // tree-level in descending score order; group headers + groups hide.
       _sortableInstances.forEach(function (s) { s.option("disabled", true); });
-      const rows = tree.querySelectorAll(".ace-code-row");
-      let anyMatch = false;
-      rows.forEach(function (row) {
+      const allRows = Array.from(tree.querySelectorAll(".ace-code-row"));
+
+      // Snapshot original positions on first entry to search mode so we can
+      // put rows back in their original groups when the query clears.
+      if (!_origRowPositions) {
+        _origRowPositions = new Map();
+        allRows.forEach(function (row) {
+          _origRowPositions.set(row, {
+            parent: row.parentNode,
+            nextSibling: row.nextSibling,
+          });
+        });
+      }
+
+      // Pair each row with its name for fuzzysort. Use the cached original
+      // text, not nameEl.textContent — a previous keystroke may have left
+      // <mark> tags which would distort scoring.
+      const candidates = allRows.map(function (row) {
         const nameEl = row.querySelector(".ace-code-name");
-        if (!nameEl) return;
-        const text = nameEl.textContent;
-        const match = text.toLowerCase().indexOf(query) >= 0;
-        if (match) {
-          row.style.display = "";
-          row.removeAttribute("aria-hidden");
-          anyMatch = true;
-          // Highlight match
-          const idx = text.toLowerCase().indexOf(query);
-          const before = text.substring(0, idx);
-          const matched = text.substring(idx, idx + query.length);
-          const after = text.substring(idx + query.length);
-          nameEl.innerHTML = `${_escapeHtml(before)}<mark>${_escapeHtml(matched)}</mark>${_escapeHtml(after)}`;
-        } else {
-          row.style.display = "none";
-          row.setAttribute("aria-hidden", "true");
-          nameEl.textContent = text; // Strip any existing highlight
+        // Strip any prior <mark>: textContent already does that.
+        return { row: row, name: nameEl ? nameEl.textContent : "" };
+      });
+
+      const results = fuzzysort.go(query, candidates, { key: "name" });
+
+      // Hide everything first; matches will be re-shown below.
+      allRows.forEach(function (row) {
+        row.style.display = "none";
+        row.setAttribute("aria-hidden", "true");
+        const nameEl = row.querySelector(".ace-code-name");
+        if (nameEl && nameEl.querySelector("mark")) {
+          nameEl.textContent = nameEl.textContent; // strip prior highlight
         }
       });
-
-      // Show/hide group headers based on visible children
-      tree.querySelectorAll(".ace-code-group-header").forEach(function (header) {
-        const groupDiv = header.nextElementSibling;
-        if (!groupDiv || groupDiv.getAttribute("role") !== "group") return;
-        let hasVisible = false;
-        groupDiv.querySelectorAll(".ace-code-row").forEach(function (r) {
-          if (r.style.display !== "none") hasVisible = true;
-        });
-        header.style.display = hasVisible ? "" : "none";
-        if (hasVisible) { header.removeAttribute("aria-hidden"); } else { header.setAttribute("aria-hidden", "true"); }
-        groupDiv.style.display = hasVisible ? "" : "none";
-        if (hasVisible) { groupDiv.removeAttribute("aria-hidden"); } else { groupDiv.setAttribute("aria-hidden", "true"); }
+      tree.querySelectorAll(".ace-code-group-header, [role='group']").forEach(function (el) {
+        el.style.display = "none";
+        el.setAttribute("aria-hidden", "true");
       });
 
-      // Show "Create" prompt if no matches
-      if (!anyMatch) {
+      // Reattach matched rows at tree level in descending-score order. Since
+      // group containers are now display:none, the rows render flat at the
+      // top of the visible tree flow.
+      results.forEach(function (result) {
+        const row = result.obj.row;
+        const text = result.obj.name;
+        row.style.display = "";
+        row.removeAttribute("aria-hidden");
+        const nameEl = row.querySelector(".ace-code-name");
+        if (nameEl) {
+          // Coalesce adjacent matched indexes into one <mark> span.
+          const matchSet = new Set(result.indexes);
+          let html = "";
+          let inMark = false;
+          for (let i = 0; i < text.length; i++) {
+            const isMatch = matchSet.has(i);
+            if (isMatch && !inMark) { html += "<mark>"; inMark = true; }
+            else if (!isMatch && inMark) { html += "</mark>"; inMark = false; }
+            html += _escapeHtml(text[i]);
+          }
+          if (inMark) html += "</mark>";
+          nameEl.innerHTML = html;
+        }
+        tree.appendChild(row);
+      });
+
+      // No matches → "Create" prompt
+      if (results.total === 0) {
         let prompt = document.createElement("div");
         prompt.className = "ace-create-prompt ace-create-prompt--code";
         prompt.innerHTML = `<span>+</span> Create "<strong>${_escapeHtml(e.target.value.trim())}</strong>"`;
@@ -1934,20 +1966,16 @@
         tree.appendChild(prompt);
       }
 
-      // Highlight first visible match as search target
+      // Mark the top-scoring row as the Enter target.
       const prevTarget = tree.querySelector(".ace-code-row--search-target");
       if (prevTarget) {
         prevTarget.classList.remove("ace-code-row--search-target");
         prevTarget.removeAttribute("aria-current");
       }
-      if (anyMatch) {
-        const target = Array.from(tree.querySelectorAll(".ace-code-row")).find(function (r) {
-          return r.style.display !== "none";
-        });
-        if (target) {
-          target.classList.add("ace-code-row--search-target");
-          target.setAttribute("aria-current", "true");
-        }
+      if (results.total > 0) {
+        const target = results[0].obj.row;
+        target.classList.add("ace-code-row--search-target");
+        target.setAttribute("aria-current", "true");
       }
     } else if (query && query.startsWith("/")) {
       // Group creation mode
@@ -1979,8 +2007,21 @@
         tree.appendChild(prompt);
       }
     } else {
-      // Empty: restore all rows, clear highlights
+      // Empty: restore all rows + groups, undo any score-order moves.
       _sortableInstances.forEach(function (s) { s.option("disabled", false); });
+
+      // Put rows back where they were before search mode. Skip any row whose
+      // cached parent was detached (e.g. tree was re-rendered via OOB swap
+      // mid-search) — the new tree already has them in the right place.
+      if (_origRowPositions) {
+        _origRowPositions.forEach(function (pos, row) {
+          if (row.isConnected && pos.parent.isConnected) {
+            pos.parent.insertBefore(row, pos.nextSibling);
+          }
+        });
+        _origRowPositions = null;
+      }
+
       tree.querySelectorAll(".ace-code-row").forEach(function (row) {
         row.style.display = "";
         row.removeAttribute("aria-hidden");

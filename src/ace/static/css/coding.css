@@ -910,13 +910,18 @@ dialog::backdrop {
   border-radius: 0;
 }
 
-/* Absolute keycap on the right edge of the search input. */
+/* Absolute keycap on the right edge of the search input. Sized to match
+   .ace-keycap so the sidebar's visual rhythm is consistent. */
 .ace-sidebar-search-hint {
   position: absolute;
   right: 6px;
   top: 50%;
   transform: translateY(-50%);
   pointer-events: none;
+  font-size: var(--ace-font-size-2xs);
+  min-width: 24px;
+  height: 24px;
+  padding: 0;
 }
 
 .ace-sidebar-search:focus {
