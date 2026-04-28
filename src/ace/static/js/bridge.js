@@ -1554,11 +1554,13 @@
     _lastSelectedCodeId = null;
     // Route the response through HTMX (not _codeAction's plain fetch) so the
     // OOB statusbar/pill fragments carrying the [Z] undo affordance get
-    // applied to the page.
-    htmx.ajax("DELETE", `/api/codes/${codeId}`, {
+    // applied to the page. current_index goes in the URL — htmx.ajax's
+    // `values` ride in the request body for DELETE, but the route reads
+    // current_index via Query, so a body-borne value would be ignored.
+    const idx = encodeURIComponent(window.__aceCurrentIndex);
+    htmx.ajax("DELETE", `/api/codes/${codeId}?current_index=${idx}`, {
       target: "#text-panel",
       swap: "outerHTML",
-      values: { current_index: window.__aceCurrentIndex },
     });
   }
 
@@ -2535,21 +2537,77 @@
   }
 
   /**
-   * Soft-delete affordance: a server-emitted statusbar/pill fragment with an
-   * inline [Z] undo keycap. Runs a 7 s auto-clear timer (paused while the
-   * keycap is hovered — sticky read), and dispatches /api/undo on click.
-   * Idempotent — bails if the current undo button is already wired.
+   * Soft-delete affordance: a server-emitted statusbar fragment with an
+   * inline [Z] undo keycap, mirrored client-side into the text-panel pill
+   * (because the pill lives inside #text-panel and gets clobbered on every
+   * primary swap — so we re-mirror after each swap from the persistent
+   * statusbar source of truth).
+   *
+   * The countdown hairline drains via the --undo-progress CSS variable and
+   * supports true pause/resume: on hover, JS reads elapsed time, freezes
+   * the progress at its current value, and clears the timer. On mouseleave
+   * it restarts with the remaining duration — not a fresh 7 s.
    */
   const UNDO_DURATION_MS = 7000;
   let _undoTimer = null;
+  let _undoStartTime = null;     // null when paused or not running
+  let _undoRemainingMs = 0;      // remaining ms until auto-clear fires
+  let _undoFrozenProgress = 1;   // last computed progress (1 → 0); seeds new pill buttons
+
+  function _undoButtons() {
+    return document.querySelectorAll(".ace-statusbar-undo[data-ace-undo-affordance]");
+  }
+
+  function _undoSetProgress(progress, durationMs) {
+    _undoButtons().forEach(function (b) {
+      if (durationMs !== undefined) {
+        b.style.setProperty("--undo-duration", (durationMs / 1000) + "s");
+      }
+      b.style.setProperty("--undo-progress", String(progress));
+    });
+  }
+
+  function _undoStart(remainingMs) {
+    // Set initial progress without transition (two RAFs let the browser
+    // commit it before flipping to 0, so the transition actually runs).
+    _undoSetProgress(_undoFrozenProgress);
+    _undoStartTime = Date.now();
+    _undoRemainingMs = remainingMs;
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () { _undoSetProgress(0, remainingMs); });
+    });
+    if (_undoTimer) clearTimeout(_undoTimer);
+    _undoTimer = setTimeout(_clearUndoAffordance, remainingMs);
+  }
+
+  function _undoPause() {
+    if (_undoStartTime === null) return;
+    const elapsed = Date.now() - _undoStartTime;
+    _undoFrozenProgress = Math.max(0, 1 - elapsed / _undoRemainingMs);
+    _undoRemainingMs = Math.max(0, _undoRemainingMs - elapsed);
+    _undoStartTime = null;
+    if (_undoTimer) { clearTimeout(_undoTimer); _undoTimer = null; }
+    // Visually freeze. The :hover rule sets transition:none, so this assignment
+    // sticks; when :hover ends, the scaleX(...) value is already in place and
+    // the transition resumes from there once _undoStart sets a new target.
+    _undoSetProgress(_undoFrozenProgress);
+  }
+
+  function _undoResume() {
+    if (_undoStartTime !== null) return; // already running
+    if (_undoRemainingMs <= 0) { _clearUndoAffordance(); return; }
+    _undoStart(_undoRemainingMs);
+  }
 
   function _clearUndoAffordance() {
     if (_undoTimer) { clearTimeout(_undoTimer); _undoTimer = null; }
+    _undoStartTime = null;
+    _undoRemainingMs = 0;
+    _undoFrozenProgress = 1;
     const sbEl = document.querySelector(".ace-statusbar-event--undo");
     if (sbEl) {
       sbEl.textContent = "";
       sbEl.classList.remove("ace-statusbar-event--undo");
-      delete sbEl.dataset.aceUndoBound;
     }
     const pillEl = document.querySelector(".ace-text-event-pill--undo");
     if (pillEl) {
@@ -2561,46 +2619,25 @@
   function _initUndoAffordance() {
     const sbEvent = document.querySelector(".ace-statusbar-event--undo");
     if (!sbEvent) return;
-    if (sbEvent.dataset.aceUndoBound === "1") return;
-    sbEvent.dataset.aceUndoBound = "1";
 
-    // Mirror the affordance into the text-panel pill (visible on /code where
-    // the global statusbar is hidden). The pill lives inside #text-panel so
-    // its content arrives empty after every primary swap — clone client-side.
+    // Always re-mirror — the pill is inside #text-panel and gets clobbered
+    // by any primary swap that lands during the affordance window. Listener-
+    // binding is gated separately, per-button.
     const pill = document.getElementById("ace-text-event-pill");
-    if (pill) {
+    if (pill && pill.innerHTML !== sbEvent.innerHTML) {
       pill.classList.add("ace-text-event-pill--undo");
       pill.innerHTML = sbEvent.innerHTML;
     }
 
-    const undoBtns = document.querySelectorAll(".ace-statusbar-undo[data-ace-undo-affordance]");
-
-    function setRunning(on) {
-      undoBtns.forEach(function (b) { b.dataset.running = on ? "true" : "false"; });
-    }
-
-    function startCountdown() {
-      // Two RAFs so the initial scaleX(1) paint happens before flipping to
-      // scaleX(0) — without this the transition can be skipped.
-      requestAnimationFrame(function () {
-        requestAnimationFrame(function () { setRunning(true); });
-      });
-      if (_undoTimer) clearTimeout(_undoTimer);
-      _undoTimer = setTimeout(_clearUndoAffordance, UNDO_DURATION_MS);
-    }
-
-    function pauseCountdown() {
-      if (_undoTimer) { clearTimeout(_undoTimer); _undoTimer = null; }
-      setRunning(false);
-    }
-
-    undoBtns.forEach(function (btn) {
-      btn.addEventListener("mouseenter", pauseCountdown);
-      btn.addEventListener("mouseleave", startCountdown);
+    // Bind per-button so the freshly-mirrored pill button gets its handlers
+    // even when the persistent statusbar button is already wired.
+    _undoButtons().forEach(function (btn) {
+      if (btn.dataset.aceUndoBound === "1") return;
+      btn.dataset.aceUndoBound = "1";
+      btn.addEventListener("mouseenter", _undoPause);
+      btn.addEventListener("mouseleave", _undoResume);
       btn.addEventListener("click", function (e) {
         e.preventDefault();
-        // Flash both keycaps so whichever the user clicked feels responsive
-        // and the other mirrors it (cheap symmetry, no per-element wiring).
         document.querySelectorAll(".ace-statusbar-undo-keycap").forEach(function (k) {
           k.classList.add("ace-statusbar-undo-keycap--pressed");
         });
@@ -2618,7 +2655,25 @@
       });
     });
 
-    startCountdown();
+    // First time we've seen this affordance? Kick off the countdown.
+    // Otherwise re-apply current state to all buttons (covers freshly-
+    // mirrored pill button mid-countdown or while paused).
+    if (_undoStartTime === null && _undoRemainingMs === 0) {
+      _undoFrozenProgress = 1;
+      _undoStart(UNDO_DURATION_MS);
+    } else if (_undoStartTime !== null) {
+      // Running — recompute current visual progress and restart the
+      // transition so the new pill button picks up the animation.
+      const elapsed = Date.now() - _undoStartTime;
+      const currentProgress = Math.max(0, 1 - elapsed / _undoRemainingMs);
+      const newRemaining = Math.max(0, _undoRemainingMs - elapsed);
+      _undoFrozenProgress = currentProgress;
+      _undoRemainingMs = newRemaining;
+      _undoStart(newRemaining);
+    } else {
+      // Paused — show the frozen progress on all buttons.
+      _undoSetProgress(_undoFrozenProgress);
+    }
   }
 
   /**

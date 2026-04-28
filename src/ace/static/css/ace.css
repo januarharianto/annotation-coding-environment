@@ -199,8 +199,13 @@ body {
   border-color: var(--ace-text);
 }
 
-/* Countdown hairline — extends the keycap's bottom edge, drains
-   right-to-left over --ace-undo-duration once data-running flips on. */
+/* Countdown hairline — extends the keycap's bottom edge, draining
+   right-to-left as JS lowers --undo-progress from 1 to 0 over
+   --undo-duration. Pause/resume tracks elapsed time: on hover, JS reads
+   the current progress and freezes it in --undo-progress; on mouseleave
+   it resets --undo-duration to the remaining time and restarts the
+   transition. The :hover transition:none rule below stops the freeze
+   value from animating. */
 .ace-statusbar-undo-keycap::after {
   content: "";
   position: absolute;
@@ -210,12 +215,8 @@ body {
   height: 1px;
   background: var(--ace-text);
   transform-origin: left center;
-  transform: scaleX(1);
-  transition: transform linear var(--ace-undo-duration, 7s);
-}
-
-.ace-statusbar-undo[data-running="true"] .ace-statusbar-undo-keycap::after {
-  transform: scaleX(0);
+  transform: scaleX(var(--undo-progress, 1));
+  transition: transform linear var(--undo-duration, 7s);
 }
 
 /* Hover pauses the visual countdown — sticky read for slower readers. */
