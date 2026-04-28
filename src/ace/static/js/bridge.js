@@ -531,7 +531,7 @@
       _shortcutRow("Shift + F", "Flag/unflag source") +
       _shortcutRow("N", "Open / close note panel") +
       _shortcutRow("F2", "Rename code (in sidebar)") +
-      _shortcutRow("Delete", "Delete code (in sidebar, press twice)") +
+      _shortcutRow("Delete", "Delete code (in sidebar; Z to undo)") +
       _shortcutRow("?", "Toggle this cheat sheet") +
       _shortcutRow("Esc", "Close overlay / clear") +
       "</table>";
@@ -1231,6 +1231,10 @@
     // behaviour of the previously-standalone listener this replaced.
     _setAmbient();
 
+    // If a soft-delete swapped in an undo affordance, wire its click +
+    // hover-pause + 7 s auto-clear timer. Idempotent.
+    _initUndoAffordance();
+
     const target = (evt.detail || {}).target;
     if (!target) return;
 
@@ -1546,31 +1550,16 @@
     if (codeId) _startInlineRename(codeId);
   });
 
-  let _deleteTarget = null;
-  let _deleteTimer = null;
-
-  function _startDeleteConfirm(codeId) {
-    if (_deleteTimer) { clearTimeout(_deleteTimer); _clearDeleteConfirm(); }
-    let row = document.querySelector(`.ace-code-row[data-code-id="${codeId}"]`);
-    if (!row) return;
-    row.classList.add("ace-code-row--confirm-delete");
-    _deleteTarget = codeId;
-    _deleteTimer = setTimeout(function () { _clearDeleteConfirm(); }, 2000);
-  }
-
-  function _clearDeleteConfirm() {
-    if (_deleteTarget) {
-      let row = document.querySelector(`.ace-code-row[data-code-id="${_deleteTarget}"]`);
-      if (row) row.classList.remove("ace-code-row--confirm-delete");
-    }
-    _deleteTarget = null;
-    if (_deleteTimer) { clearTimeout(_deleteTimer); _deleteTimer = null; }
-  }
-
   function _executeDelete(codeId) {
-    _clearDeleteConfirm();
     _lastSelectedCodeId = null;
-    _codeAction("DELETE", `/api/codes/${codeId}?current_index=${window.__aceCurrentIndex}`, null);
+    // Route the response through HTMX (not _codeAction's plain fetch) so the
+    // OOB statusbar/pill fragments carrying the [Z] undo affordance get
+    // applied to the page.
+    htmx.ajax("DELETE", `/api/codes/${codeId}`, {
+      target: "#text-panel",
+      swap: "outerHTML",
+      values: { current_index: window.__aceCurrentIndex },
+    });
   }
 
   function _moveCode(codeId, direction) {
@@ -1713,7 +1702,7 @@
       },
       { label: "Move Up", hint: "Alt+Shift+\u2191", action: function () { _closeCodeMenu(); _moveCode(codeId, -1); } },
       { label: "Move Down", hint: "Alt+Shift+\u2193", action: function () { _closeCodeMenu(); _moveCode(codeId, 1); } },
-      { label: "Delete", hint: "\u232b", danger: true, action: function () { _closeCodeMenu(); _startDeleteConfirm(codeId); } },
+      { label: "Delete", hint: "\u232b", danger: true, action: function () { _closeCodeMenu(); _executeDelete(codeId); } },
     ];
 
     // Add "Move to Group" submenu
@@ -2546,6 +2535,93 @@
   }
 
   /**
+   * Soft-delete affordance: a server-emitted statusbar/pill fragment with an
+   * inline [Z] undo keycap. Runs a 7 s auto-clear timer (paused while the
+   * keycap is hovered — sticky read), and dispatches /api/undo on click.
+   * Idempotent — bails if the current undo button is already wired.
+   */
+  const UNDO_DURATION_MS = 7000;
+  let _undoTimer = null;
+
+  function _clearUndoAffordance() {
+    if (_undoTimer) { clearTimeout(_undoTimer); _undoTimer = null; }
+    const sbEl = document.querySelector(".ace-statusbar-event--undo");
+    if (sbEl) {
+      sbEl.textContent = "";
+      sbEl.classList.remove("ace-statusbar-event--undo");
+      delete sbEl.dataset.aceUndoBound;
+    }
+    const pillEl = document.querySelector(".ace-text-event-pill--undo");
+    if (pillEl) {
+      pillEl.textContent = "";
+      pillEl.classList.remove("ace-text-event-pill--undo");
+    }
+  }
+
+  function _initUndoAffordance() {
+    const sbEvent = document.querySelector(".ace-statusbar-event--undo");
+    if (!sbEvent) return;
+    if (sbEvent.dataset.aceUndoBound === "1") return;
+    sbEvent.dataset.aceUndoBound = "1";
+
+    // Mirror the affordance into the text-panel pill (visible on /code where
+    // the global statusbar is hidden). The pill lives inside #text-panel so
+    // its content arrives empty after every primary swap — clone client-side.
+    const pill = document.getElementById("ace-text-event-pill");
+    if (pill) {
+      pill.classList.add("ace-text-event-pill--undo");
+      pill.innerHTML = sbEvent.innerHTML;
+    }
+
+    const undoBtns = document.querySelectorAll(".ace-statusbar-undo[data-ace-undo-affordance]");
+
+    function setRunning(on) {
+      undoBtns.forEach(function (b) { b.dataset.running = on ? "true" : "false"; });
+    }
+
+    function startCountdown() {
+      // Two RAFs so the initial scaleX(1) paint happens before flipping to
+      // scaleX(0) — without this the transition can be skipped.
+      requestAnimationFrame(function () {
+        requestAnimationFrame(function () { setRunning(true); });
+      });
+      if (_undoTimer) clearTimeout(_undoTimer);
+      _undoTimer = setTimeout(_clearUndoAffordance, UNDO_DURATION_MS);
+    }
+
+    function pauseCountdown() {
+      if (_undoTimer) { clearTimeout(_undoTimer); _undoTimer = null; }
+      setRunning(false);
+    }
+
+    undoBtns.forEach(function (btn) {
+      btn.addEventListener("mouseenter", pauseCountdown);
+      btn.addEventListener("mouseleave", startCountdown);
+      btn.addEventListener("click", function (e) {
+        e.preventDefault();
+        // Flash both keycaps so whichever the user clicked feels responsive
+        // and the other mirrors it (cheap symmetry, no per-element wiring).
+        document.querySelectorAll(".ace-statusbar-undo-keycap").forEach(function (k) {
+          k.classList.add("ace-statusbar-undo-keycap--pressed");
+        });
+        setTimeout(function () {
+          document.querySelectorAll(".ace-statusbar-undo-keycap").forEach(function (k) {
+            k.classList.remove("ace-statusbar-undo-keycap--pressed");
+          });
+        }, 200);
+        if (_undoTimer) { clearTimeout(_undoTimer); _undoTimer = null; }
+        htmx.ajax("POST", "/api/undo", {
+          target: "#text-panel",
+          swap: "outerHTML",
+          values: { current_index: window.__aceCurrentIndex },
+        });
+      });
+    });
+
+    startCountdown();
+  }
+
+  /**
    * Show an ephemeral or sticky message in the status bar event segment.
    *   kind="ok": text for ~2 s then fades (via empty-state CSS + timer clears text).
    *   kind="err": sticky until the next _setStatus() call.
@@ -2884,17 +2960,13 @@
       return;
     }
 
-    // Delete / Backspace — Delete code (double-press confirm)
+    // Delete / Backspace — Soft-delete (acts immediately; status bar shows
+    // an inline [Z] undo keycap that's clickable for ~7 s).
     if ((key === "Delete" || key === "Backspace") && !alt && !shift) {
       e.preventDefault();
       if (!_isGroupHeader(active)) {
         const codeId5 = active.getAttribute("data-code-id");
-        if (!codeId5) return;
-        if (_deleteTarget === codeId5) {
-          _executeDelete(codeId5);
-        } else {
-          _startDeleteConfirm(codeId5);
-        }
+        if (codeId5) _executeDelete(codeId5);
       }
       return;
     }

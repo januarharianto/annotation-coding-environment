@@ -136,6 +136,100 @@ body {
   color: #a8332e;
 }
 
+/* Soft-delete with inline undo keycap. Parent #ace-statusbar has
+   pointer-events:none for ambient text — the inline button needs auto. */
+.ace-statusbar-event--undo {
+  pointer-events: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  animation: ace-statusbar-event-in 0.18s ease;
+}
+
+@keyframes ace-statusbar-event-in {
+  from { opacity: 0; transform: translateY(2px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.ace-statusbar-undo-sep {
+  color: var(--ace-border);
+  user-select: none;
+}
+
+.ace-statusbar-undo {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  font-size: var(--ace-font-size-2xs);
+  color: var(--ace-text-muted);
+  letter-spacing: 0.2px;
+}
+
+.ace-statusbar-undo:focus-visible {
+  outline: 2px solid var(--ace-focus);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+.ace-statusbar-undo-keycap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 16px;
+  min-width: 16px;
+  padding: 0 4px;
+  border: 1px solid var(--ace-border-light);
+  border-radius: 3px;
+  background: var(--ace-bg);
+  font-family: var(--ace-font-mono);
+  font-size: 11px;
+  line-height: 1;
+  color: var(--ace-text-muted);
+  transition: background var(--ace-transition), border-color var(--ace-transition);
+}
+
+.ace-statusbar-undo:hover .ace-statusbar-undo-keycap {
+  background: var(--ace-bg-muted);
+  border-color: var(--ace-text);
+}
+
+/* Countdown hairline — extends the keycap's bottom edge, drains
+   right-to-left over --ace-undo-duration once data-running flips on. */
+.ace-statusbar-undo-keycap::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 1px;
+  background: var(--ace-text);
+  transform-origin: left center;
+  transform: scaleX(1);
+  transition: transform linear var(--ace-undo-duration, 7s);
+}
+
+.ace-statusbar-undo[data-running="true"] .ace-statusbar-undo-keycap::after {
+  transform: scaleX(0);
+}
+
+/* Hover pauses the visual countdown — sticky read for slower readers. */
+.ace-statusbar-undo:hover .ace-statusbar-undo-keycap::after {
+  transition: none;
+}
+
+/* Pressed flash on click / Z keypress — confirms activation. */
+.ace-statusbar-undo-keycap--pressed {
+  background: var(--ace-text);
+  color: var(--ace-bg);
+  border-color: var(--ace-text);
+}
+
 /* Inline origin confirmation — import/export buttons flip briefly on success */
 .ace-origin-flash.ace-origin-flash {
   color: #2f6b3f;
