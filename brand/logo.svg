@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 120">
+  <!-- Tiles: 80x80, 12px radius, 10px gap between each -->
+  <rect x="10" y="10" width="80" height="80" rx="12" ry="12" fill="#ffffff"/>
+  <rect x="100" y="10" width="80" height="80" rx="12" ry="12" fill="#ffffff"/>
+  <rect x="190" y="10" width="80" height="80" rx="12" ry="12" fill="#ffffff"/>
+
+  <!-- Letters: Plus Jakarta Sans 800, 50px, centred in each tile -->
+  <text x="50" y="50" font-family="'Plus Jakarta Sans', sans-serif" font-weight="800" font-size="50" fill="#1a1d27" text-anchor="middle" dominant-baseline="central">A</text>
+  <text x="140" y="50" font-family="'Plus Jakarta Sans', sans-serif" font-weight="800" font-size="50" fill="#1a1d27" text-anchor="middle" dominant-baseline="central">C</text>
+  <text x="230" y="50" font-family="'Plus Jakarta Sans', sans-serif" font-weight="800" font-size="50" fill="#1a1d27" text-anchor="middle" dominant-baseline="central">E</text>
+
+  <!--
+    Tri-colour bar: spans x=10 to x=270, y=100 to y=108 (8px tall)
+    Three equal segments, each 260/3 ≈ 86.667px wide
+    Segment boundaries: x=10 | x=96.667 | x=183.333 | x=270
+    4px corner radius on outer ends only (left end of left seg, right end of right seg)
+  -->
+
+  <!-- Left segment (Vermillion): rounded left end, square right end -->
+  <path d="M14,100 L96.667,100 L96.667,108 L14,108 A4,4 0 0,1 10,104 A4,4 0 0,1 14,100 Z" fill="#D55E00"/>
+
+  <!-- Middle segment (Sky Blue): all square corners, flush with neighbours -->
+  <rect x="96.667" y="100" width="86.667" height="8" fill="#56B4E9"/>
+
+  <!-- Right segment (Yellow): square left end, rounded right end -->
+  <path d="M183.333,100 L266,100 A4,4 0 0,1 270,104 A4,4 0 0,1 266,108 L183.333,108 Z" fill="#F0E442"/>
+</svg>

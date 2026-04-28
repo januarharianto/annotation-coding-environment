@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 120">
+  <!-- Tiles: 80x80, 12px radius, dark fill for light backgrounds -->
+  <rect x="10" y="10" width="80" height="80" rx="12" ry="12" fill="#1a1d27"/>
+  <rect x="100" y="10" width="80" height="80" rx="12" ry="12" fill="#1a1d27"/>
+  <rect x="190" y="10" width="80" height="80" rx="12" ry="12" fill="#1a1d27"/>
+
+  <!-- Letters: white text on dark tiles -->
+  <text x="50" y="50" font-family="'Plus Jakarta Sans', sans-serif" font-weight="800" font-size="50" fill="#ffffff" text-anchor="middle" dominant-baseline="central">A</text>
+  <text x="140" y="50" font-family="'Plus Jakarta Sans', sans-serif" font-weight="800" font-size="50" fill="#ffffff" text-anchor="middle" dominant-baseline="central">C</text>
+  <text x="230" y="50" font-family="'Plus Jakarta Sans', sans-serif" font-weight="800" font-size="50" fill="#ffffff" text-anchor="middle" dominant-baseline="central">E</text>
+
+  <!-- Tri-colour bar (same in both variants) -->
+  <path d="M14,100 L96.667,100 L96.667,108 L14,108 A4,4 0 0,1 10,104 A4,4 0 0,1 14,100 Z" fill="#D55E00"/>
+  <rect x="96.667" y="100" width="86.667" height="8" fill="#56B4E9"/>
+  <path d="M183.333,100 L266,100 A4,4 0 0,1 270,104 A4,4 0 0,1 266,108 L183.333,108 Z" fill="#F0E442"/>
+</svg>

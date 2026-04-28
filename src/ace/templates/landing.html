@@ -1,0 +1,198 @@
+{% extends "base.html" %}
+
+{% block title %}ACE{% endblock %}
+
+{% block content %}
+<main class="ace-landing">
+  <div class="ace-home">
+
+    <!-- Logo -->
+    <div class="ace-home-logo">
+      <img src="/static/logo-light.svg" alt="ACE" width="140" height="60">
+      <p class="ace-home-subtitle">Annotation Coding Environment</p>
+    </div>
+
+    <!-- Resume (conditional, rendered by JS) -->
+    <div id="resume-link" class="ace-home-resume" hidden></div>
+
+    <!-- Actions -->
+    <div class="ace-home-actions">
+      <a id="new-project-link" class="ace-home-action-primary" href="#"
+         onclick="toggleNewProject(); return false">New project</a>
+      <a class="ace-home-action-secondary" href="#"
+         onclick="openExisting(); return false">Open file</a>
+    </div>
+
+    <!-- New project expand (hidden by default) -->
+    <div id="new-project-wrap" class="ace-home-expand">
+      <input id="new-project-input" class="ace-home-input"
+             placeholder="Project name..." aria-label="New project name">
+      <p class="ace-home-input-hint">press Enter to choose folder</p>
+    </div>
+
+
+
+    <!-- Tools -->
+    <div class="ace-home-tools">
+      <p class="ace-home-section-label">Tools</p>
+      <a class="ace-home-tool-link" href="/agreement">Inter-Coder Agreement</a>
+    </div>
+
+    <div id="modal-container"></div>
+  </div>
+</main>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+  "use strict";
+
+  var STORAGE_KEY = "ace-recent-files";
+  var cloudPatterns = [/dropbox/i, /onedrive/i, /icloud/i, /google\s*drive/i];
+
+  // --- New project flow ---
+  var newWrap = document.getElementById("new-project-wrap");
+  var newInput = document.getElementById("new-project-input");
+
+  window.toggleNewProject = function() {
+    if (newWrap.classList.contains("open")) {
+      newWrap.classList.remove("open");
+      newInput.value = "";
+    } else {
+      newWrap.classList.add("open");
+      setTimeout(function() { newInput.focus(); }, 180);
+    }
+  };
+
+  newInput.addEventListener("keydown", function(e) {
+    if (e.key === "Escape") {
+      window.toggleNewProject();
+      return;
+    }
+    if (e.key !== "Enter") return;
+    var name = this.value.trim();
+    if (!name) return;
+    this.value = "";
+    this.disabled = true;
+    this.placeholder = "Choosing folder\u2026";
+
+    fetch("/api/native/pick-folder", { method: "POST" })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        newInput.disabled = false;
+        newInput.placeholder = "Project name...";
+        if (!data.path) { newInput.value = name; return; }
+
+        // Cloud sync warning
+        var lower = data.path.toLowerCase();
+        var isCloud = cloudPatterns.some(function(re) { return re.test(lower); });
+        if (isCloud && !confirm(
+          "This folder appears to be cloud-synced (Dropbox, OneDrive, iCloud). " +
+          "SQLite databases can corrupt when synced.\n\nContinue anyway?"
+        )) return;
+
+        var projectPath = data.path.replace(/\/$/, "") + "/" + name.replace(/\.ace$/, "") + ".ace";
+
+        newWrap.classList.remove("open");
+        addRecent(projectPath);
+
+        htmx.ajax("POST", "/api/project/create", {
+          values: { name: name, path: projectPath },
+          target: "#modal-container",
+          swap: "innerHTML"
+        });
+      });
+  });
+
+  // --- Open existing ---
+  window.openExisting = function() {
+    fetch("/api/native/pick-file", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: "accept=.ace"
+    })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (data.path) openProject(data.path);
+      });
+  };
+
+  function openProject(path) {
+    addRecent(path);
+    htmx.ajax("POST", "/api/project/open", {
+      values: { path: path },
+      target: "#modal-container",
+      swap: "innerHTML"
+    });
+  }
+
+  // --- Recent files ---
+  function migrateRecent(raw) {
+    if (!Array.isArray(raw)) return [];
+    return raw.map(function(item) {
+      if (typeof item === "string") return { path: item, openedAt: 0 };
+      if (item && typeof item.path === "string") return item;
+      return null;
+    }).filter(Boolean);
+  }
+
+  function getRecent() {
+    try {
+      var raw = JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
+      return migrateRecent(raw);
+    } catch(e) { return []; }
+  }
+
+  function addRecent(path) {
+    var list = getRecent().filter(function(item) { return item.path !== path; });
+    list.unshift({ path: path, openedAt: Date.now() });
+    if (list.length > 5) list = list.slice(0, 5);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+    renderResume();
+  }
+
+  function escapeHtml(str) {
+    var d = document.createElement("div");
+    d.textContent = str;
+    return d.innerHTML;
+  }
+
+  function clearResume() {
+    localStorage.removeItem(STORAGE_KEY);
+    renderResume();
+  }
+
+  function renderResume() {
+    var list = getRecent();
+    var el = document.getElementById("resume-link");
+    if (!list.length) {
+      el.hidden = true;
+      return;
+    }
+    var parts = list[0].path.split("/");
+    var filename = parts.pop();
+    var path = list[0].path;
+    el.innerHTML = '<a href="#" onclick="event.preventDefault(); window._aceOpenProject(\'' +
+      path.replace(/'/g, "\\'") + '\'); return false;">' + escapeHtml(filename) + '</a>' +
+      '<button class="ace-home-resume-close" onclick="window._aceClearResume()" title="Dismiss">\u00d7</button>';
+    el.hidden = false;
+  }
+
+  window._aceOpenProject = openProject;
+  window._aceAddRecent = addRecent;
+  window._aceClearResume = clearResume;
+
+  // Dialog auto-open for overwrite confirmation
+  document.addEventListener("htmx:afterSwap", function(evt) {
+    if (evt.detail.target.id === "modal-container") {
+      var dialog = evt.detail.target.querySelector("dialog");
+      if (dialog && !dialog.open) dialog.showModal();
+    }
+  });
+
+  // --- Init ---
+  renderResume();
+})();
+</script>
+{% endblock %}

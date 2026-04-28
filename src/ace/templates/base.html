@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}ACE{% endblock %}</title>
+  <link rel="stylesheet" href="/static/css/ace.css">
+  <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+  {% block head %}{% endblock %}
+</head>
+<body>
+  {% block content %}{% endblock %}
+  <div id="ace-statusbar" aria-hidden="true">
+    <span class="ace-statusbar-ambient" id="ace-statusbar-ambient"></span>
+    <span class="ace-statusbar-event" id="ace-statusbar-event"></span>
+  </div>
+  <script src="/static/js/htmx.min.js"></script>
+  <script src="/static/js/bridge.js"></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,110 @@
+name: Release Desktop App
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+# Don't cancel an in-flight release if a second tag push races in — we'd rather
+# finish one cleanly than half-publish two.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # Preflight — fail fast (~10 s) if GITHUB_TOKEN lacks contents:write, so we
+  # don't burn 30 min of Rust compilation just to 403 at the release step.
+  # Repo Settings → Actions → General → Workflow permissions must be set to
+  # "Read and write permissions" for the token-level permissions: block to
+  # actually elevate (workflows cannot expand beyond the repo-level default).
+  preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Verify release API write access
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PROBE="preflight-${{ github.run_id }}"
+          RESP=$(gh api -X POST /repos/${{ github.repository }}/releases \
+            -f tag_name="$PROBE" -f name="$PROBE" -F draft=true 2>&1) || {
+            echo "::error::GITHUB_TOKEN lacks contents:write. Fix via repo Settings → Actions → General → Workflow permissions → 'Read and write permissions'."
+            echo "Response: $RESP"
+            exit 1
+          }
+          gh api -X DELETE /repos/${{ github.repository }}/releases/$(echo "$RESP" | jq -r .id) > /dev/null
+          echo "Release API write access confirmed."
+
+  build:
+    needs: preflight
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-15            # ARM64 (Apple Silicon)
+            args: '--target aarch64-apple-darwin'
+            rust-targets: aarch64-apple-darwin
+          # - platform: macos-15-large    # x86_64 (Intel) — requires paid runner
+          #   args: '--target x86_64-apple-darwin'
+          #   rust-targets: x86_64-apple-darwin
+          - platform: windows-2025
+            args: ''
+            rust-targets: ''
+
+    runs-on: ${{ matrix.platform }}
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.1.0
+        with:
+          python-version: '3.12'
+          enable-cache: true
+
+      - name: Install Python dependencies
+        run: uv sync --locked
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust-targets }}
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: desktop/src-tauri -> target
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: lts/*
+
+      - name: Build and release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: desktop
+          tagName: v__VERSION__
+          releaseName: 'ACE v__VERSION__'
+          releaseBody: |
+            ## Download
+
+            | Platform | File |
+            |---|---|
+            | macOS (Apple Silicon) | `ACE_x.x.x_aarch64.dmg` |
+            | Windows | `ACE_x.x.x_x64-setup.exe` |
+
+            **macOS:** Open the `.dmg`, drag ACE to Applications.
+            **Windows:** Run the installer. You may see a SmartScreen warning — click "More info" then "Run anyway".
+
+            Not code-signed yet — macOS and Windows will show "unknown developer" / SmartScreen warnings on install. Signing is planned for a future release.
+          releaseDraft: true
+          prerelease: false
+          args: ${{ matrix.args }}

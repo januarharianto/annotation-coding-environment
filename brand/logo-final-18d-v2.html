@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ACE Logo + Palette</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;700;800&family=Inter:wght@400;500;700&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Inter', -apple-system, sans-serif;
+    background: #0f1117;
+    color: #e0e0e0;
+    min-height: 100vh;
+    padding: 40px 24px 60px;
+  }
+
+  .page-header { text-align: center; margin-bottom: 48px; }
+  .page-header h1 { font-size: 28px; font-weight: 700; color: #fff; margin-bottom: 8px; }
+  .page-header p { font-size: 14px; color: #888; }
+
+  .section {
+    max-width: 900px;
+    margin: 0 auto 56px;
+  }
+  .section-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 3px;
+    color: #555;
+    margin-bottom: 20px;
+    text-align: center;
+  }
+
+  /* ── Shared bar gradient ── */
+  :root {
+    --bar: linear-gradient(90deg, #D55E00 33%, #56B4E9 33%, #56B4E9 66%, #F0E442 66%);
+  }
+
+  /* ── Hero ── */
+  .hero {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 80px 40px;
+    background: #1a1d27;
+    border-radius: 20px;
+    margin-bottom: 56px;
+  }
+  .hero-logo {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+  }
+  .hero-tiles { display: flex; gap: 6px; }
+  .hero-tile {
+    width: 80px; height: 80px;
+    background: #fff;
+    border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-weight: 800; font-size: 50px; color: #1a1d27;
+  }
+  .hero-bar {
+    width: 252px; height: 8px; border-radius: 4px;
+    background: var(--bar);
+  }
+
+  /* ── Colour palette ── */
+  .palette {
+    display: flex;
+    gap: 16px;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+  .swatch {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+  }
+  .swatch-color {
+    width: 56px; height: 56px;
+    border-radius: 12px;
+    border: 1px solid rgba(255,255,255,0.1);
+  }
+  .swatch-label { font-size: 11px; color: #888; }
+  .swatch-hex { font-size: 10px; color: #555; font-family: monospace; }
+
+  /* ── App icon sizes ── */
+  .icon-sizes {
+    display: flex;
+    align-items: end;
+    justify-content: center;
+    gap: 32px;
+    flex-wrap: wrap;
+  }
+  .icon-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+  }
+  .icon-item .label { font-size: 11px; color: #666; }
+
+  .app-icon {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    border-radius: 22%;
+    background: #1a1d27;
+    overflow: hidden;
+  }
+  .app-icon .tiles { display: flex; }
+  .app-icon .tile {
+    background: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-weight: 800; color: #1a1d27;
+  }
+  .app-icon .bar {
+    border-radius: 2px;
+    background: var(--bar);
+  }
+
+  .icon-128 { width: 128px; height: 128px; gap: 4px; }
+  .icon-128 .tiles { gap: 3px; }
+  .icon-128 .tile { width: 28px; height: 28px; font-size: 18px; border-radius: 5px; }
+  .icon-128 .bar { width: 90px; height: 5px; }
+
+  .icon-64 { width: 64px; height: 64px; gap: 3px; }
+  .icon-64 .tiles { gap: 2px; }
+  .icon-64 .tile { width: 15px; height: 15px; font-size: 10px; border-radius: 3px; }
+  .icon-64 .bar { width: 49px; height: 3px; }
+
+  .icon-48 { width: 48px; height: 48px; gap: 2px; }
+  .icon-48 .tiles { gap: 1px; }
+  .icon-48 .tile { width: 12px; height: 12px; font-size: 8px; border-radius: 2px; }
+  .icon-48 .bar { width: 38px; height: 3px; }
+
+  .icon-32 { width: 32px; height: 32px; gap: 2px; }
+  .icon-32 .tiles { gap: 1px; }
+  .icon-32 .tile { width: 8px; height: 8px; font-size: 5px; border-radius: 1px; }
+  .icon-32 .bar { width: 26px; height: 2px; }
+
+  .icon-16 { width: 16px; height: 16px; gap: 1px; }
+  .icon-16 .tiles { gap: 1px; }
+  .icon-16 .tile { width: 4px; height: 4px; font-size: 0; border-radius: 1px; }
+  .icon-16 .bar { width: 14px; height: 1px; }
+
+  /* ── Context mockups ── */
+  .contexts {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+  }
+  .context-card {
+    background: #1a1d27;
+    border-radius: 16px;
+    overflow: hidden;
+  }
+  .context-card.full { grid-column: 1 / -1; }
+  .context-label {
+    padding: 12px 16px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: #555;
+    border-bottom: 1px solid #2a2d37;
+  }
+  .context-body {
+    padding: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 160px;
+  }
+
+  /* macOS dock */
+  .dock {
+    display: flex;
+    align-items: end;
+    gap: 6px;
+    background: rgba(255,255,255,0.08);
+    padding: 6px 12px;
+    border-radius: 16px;
+  }
+  .dock-icon {
+    width: 48px; height: 48px;
+    border-radius: 11px;
+    background: #333;
+    opacity: 0.5;
+  }
+  .dock-icon.ace {
+    opacity: 1;
+    background: #1a1d27;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 2px;
+  }
+  .dock-icon.ace .dt { display: flex; gap: 1px; }
+  .dock-icon.ace .di {
+    width: 12px; height: 12px;
+    background: #fff; border-radius: 2px;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Plus Jakarta Sans'; font-weight: 800; font-size: 8px; color: #1a1d27;
+  }
+  .dock-icon.ace .db {
+    width: 38px; height: 3px; border-radius: 1px;
+    background: var(--bar);
+  }
+  .dock-dot {
+    width: 4px; height: 4px;
+    border-radius: 50%;
+    background: #aaa;
+    margin: 4px auto 0;
+  }
+
+  /* Browser tab */
+  .tab-bar {
+    display: flex;
+    background: #2a2d37;
+    border-radius: 10px 10px 0 0;
+    padding: 8px 8px 0;
+    gap: 2px;
+  }
+  .tab {
+    display: flex; align-items: center; gap: 6px;
+    padding: 6px 14px;
+    border-radius: 8px 8px 0 0;
+    font-size: 11px; color: #888;
+    background: #1a1d27;
+  }
+  .tab.active { background: #0f1117; color: #ccc; }
+  .tab-icon {
+    width: 14px; height: 14px; border-radius: 3px;
+    background: #333;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+  }
+  .tab-icon.ace { background: #1a1d27; border: 1px solid #333; }
+  .tab-icon .tb { width: 10px; height: 3px; border-radius: 1px; background: var(--bar); }
+  .tab-content {
+    background: #0f1117;
+    padding: 24px;
+    border-radius: 0 10px 10px 10px;
+    min-height: 60px;
+  }
+
+  /* On white */
+  .on-white { background: #fff; }
+  .on-white .logo-render {
+    display: flex; flex-direction: column; align-items: center; gap: 5px;
+  }
+  .on-white .logo-tiles { display: flex; gap: 4px; }
+  .on-white .logo-tile {
+    width: 48px; height: 48px;
+    background: #1a1d27;
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Plus Jakarta Sans'; font-weight: 800; font-size: 30px; color: #fff;
+  }
+  .on-white .logo-bar {
+    width: 152px; height: 6px; border-radius: 3px;
+    background: var(--bar);
+  }
+
+  /* On dark */
+  .on-dark .logo-render {
+    display: flex; flex-direction: column; align-items: center; gap: 5px;
+  }
+  .on-dark .logo-tiles { display: flex; gap: 4px; }
+  .on-dark .logo-tile {
+    width: 48px; height: 48px;
+    background: #fff;
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Plus Jakarta Sans'; font-weight: 800; font-size: 30px; color: #1a1d27;
+  }
+  .on-dark .logo-bar {
+    width: 152px; height: 6px; border-radius: 3px;
+    background: var(--bar);
+  }
+
+  /* Landing page */
+  .landing-mock {
+    width: 100%; max-width: 400px;
+    background: #fff;
+    border-radius: 12px;
+    padding: 40px 24px;
+    display: flex; flex-direction: column;
+    align-items: center; gap: 24px;
+  }
+  .landing-logo {
+    display: flex; flex-direction: column;
+    align-items: center; gap: 5px;
+  }
+  .landing-tiles { display: flex; gap: 4px; }
+  .landing-tile {
+    width: 44px; height: 44px;
+    background: #1a1d27;
+    border-radius: 7px;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Plus Jakarta Sans'; font-weight: 800; font-size: 26px; color: #fff;
+  }
+  .landing-bar {
+    width: 140px; height: 5px; border-radius: 3px;
+    background: var(--bar);
+  }
+  .landing-links {
+    display: flex; flex-direction: column;
+    align-items: center; gap: 8px;
+    font-size: 13px; color: #555;
+  }
+  .landing-links a { color: #1a1d27; text-decoration: none; font-weight: 500; }
+</style>
+</head>
+<body>
+
+<div class="page-header">
+  <h1>Logo + Palette</h1>
+  <p>Blocks + Bar with Vermillion / Sky Blue / Yellow. Colourblind-safe (Okabe-Ito).</p>
+</div>
+
+<!-- Hero -->
+<div class="section">
+  <div class="hero">
+    <div class="hero-logo">
+      <div class="hero-tiles">
+        <div class="hero-tile">A</div>
+        <div class="hero-tile">C</div>
+        <div class="hero-tile">E</div>
+      </div>
+      <div class="hero-bar"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Colour Palette -->
+<div class="section">
+  <div class="section-label">Colour Palette</div>
+  <div class="palette">
+    <div class="swatch">
+      <div class="swatch-color" style="background: #1a1d27;"></div>
+      <div class="swatch-label">Ink</div>
+      <div class="swatch-hex">#1a1d27</div>
+    </div>
+    <div class="swatch">
+      <div class="swatch-color" style="background: #ffffff; border-color: #333 !important;"></div>
+      <div class="swatch-label">Tile</div>
+      <div class="swatch-hex">#ffffff</div>
+    </div>
+    <div class="swatch">
+      <div class="swatch-color" style="background: #D55E00;"></div>
+      <div class="swatch-label">Vermillion</div>
+      <div class="swatch-hex">#D55E00</div>
+    </div>
+    <div class="swatch">
+      <div class="swatch-color" style="background: #56B4E9;"></div>
+      <div class="swatch-label">Sky Blue</div>
+      <div class="swatch-hex">#56B4E9</div>
+    </div>
+    <div class="swatch">
+      <div class="swatch-color" style="background: #F0E442;"></div>
+      <div class="swatch-label">Yellow</div>
+      <div class="swatch-hex">#F0E442</div>
+    </div>
+  </div>
+</div>
+
+<!-- Icon sizes -->
+<div class="section">
+  <div class="section-label">App Icon Scaling</div>
+  <div class="icon-sizes">
+    <div class="icon-item">
+      <div class="app-icon icon-128">
+        <div class="tiles"><div class="tile">A</div><div class="tile">C</div><div class="tile">E</div></div>
+        <div class="bar"></div>
+      </div>
+      <div class="label">128px</div>
+    </div>
+    <div class="icon-item">
+      <div class="app-icon icon-64">
+        <div class="tiles"><div class="tile">A</div><div class="tile">C</div><div class="tile">E</div></div>
+        <div class="bar"></div>
+      </div>
+      <div class="label">64px</div>
+    </div>
+    <div class="icon-item">
+      <div class="app-icon icon-48">
+        <div class="tiles"><div class="tile">A</div><div class="tile">C</div><div class="tile">E</div></div>
+        <div class="bar"></div>
+      </div>
+      <div class="label">48px dock</div>
+    </div>
+    <div class="icon-item">
+      <div class="app-icon icon-32">
+        <div class="tiles"><div class="tile">A</div><div class="tile">C</div><div class="tile">E</div></div>
+        <div class="bar"></div>
+      </div>
+      <div class="label">32px taskbar</div>
+    </div>
+    <div class="icon-item">
+      <div class="app-icon icon-16" style="justify-content:center;">
+        <div class="bar" style="width:10px;height:3px;border-radius:1px;"></div>
+      </div>
+      <div class="label">16px favicon</div>
+    </div>
+  </div>
+</div>
+
+<!-- Contexts -->
+<div class="section">
+  <div class="section-label">In Context</div>
+  <div class="contexts">
+
+    <div class="context-card">
+      <div class="context-label">macOS Dock</div>
+      <div class="context-body">
+        <div class="dock">
+          <div><div class="dock-icon"></div></div>
+          <div><div class="dock-icon"></div></div>
+          <div>
+            <div class="dock-icon ace">
+              <div class="dt"><div class="di">A</div><div class="di">C</div><div class="di">E</div></div>
+              <div class="db"></div>
+            </div>
+            <div class="dock-dot"></div>
+          </div>
+          <div><div class="dock-icon"></div></div>
+          <div><div class="dock-icon"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="context-card">
+      <div class="context-label">Browser Tab</div>
+      <div class="context-body" style="flex-direction:column;padding:16px;">
+        <div class="tab-bar">
+          <div class="tab"><div class="tab-icon"></div>Gmail</div>
+          <div class="tab active">
+            <div class="tab-icon ace">
+              <div class="tb"></div>
+            </div>
+            ACE
+          </div>
+          <div class="tab"><div class="tab-icon"></div>Docs</div>
+        </div>
+        <div class="tab-content"></div>
+      </div>
+    </div>
+
+    <div class="context-card">
+      <div class="context-label">On White (docs, README)</div>
+      <div class="context-body on-white">
+        <div class="logo-render">
+          <div class="logo-tiles"><div class="logo-tile">A</div><div class="logo-tile">C</div><div class="logo-tile">E</div></div>
+          <div class="logo-bar"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="context-card">
+      <div class="context-label">On Dark (slides, promo)</div>
+      <div class="context-body on-dark">
+        <div class="logo-render">
+          <div class="logo-tiles"><div class="logo-tile">A</div><div class="logo-tile">C</div><div class="logo-tile">E</div></div>
+          <div class="logo-bar"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="context-card full">
+      <div class="context-label">Landing Page</div>
+      <div class="context-body" style="background: #f5f5f5;">
+        <div class="landing-mock">
+          <div class="landing-logo">
+            <div class="landing-tiles">
+              <div class="landing-tile">A</div>
+              <div class="landing-tile">C</div>
+              <div class="landing-tile">E</div>
+            </div>
+            <div class="landing-bar"></div>
+          </div>
+          <div class="landing-links">
+            <a href="#">New project</a>
+            <span style="color:#bbb;">|</span>
+            <a href="#">Open file</a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+</body>
+</html>

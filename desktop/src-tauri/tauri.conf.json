@@ -1,0 +1,67 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "ACE",
+  "identifier": "au.edu.sydney.ace-coder",
+  "build": {
+    "devUrl": "http://127.0.0.1:18080",
+    "frontendDist": "http://127.0.0.1:18080",
+    "beforeDevCommand": {
+      "script": "uv run uvicorn ace.app:create_app --factory --host 127.0.0.1 --port 18080 --reload --reload-dir src/ace",
+      "cwd": "../.."
+    },
+    "beforeBuildCommand": {
+      "script": "uv run python scripts/build_sidecar.py",
+      "cwd": "../.."
+    }
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "ACE — Starting...",
+        "width": 1280,
+        "height": 800,
+        "minWidth": 1000,
+        "minHeight": 600,
+        "visible": false,
+        "center": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis", "dmg", "app"],
+    "icon": [
+      "icons/icon.icns",
+      "icons/icon.ico",
+      "icons/icon.png"
+    ],
+    "externalBin": ["binaries/ace-server"],
+    "fileAssociations": [
+      {
+        "ext": ["ace"],
+        "name": "ACE Project",
+        "role": "Editor",
+        "rank": "Owner",
+        "description": "ACE annotation project",
+        "exportedType": {
+          "identifier": "au.edu.sydney.ace-coder.project",
+          "conformsTo": ["public.data"]
+        }
+      }
+    ],
+    "macOS": {
+      "entitlements": "Entitlements.plist",
+      "hardenedRuntime": true,
+      "minimumSystemVersion": "11.0"
+    },
+    "windows": {
+      "webviewInstallMode": { "type": "downloadBootstrapper" },
+      "nsis": {
+        "installMode": "currentUser"
+      }
+    }
+  }
+}

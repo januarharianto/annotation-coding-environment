@@ -1,0 +1,15 @@
+[package]
+name = "ace-desktop"
+version = "0.14.4"
+edition = "2021"
+
+[dependencies]
+tauri = { version = "2", features = [] }
+urlencoding = "2"
+tauri-plugin-deep-link = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-shell = "2"
+tauri-plugin-single-instance = "2"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }

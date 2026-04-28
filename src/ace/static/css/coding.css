@@ -1,0 +1,1469 @@
+/* Coding page — three-column sentence-navigation layout */
+
+:root {
+  --ace-annotation-alpha: 0.3;
+  --ace-sidebar-width: 360px;
+  --ace-grid-height: 35vh;
+}
+
+/* ---- Workspace (full viewport flex column) ---- */
+
+#coding-workspace {
+  display: flex;
+  flex-direction: column;
+  /* Full viewport height — the global #ace-statusbar is hidden on /code
+     (rule below), so no 24 px reservation is needed. Other pages keep the
+     statusbar via base.html + ace.css. */
+  height: 100vh;
+  min-width: 1000px;
+  overflow: hidden;
+}
+
+/* Suppress the global statusbar on the coding page — the event channel is
+   rehoused into the text-panel header pill (see .ace-text-event-row below).
+   coding.css is only loaded on /code, so this rule is scoped implicitly. */
+#ace-statusbar {
+  display: none;
+}
+
+/* ---- Sidebar branding ---- */
+
+.ace-sidebar-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--ace-space-1);
+  padding: var(--ace-space-2) var(--ace-space-2);
+  flex-shrink: 0;
+}
+
+.ace-sidebar-brand-link {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
+
+.ace-sidebar-brand-project {
+  font-size: var(--ace-font-size-2xs);
+  color: var(--ace-text-muted);
+  font-weight: 400;
+  letter-spacing: 0.2px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0 var(--ace-space-2);
+}
+
+.ace-sidebar-logo {
+  height: 40px;
+  width: auto;
+}
+
+.ace-sidebar-brand-link:focus-visible,
+.ace-sidebar-help-btn:focus-visible,
+.ace-flag-btn:focus-visible {
+  outline: 2px solid var(--ace-focus);
+  outline-offset: 2px;
+  border-radius: var(--ace-radius);
+}
+
+.ace-sidebar-brand-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--ace-space-1);
+}
+
+.ace-sidebar-help-btn,
+.ace-codebook-menu-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--ace-text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--ace-radius);
+  padding: 0;
+  transition: color var(--ace-transition), background var(--ace-transition);
+}
+
+.ace-sidebar-help-btn:hover,
+.ace-codebook-menu-btn:hover {
+  color: var(--ace-text);
+  background: var(--ace-bg-muted);
+}
+
+/* ---- Flag row ---- */
+
+.ace-flag-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--ace-space-2);
+  padding: var(--ace-space-1) 0 var(--ace-space-2);
+}
+
+.ace-nav-cluster {
+  display: flex;
+  align-items: center;
+}
+
+.ace-nav-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: var(--ace-space-1) var(--ace-space-2);
+  font-size: var(--ace-font-size-xl);
+  color: var(--ace-text-muted);
+  transition: color var(--ace-transition);
+}
+
+.ace-nav-btn:hover {
+  color: var(--ace-text);
+}
+
+.ace-nav-btn:disabled {
+  opacity: var(--ace-opacity-disabled);
+  cursor: not-allowed;
+}
+
+.ace-nav-counter {
+  padding: var(--ace-space-1) var(--ace-space-2);
+  font-family: var(--ace-font-mono);
+  font-size: var(--ace-font-size-sm);
+  color: var(--ace-text-muted);
+  border-radius: var(--ace-radius);
+}
+
+/* Page title on /code — centred above the nav cluster, 14 px gap.
+   The 14 px matches the existing grid-gap on /code/{id}/view's
+   .cv-header, so both pages share a vertical rhythm rule. */
+.ace-text-page-title {
+  text-align: center;
+  padding-top: var(--ace-space-4);
+  margin-bottom: 14px;
+}
+
+.ace-text-header {
+  margin: 0 var(--ace-space-8) var(--ace-space-4);
+  border-bottom: 1px solid var(--ace-border-light);
+}
+
+.ace-text-nav {
+  text-align: center;
+  padding: var(--ace-space-2) 0 0;
+}
+
+.ace-text-nav .ace-nav-cluster {
+  display: inline-flex;
+  position: relative;
+  top: 1px;
+  background: var(--ace-bg);
+  padding: 0 var(--ace-space-3) var(--ace-space-1);
+}
+
+/* Flag button */
+.ace-flag-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  transition: color var(--ace-transition);
+}
+
+.ace-flag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: transparent;
+  color: var(--ace-text-muted);
+  border: 1px solid transparent;
+  border-radius: var(--ace-radius);
+  font-size: var(--ace-font-size-sm);
+  font-weight: 500;
+  padding: 2px 8px;
+  transition: color var(--ace-transition);
+}
+
+.ace-flag-btn:hover .ace-flag-chip { color: var(--ace-text); }
+
+.ace-flag-chip--active {
+  background: rgba(191, 54, 12, 0.1);
+  color: #bf360c;
+  border-color: rgba(191, 54, 12, 0.25);
+  font-weight: 600;
+}
+
+.ace-flag-btn:hover .ace-flag-chip--active { background: rgba(191, 54, 12, 0.16); }
+
+/* ---- Text-panel event slot (row 2 of 3 in the header stack) ---- */
+
+.ace-text-event-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 28px;              /* fixed — pill cannot shift neighbours */
+  padding: 0 var(--ace-space-4);
+}
+
+.ace-text-event-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--ace-font-mono);
+  font-size: var(--ace-font-size-2xs);
+  padding: 2px 10px;
+  background: var(--ace-bg-muted);
+  border: 1px solid var(--ace-border-light);
+  border-radius: 999px;
+  color: var(--ace-text);
+  opacity: 0;
+  transform: translateY(-2px);
+  transition: opacity var(--ace-transition), transform var(--ace-transition);
+}
+
+.ace-text-event-pill::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ace-success);
+  flex-shrink: 0;
+}
+
+.ace-text-event-pill:not(:empty) {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.ace-text-event-pill--err {
+  color: var(--ace-warning);
+  border-color: var(--ace-warning);
+  background: #fff;
+}
+
+.ace-text-event-pill--err::before {
+  background: var(--ace-warning);
+}
+
+/* ---- Three-column layout ---- */
+
+.ace-three-col {
+  display: grid;
+  grid-template-columns: var(--ace-sidebar-width) 1px 1fr;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* ---- Sidebar ---- */
+
+.ace-sidebar {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-right: 1px solid var(--ace-border);
+}
+
+.ace-code-group-header {
+  padding: 10px 8px 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ace-text);
+  border-bottom: 1px solid var(--ace-border-light);
+  margin-bottom: 4px;
+  cursor: default;
+  user-select: none;
+}
+
+/* "Ungrouped" pseudo-group reads as "everything else", not a peer of named
+   groups — revert to the plain pre-redesign treatment. Its children also
+   lose the indent + rail (rules below). */
+.ace-code-group-header[data-group=""] {
+  padding: 3px 8px;
+  font-size: var(--ace-font-size-sm);
+  font-weight: 400;
+  letter-spacing: normal;
+  text-transform: none;
+  border-bottom: none;
+  margin-bottom: 0;
+}
+
+.ace-group-toggle {
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  vertical-align: middle;
+  color: var(--ace-text-muted);
+  transition: color var(--ace-transition);
+}
+
+.ace-group-toggle:hover {
+  color: var(--ace-text);
+}
+
+.ace-group-label {
+  cursor: default;
+}
+
+/* Collapsed group: hide the role="group" sibling's children */
+.ace-code-group-header[aria-expanded="false"] + [role="group"] .ace-code-row {
+  display: none;
+}
+
+/* And kill the connector rail when collapsed — belt-and-braces in case the
+   role=group container retains any residual height. */
+.ace-code-group-header[aria-expanded="false"] + [role="group"]::before {
+  display: none;
+}
+
+.ace-sidebar-codes {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--ace-space-1) 0;
+}
+
+/* Indent + 1px connector rail under each group, anchoring children to the
+   chevron above. Rail at left:17px aligns with the chevron's centre. */
+.ace-sidebar-codes [role="group"] {
+  position: relative;
+  padding-left: 24px;
+}
+.ace-sidebar-codes [role="group"]::before {
+  content: "";
+  position: absolute;
+  left: 17px;
+  top: 0;
+  bottom: 6px;
+  width: 1px;
+  background: var(--ace-border);
+}
+
+/* "Ungrouped" pseudo-group: no indent, no rail. Reverts the rules above. */
+.ace-code-group-header[data-group=""] + [role="group"] {
+  padding-left: 0;
+}
+.ace-code-group-header[data-group=""] + [role="group"]::before {
+  display: none;
+}
+
+.ace-code-row {
+  display: grid;
+  grid-template-columns: 1fr auto 24px;
+  gap: 6px;
+  align-items: center;
+  height: 28px;
+  padding: 0 8px;
+  border-left: 3px solid transparent;
+  font-size: var(--ace-font-size-sm);
+  color: var(--ace-text);
+  cursor: pointer;
+  transition: background var(--ace-transition);
+  position: relative;
+}
+
+/* Inside a named group: reduce row padding-left so total visual indent is
+   sensible (group:24 + stripe:3 + row:12 = ~39px from the sidebar edge). */
+.ace-sidebar-codes [role="group"] .ace-code-row {
+  padding-left: 12px;
+}
+/* Ungrouped revert: codes stay at the original 8px left padding. */
+.ace-code-group-header[data-group=""] + [role="group"] .ace-code-row {
+  padding-left: 8px;
+}
+
+.ace-code-row:hover {
+  background: var(--ace-bg-muted);
+}
+
+.ace-code-row.ace-code-row--flash {
+  background: var(--ace-bg-muted);
+  transition: none;
+}
+
+.ace-code-row--ghost {
+  opacity: 0.4;
+}
+
+/* Focused treeitem (roving tabindex) */
+.ace-code-row:focus {
+  outline: none;
+}
+
+.ace-code-row:focus .ace-code-name {
+  font-weight: 600;
+}
+
+/* Focused group header */
+.ace-code-group-header:focus {
+  outline: none;
+  font-weight: 600;
+}
+
+/* Reorder-in-progress (dashed outline) */
+.ace-code-row--reordering {
+  outline: 2px dashed var(--ace-focus);
+  outline-offset: -2px;
+  background: rgba(59, 130, 246, 0.08);
+  border-radius: var(--ace-radius);
+}
+
+.ace-code-row--search-target {
+  background: var(--ace-bg-muted);
+}
+
+.ace-code-row--confirm-delete {
+  background: rgba(198, 40, 40, 0.08);
+}
+
+.ace-code-row--confirm-delete::after {
+  content: "Delete?";
+  font-size: var(--ace-font-size-2xs);
+  color: var(--ace-danger);
+  position: absolute;
+  right: var(--ace-space-2);
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.ace-code-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;  /* needed inside grid 1fr column for ellipsis to engage */
+}
+
+/* Per-code annotation count, sits between the name and the keycap.
+   Mono 11px is a documented sub-13px exception for supporting labels
+   (matches the .ace-hint precedent — visual hierarchy via uppercase /
+   monospace / right-align, not colour). */
+.ace-code-count {
+  font-family: var(--ace-font-mono);
+  font-size: 11px;
+  color: var(--ace-text-muted);
+  min-width: 18px;
+  text-align: right;
+  user-select: none;
+}
+
+/* Postfix "×" reads as a tally marker ("12×" = "twelve of these"). Postfix
+   over prefix avoids the multiplication-operator misread that "× 12" can
+   trigger for technical readers. */
+.ace-code-count::after {
+  content: "×";
+  margin-left: 1px;
+  opacity: 0.5;
+}
+
+.ace-code-name[contenteditable="true"] {
+  outline: 1px solid var(--ace-focus);
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  padding: 0 2px;
+}
+
+.ace-keycap {
+  font-family: var(--ace-font-mono);
+  font-size: var(--ace-font-size-2xs);
+  padding: 1px 0;
+  border: 1px solid var(--ace-border-light);
+  border-radius: var(--ace-radius);
+  background: var(--ace-bg-muted);
+  color: var(--ace-text-muted);
+  width: 18px;
+  text-align: center;
+  line-height: var(--ace-leading-tight);
+  cursor: pointer;
+  min-height: 24px;
+  min-width: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--ace-transition), border-color var(--ace-transition);
+}
+
+.ace-keycap:hover {
+  border-color: var(--ace-text-muted);
+  background: var(--ace-bg-muted);
+}
+
+.ace-keycap:focus-visible {
+  outline: 2px solid var(--ace-focus);
+  outline-offset: 1px;
+}
+
+/* ---- Hotkey hints ---- */
+/* Smaller sibling of .ace-keycap. Always visible on search + sources header,
+ * hover/focus-revealed on flag/note buttons. */
+.ace-hint {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--ace-font-mono);
+  font-size: 11px;
+  line-height: 1;
+  padding: 0 4px;
+  min-width: 16px;
+  height: 16px;
+  border: 1px solid var(--ace-border-light);
+  border-radius: 3px;
+  background: var(--ace-bg);
+  color: var(--ace-text-muted);
+  letter-spacing: 0.2px;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+/* Hover-reveal variant — collapses to zero layout footprint when hidden so
+ * the parent chip's border/background doesn't stretch past the text when
+ * the chip is in an "active" state (flagged, has-note). Keyboard users
+ * see it via focus-visible. */
+.ace-hint--hover {
+  opacity: 0;
+  max-width: 0;
+  min-width: 0;
+  margin-left: 0;
+  padding-left: 0;
+  padding-right: 0;
+  border-width: 0;
+  overflow: hidden;
+  transition: max-width 0.14s ease, margin-left 0.14s ease,
+              padding 0.14s ease, border-width 0.14s ease,
+              opacity 0.1s ease 0.04s;
+}
+.ace-flag-btn:hover .ace-hint--hover,
+.ace-flag-btn:focus-visible .ace-hint--hover,
+.ace-note-pill:hover .ace-hint--hover,
+.ace-note-pill:focus-visible .ace-hint--hover {
+  opacity: 1;
+  max-width: 40px;
+  min-width: 16px;
+  margin-left: 6px;
+  padding: 0 4px;
+  border-width: 1px;
+}
+
+.ace-sidebar-empty {
+  padding: var(--ace-space-4);
+  color: var(--ace-text-muted);
+  font-size: var(--ace-font-size-sm);
+  text-align: center;
+}
+
+.ace-create-prompt {
+  padding: 5px 10px;
+  font-size: var(--ace-font-size-sm);
+  color: var(--ace-text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: var(--ace-space-1);
+}
+
+.ace-create-prompt:hover {
+  background: var(--ace-bg-muted);
+}
+
+/* ---- Resize handle ---- */
+
+.ace-resize-handle {
+  width: 8px;
+  margin-left: -4px;
+  margin-right: -3px;
+  cursor: col-resize;
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ace-resize-handle::after {
+  content: '';
+  width: 1px;
+  height: 100%;
+  background: var(--ace-border);
+  transition: background var(--ace-transition), width var(--ace-transition);
+}
+
+.ace-resize-handle:hover::after {
+  width: 3px;
+  background: var(--ace-focus);
+}
+
+/* ---- Text panel ---- */
+
+.ace-text-panel {
+  flex: 1;
+  min-width: 0;
+  max-width: 72ch;
+  margin-left: auto;
+  margin-right: auto;
+  padding: var(--ace-space-6) var(--ace-space-8);
+  outline: none;
+  line-height: 2;
+  font-size: var(--ace-font-size-base);
+  display: flex;
+  flex-direction: column;
+}
+
+/* Push the legend (last child) to the bottom when content doesn't fill the panel */
+.ace-text-panel > .ace-legend {
+  margin-top: auto;
+}
+
+.ace-text-empty {
+  color: var(--ace-text-muted);
+}
+
+/* ---- Content scroll wrapper ---- */
+
+.ace-content-scroll {
+  display: flex;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+/* ---- SVG highlight overlay ---- */
+
+.ace-text-body {
+  position: relative;
+}
+
+.ace-text-body > svg#ace-hl-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Elevate every non-overlay direct child above the SVG so non-sentence
+   siblings (source_text fallback <p>, .ace-para-break spans, etc.) aren't
+   obscured by the absolutely-positioned overlay. */
+.ace-text-body > :not(svg#ace-hl-overlay) {
+  position: relative;
+  z-index: 1;
+}
+
+rect.ace-flash {
+  opacity: 0;
+  animation: ace-flash 800ms ease-out;
+}
+
+@keyframes ace-flash {
+  0%   { opacity: 0; }
+  15%  { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* ---- Sentences ---- */
+
+.ace-sentence {
+  cursor: text;
+  padding: 2px 0 4px;
+  display: inline;
+  font-size: var(--ace-font-size-base);
+  line-height: 2;
+}
+
+.ace-sentence--list {
+  display: block;
+  padding: 2px 2px 4px 20px;
+}
+
+.ace-sentence--focused {
+  text-decoration: underline;
+  text-decoration-color: #546e7a;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+  text-decoration-skip-ink: none;
+}
+
+.ace-sentence--coded.ace-sentence--focused {
+  text-decoration-color: #212121;
+}
+
+
+.ace-para-break {
+  display: block;
+  height: 12px;
+}
+
+/* ---- Bottom code bar ---- */
+
+.ace-code-bar {
+  position: sticky;
+  bottom: 48px;
+  margin-top: var(--ace-space-4);
+  padding: var(--ace-space-2) var(--ace-space-8);
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  border-top: 1px solid var(--ace-border-light);
+  background: var(--ace-bg);
+  z-index: 1;
+}
+
+.ace-code-sep {
+  color: var(--ace-border);
+}
+
+.ace-code-bar-label {
+  font-family: var(--ace-font-mono);
+  font-size: var(--ace-font-size-2xs);
+  font-weight: var(--ace-weight-medium);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: rgba(0, 0, 0, 0.48);
+  white-space: nowrap;
+  user-select: none;
+}
+
+.ace-code-chip {
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: var(--ace-font-size-xs);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.ace-code-chip:hover {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+/* ---- Permanent keyboard-shortcut legend (bottom of text panel) ---- */
+
+.ace-legend {
+  position: sticky;
+  bottom: 24px;
+  padding: 4px var(--ace-space-8) 6px;
+  text-align: center;
+  font-family: var(--ace-font-mono);
+  font-size: var(--ace-font-size-2xs);
+  color: rgba(43, 48, 56, 0.40);
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+  user-select: none;
+  z-index: 1;
+}
+
+.ace-legend .k {
+  color: rgba(43, 48, 56, 0.72);
+}
+
+/* ---- Code menu dropdown (management mode) ---- */
+
+.ace-code-menu {
+  position: fixed;
+  z-index: 100;
+  background: var(--ace-bg);
+  border: 1px solid var(--ace-border);
+  box-shadow: var(--ace-shadow);
+  min-width: 140px;
+}
+
+.ace-code-menu-item {
+  display: block;
+  width: 100%;
+  padding: 6px 12px;
+  font-size: var(--ace-font-size-md);
+  color: var(--ace-text);
+  background: none;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--ace-transition);
+}
+
+.ace-code-menu-item:hover { background: var(--ace-bg-muted); }
+.ace-code-menu-item--danger { color: var(--ace-danger); }
+
+.ace-code-menu-hint {
+  font-size: var(--ace-font-size-2xs);
+  font-family: var(--ace-font-mono);
+  color: var(--ace-text-muted);
+  margin-left: auto;
+  padding-left: var(--ace-space-3);
+}
+
+.ace-code-menu-sub {
+  position: relative;
+  cursor: default;
+}
+
+.ace-code-submenu {
+  display: none;
+  position: absolute;
+  left: 100%;
+  top: 0;
+  background: var(--ace-bg);
+  border: 1px solid var(--ace-border);
+  box-shadow: var(--ace-shadow);
+  min-width: 120px;
+}
+
+.ace-code-menu-sub:hover .ace-code-submenu {
+  display: block;
+}
+
+.ace-code-menu-sep {
+  height: 1px;
+  background: var(--ace-border-light);
+  margin: var(--ace-space-1) 0;
+}
+
+/* ---- Colour swatch popover ---- */
+
+.ace-colour-popover {
+  position: fixed;
+  z-index: 100;
+  background: var(--ace-bg);
+  border: 1px solid var(--ace-border);
+  box-shadow: var(--ace-shadow);
+  padding: 4px;
+  display: grid;
+  grid-template-columns: repeat(6, 28px);
+  gap: 2px;
+  border-radius: var(--ace-radius);
+}
+
+.ace-colour-swatch {
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 2px;
+  cursor: pointer;
+  padding: 0;
+}
+
+.ace-colour-swatch:hover {
+  outline: 2px solid var(--ace-text);
+  outline-offset: -1px;
+}
+
+/* ---- Utility ---- */
+
+.ace-hidden { display: none !important; }
+
+/* ---- Dialog base ---- */
+
+dialog {
+  border: 1px solid var(--ace-border);
+  padding: var(--ace-space-6);
+  max-width: 400px;
+  background: var(--ace-bg);
+  box-shadow: var(--ace-shadow);
+}
+
+dialog::backdrop {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+/* ---- HTMX loading ---- */
+
+.htmx-request {
+  opacity: 0.6;
+  pointer-events: none;
+  transition: opacity var(--ace-transition);
+}
+
+/* ---- Management mode ---- */
+
+.ace-sidebar-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--ace-space-1);
+  padding: var(--ace-space-3) var(--ace-space-2) var(--ace-space-2);
+  flex-shrink: 0;
+}
+
+/* Wraps the search input + its absolute hint keycap. */
+.ace-sidebar-search-wrap {
+  position: relative;
+  flex: 1;
+}
+
+.ace-sidebar-search {
+  width: 100%;
+  padding: var(--ace-space-2) 30px var(--ace-space-2) var(--ace-space-2);
+  font-size: var(--ace-font-size-sm);
+  border: 1px solid transparent;
+  background: var(--ace-bg-muted);
+  color: var(--ace-text);
+  border-radius: 0;
+}
+
+/* Absolute keycap on the right edge of the search input. */
+.ace-sidebar-search-hint {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.ace-sidebar-search:focus {
+  border-color: var(--ace-focus);
+  background: var(--ace-bg);
+  outline: none;
+}
+
+/* Codebook menu */
+.ace-codebook-menu {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.ace-codebook-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--ace-bg);
+  border: 1px solid var(--ace-border);
+  border-radius: var(--ace-radius);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  min-width: 180px;
+  padding: 4px 0;
+  z-index: 100;
+}
+
+.ace-codebook-dropdown-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 6px 14px;
+  font-size: var(--ace-font-size-sm);
+  color: var(--ace-text);
+  transition: background var(--ace-transition);
+}
+
+.ace-codebook-dropdown-item:hover { background: var(--ace-bg-muted); }
+
+.ace-codebook-dropdown-sep {
+  border: none;
+  border-top: 1px solid var(--ace-border);
+  margin: 4px 0;
+}
+
+/* Import preview dialog */
+.ace-import-dialog {
+  max-width: 380px;
+  padding: 20px;
+  border: 1px solid var(--ace-border);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+}
+
+.ace-import-dialog-title {
+  font-size: var(--ace-font-size-lg);
+  font-weight: 600;
+  color: var(--ace-text);
+  margin-bottom: 2px;
+}
+
+.ace-import-dialog-sub {
+  font-size: var(--ace-font-size-xs);
+  color: var(--ace-text-muted);
+  margin-bottom: 14px;
+}
+
+.ace-import-preview {
+  border: 1px solid var(--ace-border-light);
+  border-radius: var(--ace-radius);
+  overflow: hidden;
+  margin-bottom: 14px;
+}
+
+.ace-import-preview-header {
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--ace-border-light);
+  font-size: var(--ace-font-size-2xs);
+  color: var(--ace-text-muted);
+}
+
+.ace-import-preview-list {
+  max-height: 250px;
+  overflow-y: auto;
+  padding: 4px 0;
+}
+
+.ace-import-group-label {
+  padding: 1px 8px;
+  font-size: var(--ace-font-size-2xs);
+  color: var(--ace-text-muted);
+  letter-spacing: 0.3px;
+  margin-top: 4px;
+  text-transform: uppercase;
+}
+
+.ace-import-row {
+  padding: 2px 8px 2px 16px;
+  font-size: var(--ace-font-size-sm);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.ace-import-row--new { color: var(--ace-text); }
+.ace-import-row--exists { color: var(--ace-text-muted); }
+
+.ace-import-badge {
+  margin-left: auto;
+  font-size: var(--ace-font-size-2xs);
+}
+
+.ace-import-badge--new { color: #22c55e; }
+.ace-import-badge--exists { color: var(--ace-text-muted); }
+
+.ace-import-empty {
+  padding: 16px;
+  text-align: center;
+  color: var(--ace-text-muted);
+  font-size: var(--ace-font-size-sm);
+}
+
+.ace-import-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+/* ---- Flash sentence highlight ---- */
+
+.ace-flash-sentence {
+  background: rgba(255, 235, 59, 0.3);
+  transition: background 1.5s ease;
+}
+
+/* ================================================================
+ * Source notes (Task 4)
+ * ================================================================ */
+
+:root {
+  --ace-note-bg: #fffef5;
+  --ace-note-border: #e6e2c8;
+  --ace-note-accent: #d4a017;
+}
+
+.ace-note-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--ace-text-muted);
+  font-size: var(--ace-font-size-2xs);
+  font-family: inherit;
+  cursor: pointer;
+  transition: var(--ace-transition);
+}
+
+.ace-note-pill:hover {
+  color: var(--ace-text);
+}
+
+.ace-note-pill--has-note {
+  background: var(--ace-note-bg);
+  border-color: var(--ace-note-border);
+  color: #212121;
+}
+
+.ace-note-icon {
+  font-size: var(--ace-font-size-xs);
+  line-height: 1;
+}
+
+/* ---- Note drawer (right-edge overlay) ---- */
+
+.ace-note-drawer {
+  width: 0;
+  min-width: 0;
+  overflow: hidden;
+  background: var(--ace-note-bg);
+  border-left: 1px solid transparent;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  transition: width 180ms cubic-bezier(0.2, 0, 0, 1), border-color 180ms;
+}
+
+html[data-ace-note-open="1"] .ace-note-drawer {
+  width: 320px;
+  border-left-color: var(--ace-note-border);
+}
+
+body:has(#note-textarea:focus) .ace-note-drawer {
+  box-shadow: inset 0 0 0 2px var(--ace-note-accent);
+}
+
+.ace-note-drawer-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--ace-space-1) var(--ace-space-2);
+  padding: var(--ace-space-2) var(--ace-space-4);
+  border-bottom: 1px solid var(--ace-note-border);
+  flex-shrink: 0;
+}
+
+/* Only drawer-specific property not covered by .ace-panel-heading — prevents
+   the title from shrinking inside the flex-based .ace-note-drawer-header. */
+.ace-note-drawer #note-drawer-title { flex-shrink: 0; }
+
+.ace-note-mode-indicator {
+  font-size: var(--ace-font-size-2xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+
+html[data-ace-note-open="1"] .ace-note-mode-indicator::before {
+  content: "View · N to edit";
+  font-size: 11px;
+  background: #e3f2fd;
+  color: #1976d2;
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+
+body:has(#note-textarea:focus) .ace-note-mode-indicator::before {
+  content: "Edit · Esc to stop";
+  font-size: 11px;
+  background: #fff3e0;
+  color: #e65100;
+}
+
+.ace-note-drawer-status {
+  font-size: var(--ace-font-size-2xs);
+  color: #888;
+  font-style: normal;
+  flex-basis: 100%;
+}
+
+/* READ mode: subtle cue that the textarea isn't active yet */
+html[data-ace-note-open="1"] .ace-note-drawer .ace-note-textarea {
+  background: transparent;
+  caret-color: transparent;
+}
+
+body:has(#note-textarea:focus) .ace-note-drawer .ace-note-textarea {
+  background: #ffffff;
+  caret-color: var(--ace-text, #212121);
+}
+
+.ace-note-drawer .ace-note-textarea {
+  flex: 1;
+  width: 100%;
+  padding: var(--ace-space-3) var(--ace-space-4);
+  margin: 0;
+  background: transparent;
+  border: none;
+  outline: none;
+  resize: none;
+  font-family: inherit;
+  font-size: var(--ace-font-size-sm, 13px);
+  line-height: 1.6;
+  color: var(--ace-text, #212121);
+}
+
+.ace-note-drawer .ace-note-textarea:focus {
+  outline: none;  /* amber ring is drawn on the parent .ace-note-drawer via .editing */
+}
+
+/* ---- Note rail (persistent right-edge affordance) ---- */
+
+.ace-note-rail {
+  width: 16px;
+  flex-shrink: 0;
+  padding: 0;
+  border: none;
+  border-left: 1px solid var(--ace-note-border);
+  background: linear-gradient(
+    to bottom,
+    transparent 0%,
+    #fdf6d8 15%,
+    #fdf6d8 85%,
+    transparent 100%
+  );
+  cursor: pointer;
+  transition: width 150ms ease;
+  position: relative;
+}
+
+.ace-note-rail:hover {
+  width: 22px;
+}
+
+.ace-note-rail:focus-visible {
+  outline: 2px solid var(--ace-note-accent);
+  outline-offset: -2px;
+}
+
+.ace-note-rail-dot {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: transparent;
+  transition: background 150ms;
+}
+
+html[data-ace-has-note="1"] .ace-note-rail-dot {
+  background: var(--ace-note-accent);
+}
+
+html[data-ace-note-open="1"] .ace-note-rail {
+  display: none;
+}
+
+/* ---- Reduced motion ---- */
+@media (prefers-reduced-motion: reduce) {
+  .ace-note-drawer {
+    transition: width 0.01ms;
+  }
+}
+
+/* ================================================================ */
+/* Integrated source grid — permanent panel at bottom of sidebar    */
+/* ================================================================ */
+
+.ace-sidebar-vsplit {
+  flex-shrink: 0;
+  height: 14px;
+  padding: 4px 0;
+  background-clip: content-box;
+  background-color: transparent;
+  cursor: row-resize;
+  transition: background-color var(--ace-transition);
+}
+.ace-sidebar-vsplit:hover,
+.ace-sidebar-vsplit:focus-visible {
+  background-color: var(--ace-bg-muted);
+  outline: none;
+}
+
+.ace-sidebar-grid {
+  flex: 0 0 var(--ace-grid-height);
+  min-height: 120px;
+  max-height: 70vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  /* Soft wash demarcates the sources zone in place of a horizontal border. */
+  background: #fafafa;
+}
+
+.ace-grid-header {
+  appearance: none;
+  background: none;
+  border: 0;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: var(--ace-space-2);
+  padding: var(--ace-space-2) var(--ace-space-3);
+  font: inherit;
+  font-size: var(--ace-font-size-2xs);
+  color: var(--ace-text-muted);
+  cursor: pointer;
+  text-align: left;
+  flex-shrink: 0;
+  transition: background-color var(--ace-transition);
+}
+.ace-grid-header:hover { background-color: var(--ace-bg-muted); }
+.ace-grid-header:focus-visible {
+  outline: 2px solid var(--ace-focus);
+  outline-offset: -2px;
+}
+.ace-grid-chevron {
+  transition: transform var(--ace-transition);
+  flex-shrink: 0;
+}
+.ace-grid-header[aria-expanded="false"] .ace-grid-chevron {
+  transform: rotate(-90deg);
+}
+
+/* Hint for the Shift+Arrow source-nav shortcut, right-aligned inside the
+ * sources header button. */
+.ace-grid-header-hint {
+  margin-left: auto;
+  letter-spacing: 0;
+}
+
+/* Collapse mechanism: display:contents keeps the wrapper neutral in layout
+   when expanded, so flex children of .ace-sidebar-grid still participate.
+   When collapsed, the wrapper flips to display:none, hiding all children
+   in one shot. */
+.ace-grid-content {
+  display: contents;
+}
+html[data-ace-grid-collapsed="1"] .ace-grid-content { display: none; }
+html[data-ace-grid-collapsed="1"] .ace-sidebar-grid {
+  flex: 0 0 auto;
+  min-height: 0;
+}
+
+/* ================================================================ */
+/* Sparkline minimap + tile viewport (replaces coloured-square grid)*/
+/* ================================================================ */
+
+/* Sparkline strip — fixed height at the top of the grid panel */
+.ace-grid-spark {
+  flex-shrink: 0;
+  position: relative;
+  height: 44px;
+  padding: 4px var(--ace-space-3) 2px;
+}
+.ace-grid-spark svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: pointer;
+}
+.ace-grid-spark .spark-area  { fill: #eeeeee; }
+.ace-grid-spark .spark-line  { fill: none; stroke: #9e9e9e; stroke-width: 1; }
+.ace-grid-spark .spark-viewport {
+  fill: rgba(0, 0, 0, 0.06);
+  stroke: rgba(0, 0, 0, 0.35);
+  stroke-width: 1;
+  rx: 1;
+}
+.ace-grid-spark .spark-playhead {
+  stroke: #000;
+  stroke-width: 1.5;
+  pointer-events: none;
+}
+.ace-grid-spark .spark-playhead-cap {
+  fill: #000;
+  pointer-events: none;
+}
+
+/* Range label sits between the sparkline and the tiles */
+.ace-grid-sub-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 0 var(--ace-space-3) 2px;
+  font-size: var(--ace-font-size-2xs);
+  color: var(--ace-text-muted);
+  font-family: var(--ace-font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  flex-shrink: 0;
+}
+.ace-grid-sub-label { font-weight: var(--ace-weight-medium); }
+
+/* Tile grid — fills whatever height the panel has after strip + headers */
+.ace-grid-tiles {
+  flex: 1 1 auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, 22px);
+  grid-auto-rows: 22px;
+  gap: 2px;
+  align-content: start;
+  min-height: 0;
+  overflow: hidden;
+  padding: 0 var(--ace-space-3);
+}
+.ace-grid-tile {
+  aspect-ratio: 1;
+  appearance: none;
+  border: 1px solid var(--ace-border-light);
+  padding: 0;
+  background: var(--ace-bg);
+  color: var(--ace-text-muted);
+  cursor: pointer;
+  position: relative;
+  font-family: var(--ace-font-mono);
+  /* 11 px is a deliberate carve-out below the 13 px floor — micro-data,
+     not prose; matches existing 11 px carve-outs in this file. */
+  font-size: 11px;
+  display: grid;
+  place-items: center;
+  line-height: 1;
+  transition: background-color var(--ace-transition),
+              border-color var(--ace-transition);
+}
+.ace-grid-tile[data-count="0"] > span { color: transparent; }
+.ace-grid-tile:hover { border-color: var(--ace-focus); }
+.ace-grid-tile:focus-visible {
+  outline: 2px solid var(--ace-focus);
+  outline-offset: 1px;
+  z-index: 2;
+}
+.ace-grid-tile.warm {
+  background: #f0f0f0;
+  color: #555;
+}
+.ace-grid-tile.hot {
+  background: #e0e0e0;
+  color: #222;
+  font-weight: var(--ace-weight-semibold);
+}
+.ace-grid-tile.active {
+  background: #000;
+  color: #fff;
+  border-color: #000;
+  font-weight: var(--ace-weight-semibold);
+}
+.ace-grid-tile.flagged {
+  border-left: 3px solid var(--ace-warning);
+}
+.ace-grid-tile.note::after {
+  content: "";
+  position: absolute;
+  bottom: 2px;
+  right: 2px;
+  width: 3px;
+  height: 3px;
+  background: var(--ace-note-accent);
+  border-radius: 50%;
+}
+
+/* Inspector row — updates on tile hover or keyboard focus */
+.ace-grid-inspector {
+  flex-shrink: 0;
+  padding: 4px var(--ace-space-3);
+  font-family: var(--ace-font-mono);
+  font-size: var(--ace-font-size-2xs);
+  color: var(--ace-text-muted);
+  min-height: calc(var(--ace-font-size-2xs) + 8px);
+  line-height: 1.3;
+  border-top: 1px solid var(--ace-border-light);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ace-grid-inspector:empty::before {
+  content: "\00a0"; /* non-breaking space so the row keeps its height */
+  color: transparent;
+}

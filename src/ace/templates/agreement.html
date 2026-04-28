@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+
+{% block title %}Agreement — ACE{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="/static/css/agreement.css">
+{% endblock %}
+
+{% block content %}
+<div class="ace-agreement-page">
+  <a href="/" class="ace-back">← Home</a>
+
+  <div id="agreement-results">
+    <h1 class="ace-agreement-title">Inter-Coder Agreement</h1>
+    <div class="ace-agreement-empty">
+      <p>Select 2 or more .ace files to compute agreement</p>
+      <button class="ace-agreement-choose-btn" onclick="acePickAndCompute()">Choose files</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+  "use strict";
+
+  window.acePickAndCompute = function() {
+    var results = document.getElementById("agreement-results");
+
+    fetch("/api/native/pick-files", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: "accept=.ace"
+    })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (!data.paths || data.paths.length < 2) {
+          return;
+        }
+        // Show loading state only after files are selected
+        results.innerHTML =
+          '<h1 class="ace-agreement-title">Inter-Coder Agreement</h1>' +
+          '<div class="ace-agreement-loading" role="status" aria-live="polite">Computing agreement\u2026</div>';
+        htmx.ajax("POST", "/api/agreement/compute", {
+          values: { paths: JSON.stringify(data.paths) },
+          target: "#agreement-results",
+          swap: "innerHTML",
+        });
+      })
+      .catch(function() {
+        results.innerHTML =
+          '<h1 class="ace-agreement-title">Inter-Coder Agreement</h1>' +
+          '<div class="ace-agreement-error">' +
+          '<p>Something went wrong. Please try again.</p>' +
+          '<button class="ace-agreement-choose-btn" onclick="acePickAndCompute()">Choose different files</button>' +
+          '</div>';
+      });
+  };
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,39 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ace-coder"
+dynamic = ["version"]
+description = "Lightweight qualitative coding tool with inter-coder reliability"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn>=0.34",
+    "jinja2>=3.1",
+    "jinja2-fragments>=1.5",
+    "python-multipart>=0.0.18",
+    "itsdangerous>=2.2",
+    "openpyxl>=3.1",
+    "pysbd>=0.3.4",
+]
+
+[project.scripts]
+ace = "ace.__main__:main"
+
+[tool.hatch.version]
+path = "src/ace/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ace"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28.1",
+    "nuitka[onefile]>=4.0.7",
+    "pytest>=9.0.2",
+]

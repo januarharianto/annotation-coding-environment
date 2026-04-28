@@ -1,0 +1,348 @@
+{# Agreement results fragment — rendered by api.py agreement_compute route #}
+
+<!-- Title bar -->
+<div class="ace-agreement-title-bar">
+  <h1 class="ace-agreement-title">Inter-Coder Agreement</h1>
+</div>
+<div class="ace-agreement-exports">
+  <a href="/api/agreement/export/results" class="ace-export-pill">Summary CSV</a>
+  <a href="/api/agreement/export/raw" class="ace-export-pill">Raw data CSV</a>
+  <a href="/api/agreement/export/references" class="ace-export-pill">References .bib</a>
+  <a href="/api/agreement/export/methodology" class="ace-export-pill">Methodology .md</a>
+</div>
+
+<!-- Context bar -->
+<div class="ace-agreement-context">
+  <span>{{ n_coders }} coders</span>
+  <span class="dot">&middot;</span>
+  <span>{{ n_sources }} of {{ total_sources }} sources</span>
+  <span class="dot">&middot;</span>
+  <span>{{ n_codes }} of {{ total_codes }} codes</span>
+  <a href="#" class="action" onclick="acePickAndCompute();return false">Choose different files</a>
+</div>
+
+<!-- Warnings -->
+{% if warnings %}
+<details class="ace-agreement-warnings">
+  <summary>{{ warnings|length }} warning{{ 's' if warnings|length > 1 else '' }}</summary>
+  <ul>{% for w in warnings %}<li>{{ w }}</li>{% endfor %}</ul>
+</details>
+{% endif %}
+
+<!-- Section: Summary -->
+<h2 class="ace-section-heading">Summary</h2>
+<div class="ace-verdict ace-verdict-{{ verdict.colour }}">
+  <div class="ace-verdict-title">{{ verdict.title }}</div>
+  {% for p in verdict.paragraphs %}
+  <p>{{ p|safe }}</p>
+  {% endfor %}
+</div>
+
+<!-- Section: Per-code breakdown -->
+<h2 class="ace-section-heading">Per-code breakdown</h2>
+<div class="ace-table-scroll">
+  <table class="ace-agreement-table" id="per-code-table">
+    <caption>
+      <span class="cap-label">Table {{ table_per_code }}: Agreement metrics by code</span>
+      <strong>Gwet's AC1</strong> measures reliability adjusted for chance agreement.
+      <strong>Krippendorff's &alpha;</strong> is a conservative estimate commonly reported in publications.
+      <strong>% Agreement</strong> is the raw proportion of matching character positions.
+      Status reflects the overall pattern across metrics. Click a row for guidance.
+    </caption>
+    <thead>
+      <tr>
+        <th class="col-idx">#</th>
+        <th class="col-sortable" data-sort="code">Code <span class="sort-icon">&updownarrow;</span></th>
+        <th class="col-sortable" data-sort="status">Status <span class="sort-icon">&updownarrow;</span></th>
+        <th class="col-sortable col-num" data-sort="ac1">AC1 <span class="sort-icon">&updownarrow;</span></th>
+        <th class="col-sortable col-num" data-sort="alpha">&alpha; <span class="sort-icon">&updownarrow;</span></th>
+        <th class="col-sortable col-num" data-sort="agree">% Agree <span class="sort-icon">&updownarrow;</span></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in code_groups %}
+        {% if item.type == "group" %}
+          {% if item.name %}
+          <tr class="ace-group-header"><td colspan="6">{{ item.name }}</td></tr>
+          {% endif %}
+        {% else %}
+          {% set m = item.metrics %}
+          {% set v = item.verdict %}
+          <tr class="ace-code-row ace-row-{{ v.colour }}"
+              data-code-name="{{ item.name }}"
+              data-sort-code="{{ item.name }}"
+              data-sort-status="{{ {'red': 0, 'amber': 1, 'grey': 2, 'green': 3}[v.colour] }}"
+              data-sort-ac1="{{ m.gwets_ac1 if m.gwets_ac1 is not none else -1 }}"
+              data-sort-alpha="{{ m.krippendorffs_alpha if m.krippendorffs_alpha is not none else -1 }}"
+              data-sort-agree="{{ m.percent_agreement }}"
+              aria-expanded="false">
+            <td class="col-idx">{{ item.index }}</td>
+            <td class="col-code">{{ item.name }}</td>
+            <td class="col-status">
+              <span class="ace-status ace-status-{{ v.colour }}">
+                <span class="ace-status-dot"></span>
+                {{ v.status|capitalize }}
+              </span>
+              {% if v.paradox %}<span class="ace-paradox-badge">paradox</span>{% endif %}
+            </td>
+            <td class="col-num {% if v.colour == 'red' %}val-red{% elif v.colour == 'amber' %}val-amber{% endif %}">{{ fmt(m.gwets_ac1) }}</td>
+            <td class="col-num {% if v.colour == 'red' %}val-red{% elif v.colour == 'amber' %}val-amber{% endif %}">{{ fmt(m.krippendorffs_alpha) }}</td>
+            <td class="col-num">{{ fmt(m.percent_agreement, is_pct=True) }}%</td>
+          </tr>
+          <tr class="ace-expanded-row ace-expanded-{{ 'paradox' if v.paradox else v.colour }}" hidden>
+            <td colspan="6">
+              {% if v.paradox %}<span class="ace-paradox-badge">Prevalence paradox</span>{% endif %}
+              <p class="ace-guidance">{{ v.guidance }}</p>
+              <div class="ace-expanded-meta">{{ v.metadata_line }}</div>
+            </td>
+          </tr>
+        {% endif %}
+      {% endfor %}
+
+      <!-- Overall row -->
+      <tr class="ace-overall-row">
+        <td class="col-idx"></td>
+        <td class="col-code">Overall (pooled)</td>
+        <td class="col-status">
+          <span class="ace-status ace-status-{{ overall_verdict.colour }}">
+            <span class="ace-status-dot"></span>
+            {{ overall_verdict.status|capitalize }}
+          </span>
+        </td>
+        <td class="col-num">{{ fmt(overall.gwets_ac1) }}</td>
+        <td class="col-num">{{ fmt(overall.krippendorffs_alpha) }}</td>
+        <td class="col-num">{{ fmt(overall.percent_agreement, is_pct=True) }}%</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- Section: Pairwise (3+ coders only) -->
+{% if pairwise_sorted %}
+<h2 class="ace-section-heading">Pairwise comparison</h2>
+<div class="ace-table-scroll">
+  <table class="ace-agreement-table">
+    <caption>
+      <span class="cap-label">Table {{ table_pairwise }}: Pairwise agreement between coders</span>
+    </caption>
+    <thead>
+      <tr>
+        <th>Pair</th>
+        <th>Status</th>
+        <th class="col-num">AC1</th>
+        <th class="col-num">&alpha;</th>
+        <th class="col-num">% Agree</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for label, pm, pv in pairwise_sorted %}
+      <tr class="ace-code-row ace-row-{{ pv.colour }}" aria-expanded="false">
+        <td>{{ label }}</td>
+        <td class="col-status">
+          <span class="ace-status ace-status-{{ pv.colour }}">
+            <span class="ace-status-dot"></span>{{ pv.status|capitalize }}
+          </span>
+          {% if pv.paradox %}<span class="ace-paradox-badge">paradox</span>{% endif %}
+        </td>
+        <td class="col-num">{{ fmt(pm.gwets_ac1) }}</td>
+        <td class="col-num">{{ fmt(pm.krippendorffs_alpha) }}</td>
+        <td class="col-num">{{ fmt(pm.percent_agreement, is_pct=True) }}%</td>
+      </tr>
+      <tr class="ace-expanded-row ace-expanded-{{ 'paradox' if pv.paradox else pv.colour }}" hidden>
+        <td colspan="6">
+          {% if pv.paradox %}<span class="ace-paradox-badge">Prevalence paradox</span>{% endif %}
+          <p class="ace-guidance">{{ pv.guidance }}</p>
+          <div class="ace-expanded-meta">{{ pv.metadata_line }}</div>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+<!-- Section: Detailed metrics -->
+<h2 class="ace-section-heading">Detailed metrics</h2>
+<div class="ace-detailed-section">
+    <!-- Methodology note -->
+    <div class="ace-methodology-note">
+      <strong>How verdicts are computed.</strong>
+      Status is based on Gwet's AC1, which simulation studies show tracks true reliability more accurately than alpha or kappa under the prevalence conditions typical of text annotation (Zhao et al., 2022).
+      Thresholds: Reliable &ge; 0.80, Tentative 0.60&ndash;0.79, Unreliable &lt; 0.60.
+      When alpha appears low despite high agreement, ACE checks for the prevalence paradox (Feinstein &amp; Cicchetti, 1990) and flags it in the per-code guidance.
+      For full details including threshold derivation and paradox detection algorithm, download the methodology document from the export buttons at the top of the page.
+    </div>
+
+    <!-- Full metrics table -->
+    <table class="ace-full-table">
+      <caption>
+        <span class="cap-label">Table {{ table_full }}: Complete metrics for all codes</span>
+        All seven agreement coefficients computed for each code.
+      </caption>
+      <thead>
+        <tr>
+          <th>Code</th>
+          <th class="col-num">% Agree</th>
+          <th class="col-num">&alpha;</th>
+          <th class="col-num">{{ kappa_header }}</th>
+          <th class="col-num">AC1</th>
+          <th class="col-num">Conger</th>
+          <th class="col-num">B-P</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for name, m in per_code_sorted %}
+        <tr>
+          <td>{{ name }}</td>
+          <td class="col-num">{{ fmt(m.percent_agreement, is_pct=True) }}%</td>
+          <td class="col-num">{{ fmt(m.krippendorffs_alpha) }}</td>
+          <td class="col-num">{{ fmt(m.cohens_kappa or m.fleiss_kappa) }}</td>
+          <td class="col-num">{{ fmt(m.gwets_ac1) }}</td>
+          <td class="col-num">{{ fmt(m.congers_kappa) }}</td>
+          <td class="col-num">{{ fmt(m.brennan_prediger) }}</td>
+        </tr>
+        {% endfor %}
+        <tr class="ace-overall-row">
+          <td>Overall</td>
+          <td class="col-num">{{ fmt(overall.percent_agreement, is_pct=True) }}%</td>
+          <td class="col-num">{{ fmt(overall.krippendorffs_alpha) }}</td>
+          <td class="col-num">{{ fmt(overall.cohens_kappa or overall.fleiss_kappa) }}</td>
+          <td class="col-num">{{ fmt(overall.gwets_ac1) }}</td>
+          <td class="col-num">{{ fmt(overall.congers_kappa) }}</td>
+          <td class="col-num">{{ fmt(overall.brennan_prediger) }}</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <!-- References -->
+    <div class="ace-refs">
+      <div class="ace-refs-title">References</div>
+      <div>[1] Gwet, K. L. (2008). Computing inter-rater reliability and its variance in the presence of high agreement. <em>Br. J. Math. Stat. Psychol.</em>, 61(1), 29&ndash;48.</div>
+      <div>[2] Krippendorff, K. (2018). <em>Content Analysis: An Introduction to Its Methodology</em> (4th ed.). SAGE.</div>
+      <div>[3] Cohen, J. (1960). A coefficient of agreement for nominal scales. <em>Educ. Psychol. Meas.</em>, 20(1), 37&ndash;46.</div>
+      <div>[4] Fleiss, J. L. (1971). Measuring nominal scale agreement among many raters. <em>Psychol. Bull.</em>, 76(5), 378&ndash;382.</div>
+      <div>[5] Conger, A. J. (1980). Integration and generalization of kappas for multiple raters. <em>Psychol. Bull.</em>, 88(2), 322&ndash;328.</div>
+      <div>[6] Brennan, R. L. &amp; Prediger, D. J. (1981). Coefficient kappa: Some uses, misuses, and alternatives. <em>Educ. Psychol. Meas.</em>, 41(3), 687&ndash;699.</div>
+      <div>[7] Landis, J. R. &amp; Koch, G. G. (1977). The measurement of observer agreement for categorical data. <em>Biometrics</em>, 33(1), 159&ndash;174.</div>
+      <div>[8] Holsti, O. R. (1969). <em>Content Analysis for the Social Sciences and Humanities</em>. Addison-Wesley.</div>
+      <div>[9] Feinstein, A. R. &amp; Cicchetti, D. V. (1990). High agreement but low kappa: I. The problems of two paradoxes. <em>J. Clin. Epidemiol.</em>, 43(6), 543&ndash;549.</div>
+      <div>[10] Cicchetti, D. V. &amp; Feinstein, A. R. (1990). High agreement but low kappa: II. Resolving the paradoxes. <em>J. Clin. Epidemiol.</em>, 43(6), 551&ndash;558.</div>
+      <div>[11] Zhao, X. et al. (2022). Interrater reliability estimators tested against true interrater reliabilities. <em>BMC Med. Res. Methodol.</em>, 22, 232.</div>
+      <div>[12] Krippendorff, K. (2011). Computing Krippendorff's alpha-reliability. University of Pennsylvania Scholarly Commons.</div>
+    </div>
+</div>
+
+<!-- Inline JS for expand/collapse and column sorting -->
+<script>
+(function() {
+  // Expand/collapse rows
+  document.addEventListener("click", function(e) {
+    var row = e.target.closest(".ace-code-row");
+    if (!row) return;
+    var next = row.nextElementSibling;
+    if (!next || !next.classList.contains("ace-expanded-row")) return;
+    var expanded = !next.hidden;
+    next.hidden = expanded;
+    row.setAttribute("aria-expanded", expanded ? "false" : "true");
+  });
+
+  // Column sorting
+  var table = document.getElementById("per-code-table");
+  if (!table) return;
+  var headers = table.querySelectorAll("th.col-sortable");
+  var tbody = table.querySelector("tbody");
+  var sortState = {col: null, dir: null};
+
+  // Save original order for restore
+  var originalOrder = [];
+  (function() {
+    var children = tbody.children;
+    for (var i = 0; i < children.length; i++) {
+      originalOrder.push(children[i]);
+    }
+  })();
+
+  headers.forEach(function(th) {
+    th.style.cursor = "pointer";
+    th.addEventListener("click", function() {
+      var col = th.getAttribute("data-sort");
+      var dir;
+      if (sortState.col === col) {
+        if (sortState.dir === "asc") dir = "desc";
+        else if (sortState.dir === "desc") dir = null;
+        else dir = "asc";
+      } else {
+        dir = "asc";
+      }
+      sortState.col = dir ? col : null;
+      sortState.dir = dir;
+
+      // Update sort icons
+      headers.forEach(function(h) {
+        var icon = h.querySelector(".sort-icon");
+        if (icon) icon.textContent = "\u21D5";
+      });
+      if (dir) {
+        var icon = th.querySelector(".sort-icon");
+        if (icon) icon.textContent = dir === "asc" ? "\u2191" : "\u2193";
+      }
+
+      // Collapse all expanded rows
+      tbody.querySelectorAll(".ace-expanded-row").forEach(function(r) {
+        r.hidden = true;
+      });
+      tbody.querySelectorAll(".ace-code-row[aria-expanded]").forEach(function(r) {
+        r.setAttribute("aria-expanded", "false");
+      });
+
+      if (!dir) {
+        restoreOriginalOrder();
+        return;
+      }
+
+      // Collect code rows (skip group headers, expanded rows, overall row)
+      var codeRows = [];
+      tbody.querySelectorAll(".ace-code-row").forEach(function(r) {
+        var expandedRow = r.nextElementSibling;
+        if (expandedRow && expandedRow.classList.contains("ace-expanded-row")) {
+          codeRows.push({row: r, expanded: expandedRow});
+        }
+      });
+
+      // Sort
+      codeRows.sort(function(a, b) {
+        var aVal = a.row.getAttribute("data-sort-" + col);
+        var bVal = b.row.getAttribute("data-sort-" + col);
+        if (col === "code") {
+          return dir === "asc" ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+        }
+        aVal = parseFloat(aVal);
+        bVal = parseFloat(bVal);
+        return dir === "asc" ? aVal - bVal : bVal - aVal;
+      });
+
+      // Hide group headers
+      tbody.querySelectorAll(".ace-group-header").forEach(function(r) {
+        r.hidden = true;
+      });
+
+      // Reorder: insert sorted rows before the overall row
+      var overallRow = tbody.querySelector(".ace-overall-row");
+      codeRows.forEach(function(item) {
+        tbody.insertBefore(item.row, overallRow);
+        tbody.insertBefore(item.expanded, overallRow);
+      });
+    });
+  });
+
+  function restoreOriginalOrder() {
+    originalOrder.forEach(function(row) {
+      row.hidden = row.classList.contains("ace-expanded-row");
+      tbody.appendChild(row);
+    });
+    tbody.querySelectorAll(".ace-group-header").forEach(function(r) {
+      r.hidden = false;
+    });
+  }
+})();
+</script>
