@@ -639,6 +639,9 @@
       evt.preventDefault();
       evt.stopImmediatePropagation();
       if (id === currentId) return;   // already here, no-op
+      // Same flag as auto-nav so the next page load restores codebook focus
+      // and the user can keep arrow-navigating without falling out to tracks.
+      try { sessionStorage.setItem("cv-restore-codebook-focus", "1"); } catch (_) {}
       window.location.href = `/code/${id}/view`;
     }, true);
 
@@ -736,6 +739,26 @@
 
   updateUI(); // announce initial overview state
 
+  // Restore codebook focus after an auto-navigate reload so holding ↑/↓
+  // continues the codebook scroll seamlessly across page loads.
+  const CODEBOOK_FOCUS_RESTORE_KEY = "cv-restore-codebook-focus";
+  try {
+    if (sessionStorage.getItem(CODEBOOK_FOCUS_RESTORE_KEY) === "1") {
+      sessionStorage.removeItem(CODEBOOK_FOCUS_RESTORE_KEY);
+      const currentRow = document.querySelector(
+        '#code-tree .ace-code-row[aria-current="page"]',
+      );
+      if (currentRow) {
+        document.querySelectorAll("#code-tree .ace-code-row").forEach((r) =>
+          r.setAttribute("tabindex", "-1"),
+        );
+        currentRow.setAttribute("tabindex", "0");
+        currentRow.focus({ preventScroll: true });
+        currentRow.scrollIntoView({ block: "nearest" });
+      }
+    }
+  } catch (_) {}
+
   // --- Codebook keyboard navigation -------------------------------------
   // T4: `/` → focus search; ↑/↓/Home/End on code rows (roving tabindex,
   // skipping collapsed-group contents); Enter → navigate; search ↓/↑/Esc.
@@ -764,6 +787,26 @@
     targetRow.setAttribute("tabindex", "0");
     targetRow.focus();
     targetRow.scrollIntoView({ block: "nearest" });
+  }
+
+  // Debounced auto-navigate when the codebook cursor lands on a different code.
+  // Only invoked from explicit ↑/↓/Home/End presses on a focused code row —
+  // not from zone-shift entry (←/→) or search-input ↓/↑, which are landing
+  // gestures, not "scrolling through codes" gestures.
+  const CODEBOOK_NAV_DEBOUNCE_MS = 150;
+  let codebookNavTimer = null;
+  function maybeAutoNavigate(targetRow) {
+    clearTimeout(codebookNavTimer);
+    if (!targetRow) return;
+    const codeId = targetRow.dataset.codeId;
+    if (!codeId || codeId === data.code.id) return;
+    codebookNavTimer = setTimeout(() => {
+      // Set flag so the next page load restores focus to the new current row.
+      // Without this, focus drops to <body> and subsequent ↓ enters tracks
+      // (body+↓ shortcut) instead of continuing the codebook scroll.
+      try { sessionStorage.setItem(CODEBOOK_FOCUS_RESTORE_KEY, "1"); } catch (_) {}
+      window.location.href = `/code/${codeId}/view`;
+    }, CODEBOOK_NAV_DEBOUNCE_MS);
   }
 
   // Document-level `/` → focus codebook search.
@@ -811,6 +854,41 @@
       const target = Math.max(0, Math.min(rows.length - 1, base + dir));
       evt.preventDefault();
       moveFocus(target, { announce: false });
+      return;
+    }
+
+    // ← / → → move between columns: codebook → tracks → excerpts (no wrap).
+    // Skipped inside form controls so plain ←/→ remains text-cursor movement.
+    // Entering excerpts triggers a full reset (clears pinned tracks, search
+    // filter, selected excerpt, cursor returns to row 0).
+    if (!evt.shiftKey && !evt.ctrlKey && !evt.metaKey && !evt.altKey
+        && (evt.key === "ArrowLeft" || evt.key === "ArrowRight")) {
+      if (isEditableElement(document.activeElement)) return;
+      const zone = currentZone();
+      const ZONES_LR = ["codebook", "tracks", "excerpts"];
+      const idx = ZONES_LR.indexOf(zone);
+      if (idx < 0) return;
+      const nextIdx = idx + (evt.key === "ArrowRight" ? 1 : -1);
+      if (nextIdx < 0 || nextIdx >= ZONES_LR.length) return;
+      claim(evt);
+      clearTimeout(codebookNavTimer);
+      if (ZONES_LR[nextIdx] === "excerpts") {
+        // Full reset on entry: matches Clear-button behaviour plus clearing
+        // the search filter. The tracksCursorIdx + tabindex reset is critical
+        // — without it updateUI()'s context bar still filters by the cursor
+        // (see the `selectedSources.size === 0 && tracksCursorIdx < 0` branch).
+        selectedSources.clear();
+        selectedExcerpt = null;
+        anchorIdx = null;
+        tracksCursorIdx = -1;
+        setRovingTabindex(trackRowEls(), -1);
+        filterText = "";
+        const cvSearch = document.getElementById("cv-search");
+        if (cvSearch) cvSearch.value = "";
+        rememberedCursor.excerpts = null;
+        updateUI({ announce: false });
+      }
+      focusZone(ZONES_LR[nextIdx]);
       return;
     }
 
@@ -887,28 +965,39 @@
 
       if (plainKey && evt.key === "ArrowDown") {
         claim(evt);
-        moveCodebookCursor(rows[Math.min(pos + 1, rows.length - 1)]);
+        const target = rows[Math.min(pos + 1, rows.length - 1)];
+        moveCodebookCursor(target);
+        maybeAutoNavigate(target);
         return;
       }
       if (plainKey && evt.key === "ArrowUp") {
         claim(evt);
-        moveCodebookCursor(rows[Math.max(pos - 1, 0)]);
+        const target = rows[Math.max(pos - 1, 0)];
+        moveCodebookCursor(target);
+        maybeAutoNavigate(target);
         return;
       }
       if (plainKey && evt.key === "Home") {
         claim(evt);
-        moveCodebookCursor(rows[0]);
+        const target = rows[0];
+        moveCodebookCursor(target);
+        maybeAutoNavigate(target);
         return;
       }
       if (plainKey && evt.key === "End") {
         claim(evt);
-        moveCodebookCursor(rows[rows.length - 1]);
+        const target = rows[rows.length - 1];
+        moveCodebookCursor(target);
+        maybeAutoNavigate(target);
         return;
       }
       if (plainKey && evt.key === "Enter") {
         claim(evt);
         const codeId = target.dataset.codeId;
-        if (codeId) window.location.href = `/code/${codeId}/view`;
+        if (codeId) {
+          try { sessionStorage.setItem("cv-restore-codebook-focus", "1"); } catch (_) {}
+          window.location.href = `/code/${codeId}/view`;
+        }
         return;
       }
     }, true); // capture phase — run before bridge.js's tree keydown
@@ -949,9 +1038,7 @@
     }, true); // capture phase — stopImmediatePropagation blocks bridge.js handlers
   }
 
-  // --- Tab cycle across four stops -------------------------------------
-
-  const ZONE_ORDER = ["tracks", "excerpts", "codebook", "back"];
+  // --- Zone focus helpers (used by ←/→ zone-shift) ---------------------
 
   // Remembered cursor per zone — stable identifiers so cursors survive DOM
   // rerenders (the stored idx/id is resolved back to an element at focus time).
@@ -1043,39 +1130,6 @@
       if (a.dataset.codeId) rememberedCursor.codebook = a.dataset.codeId;
     }
     // back link has no remembered state — not a roving zone
-  }, true); // capture phase
-
-  // Document-level Tab/Shift+Tab intercept at capture phase — runs before the
-  // browser's default Tab action. Does not interfere when focus is inside an
-  // open dialog (native trap preserved — T8 cheat sheet will exercise this).
-  document.addEventListener("keydown", (evt) => {
-    if (evt.key !== "Tab") return;
-
-    // Don't intercept if focus is inside an open dialog — native trap.
-    const active = document.activeElement;
-    const insideDialog = active && active.closest && active.closest("dialog[open]");
-    if (insideDialog) return;
-
-    const zone = currentZone();
-
-    if (!zone) {
-      // Only enter the custom cycle from document/body focus — preserves
-      // native Tab for any other focused control (sort chips, excerpt filter,
-      // Clear button) so they remain keyboard-reachable.
-      const atDocumentRoot =
-        !active || active === document.body || active === document.documentElement;
-      if (!atDocumentRoot) return;
-      evt.preventDefault();
-      focusZone(evt.shiftKey ? "back" : "tracks");
-      return;
-    }
-
-    evt.preventDefault();
-    const curIdx = ZONE_ORDER.indexOf(zone);
-    const nextIdx = evt.shiftKey
-      ? (curIdx - 1 + ZONE_ORDER.length) % ZONE_ORDER.length
-      : (curIdx + 1) % ZONE_ORDER.length;
-    focusZone(ZONE_ORDER[nextIdx]);
   }, true); // capture phase
 
   // --- Cheat sheet dialog close + focus restoration ---

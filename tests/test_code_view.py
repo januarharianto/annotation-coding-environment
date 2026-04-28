@@ -182,6 +182,6 @@ def test_code_view_has_cheatsheet_dialog(client_with_annotations):
     dialog = m.group(0)
     assert "Coded text shortcuts" in dialog
     # Every zone gets its own section — guard against an empty/truncated body.
-    assert "Cycle Tracks" in dialog
+    assert "Move between columns" in dialog
     assert "Move cursor" in dialog
     assert "pin / unpin" in dialog.lower()

@@ -8,6 +8,20 @@
   --ace-text-faint: #9e9e9e;
 }
 
+/* Unified keyboard-focus indicator across all three navigable columns.
+   Codebook uses outline:none in coding.css; tracks has its own ring; excerpts
+   had no focus rule. Same recipe everywhere on this page so the user always
+   knows which column the cursor is in. */
+#code-view .ace-code-row:focus-visible,
+#code-view .cv-track-row:focus-visible,
+#code-view .cv-row:focus-visible {
+  outline: 2px solid var(--ace-focus);
+  outline-offset: -2px;
+  background: var(--ace-bg-muted);
+  position: relative;
+  z-index: 1;
+}
+
 /* Subtle scrollbars */
 * { scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.18) transparent; }
 ::-webkit-scrollbar { width: 10px; height: 10px; }
@@ -218,11 +232,7 @@
   position: relative;
   z-index: 2;
 }
-.cv-track-row:focus-visible {
-  outline: 2px solid var(--ace-focus);
-  outline-offset: -1px;
-  background: var(--ace-bg-muted);
-}
+/* :focus-visible handled by the unified rule near the top of this file. */
 .cv-track-row .idx {
   font-family: var(--ace-font-mono);
   font-size: 11px;
