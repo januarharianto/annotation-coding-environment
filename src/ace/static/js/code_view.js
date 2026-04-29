@@ -867,7 +867,14 @@
       const zone = currentZone();
       const ZONES_LR = ["codebook", "tracks", "excerpts"];
       const idx = ZONES_LR.indexOf(zone);
-      if (idx < 0) return;
+      if (idx < 0) {
+        // Fresh page entry — no zone has focus yet. Treat the arrow as the
+        // entry direction: ← lands in the codebook (leftmost), → lands in
+        // the tracks list (natural starting point for browsing sources).
+        claim(evt);
+        focusZone(evt.key === "ArrowLeft" ? "codebook" : "tracks");
+        return;
+      }
       const nextIdx = idx + (evt.key === "ArrowRight" ? 1 : -1);
       if (nextIdx < 0 || nextIdx >= ZONES_LR.length) return;
       claim(evt);
