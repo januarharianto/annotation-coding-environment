@@ -3,7 +3,7 @@
 import sqlite3
 
 ACE_APPLICATION_ID = 0x41434500  # "ACE\0"
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 
 _SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS project (
@@ -102,7 +102,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_codebook_code_name_active
     ON codebook_code(name) WHERE deleted_at IS NULL;
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_codebook_chord
-    ON codebook_code(chord) WHERE chord IS NOT NULL;
+    ON codebook_code(chord) WHERE chord IS NOT NULL AND deleted_at IS NULL;
 """
 
 

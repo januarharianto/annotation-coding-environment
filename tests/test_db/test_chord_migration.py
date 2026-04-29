@@ -43,12 +43,12 @@ def test_v4_to_v5_migration_adds_column():
         conn.commit()
         conn.close()
 
-        # Open: triggers migration to v5
+        # Open: triggers migration to v6 (via v5 → v6 chain)
         conn = open_project(str(path))
         version = conn.execute("PRAGMA user_version").fetchone()[0]
         cols = {r["name"] for r in conn.execute("PRAGMA table_info(codebook_code)")}
         conn.close()
-        assert version == 5
+        assert version == 6
         assert "chord" in cols
 
 
@@ -69,8 +69,54 @@ def test_migration_is_idempotent():
         cols = {r["name"] for r in conn.execute("PRAGMA table_info(codebook_code)")}
         conn.close()
 
-        assert v1 == v2 == 5
+        assert v1 == v2 == 6
         assert "chord" in cols
+
+
+def test_v5_to_v6_tightens_index_for_soft_deletes():
+    """v5→v6 migration recreates idx_codebook_chord to exclude deleted rows."""
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "v5.ace"
+
+        # Build a v5-shaped DB by hand
+        conn = sqlite3.connect(str(path))
+        conn.execute("PRAGMA application_id = 0x41434500")
+        conn.execute("PRAGMA user_version = 5")
+        conn.execute("""
+            CREATE TABLE codebook_code (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                colour TEXT NOT NULL,
+                sort_order INTEGER NOT NULL,
+                group_name TEXT,
+                chord TEXT,
+                created_at TEXT NOT NULL,
+                deleted_at TEXT
+            )
+        """)
+        conn.execute("""
+            CREATE UNIQUE INDEX idx_codebook_chord
+                ON codebook_code(chord) WHERE chord IS NOT NULL
+        """)
+        # Soft-deleted code with chord "ab"
+        conn.execute(
+            "INSERT INTO codebook_code (id, name, colour, sort_order, chord, created_at, deleted_at) "
+            "VALUES ('a', 'A', '#A91818', 0, 'ab', datetime('now'), datetime('now'))"
+        )
+        conn.commit()
+        conn.close()
+
+        # Open: triggers v5→v6 migration. New code with chord "ab" should now be insertable.
+        conn = open_project(str(path))
+        try:
+            assert conn.execute("PRAGMA user_version").fetchone()[0] == 6
+            conn.execute(
+                "INSERT INTO codebook_code (id, name, colour, sort_order, chord, created_at) "
+                "VALUES ('b', 'B', '#557FE6', 1, 'ab', datetime('now'))"
+            )
+            conn.commit()
+        finally:
+            conn.close()
 
 
 def test_chord_unique_when_set():

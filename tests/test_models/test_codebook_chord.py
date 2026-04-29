@@ -1,7 +1,6 @@
 """Tests for chord assignment in the codebook model layer."""
 
 import sqlite3
-import tempfile
 from pathlib import Path
 
 import pytest
@@ -16,15 +15,14 @@ from ace.models.codebook import (
 )
 
 
-def _fresh_project():
-    tmp = tempfile.mkdtemp()
-    path = Path(tmp) / "fresh.ace"
+def _fresh_project(tmp_path):
+    path = tmp_path / "fresh.ace"
     create_project(str(path), "Test")
     return str(path)
 
 
-def test_first_thirty_one_codes_have_null_chord():
-    path = _fresh_project()
+def test_first_thirty_one_codes_have_null_chord(tmp_path):
+    path = _fresh_project(tmp_path)
     conn = open_project(path)
     try:
         for i in range(SINGLE_KEY_LIMIT):
@@ -35,8 +33,8 @@ def test_first_thirty_one_codes_have_null_chord():
         conn.close()
 
 
-def test_thirty_second_code_gets_chord():
-    path = _fresh_project()
+def test_thirty_second_code_gets_chord(tmp_path):
+    path = _fresh_project(tmp_path)
     conn = open_project(path)
     try:
         for i in range(SINGLE_KEY_LIMIT):
@@ -53,9 +51,9 @@ def test_thirty_second_code_gets_chord():
         conn.close()
 
 
-def test_backfill_assigns_chord_to_unchorded_tail():
+def test_backfill_assigns_chord_to_unchorded_tail(tmp_path):
     """Simulates a post-migration state: codes past slot 31 with NULL chord."""
-    path = _fresh_project()
+    path = _fresh_project(tmp_path)
     conn = open_project(path)
     try:
         # Add 35 codes manually with NULL chord (bypass add_code's auto-assignment)
@@ -85,8 +83,8 @@ def test_backfill_assigns_chord_to_unchorded_tail():
         conn.close()
 
 
-def test_backfill_is_idempotent():
-    path = _fresh_project()
+def test_backfill_is_idempotent(tmp_path):
+    path = _fresh_project(tmp_path)
     conn = open_project(path)
     try:
         for i in range(35):
@@ -102,8 +100,8 @@ def test_backfill_is_idempotent():
         conn.close()
 
 
-def test_set_chord_updates_column():
-    path = _fresh_project()
+def test_set_chord_updates_column(tmp_path):
+    path = _fresh_project(tmp_path)
     conn = open_project(path)
     try:
         cid = add_code(conn, "Privacy of data", "#A91818")
@@ -117,8 +115,8 @@ def test_set_chord_updates_column():
         conn.close()
 
 
-def test_set_chord_rejects_duplicate():
-    path = _fresh_project()
+def test_set_chord_rejects_duplicate(tmp_path):
+    path = _fresh_project(tmp_path)
     conn = open_project(path)
     try:
         cid1 = add_code(conn, "Code A", "#A91818")
@@ -132,8 +130,8 @@ def test_set_chord_rejects_duplicate():
         conn.close()
 
 
-def test_set_chord_to_none_clears():
-    path = _fresh_project()
+def test_set_chord_to_none_clears(tmp_path):
+    path = _fresh_project(tmp_path)
     conn = open_project(path)
     try:
         cid = add_code(conn, "Privacy of data", "#A91818")
@@ -149,9 +147,9 @@ def test_set_chord_to_none_clears():
         conn.close()
 
 
-def test_backfill_preserves_existing_chords_in_mixed_state():
+def test_backfill_preserves_existing_chords_in_mixed_state(tmp_path):
     """Backfill must not stomp pre-existing chords; only fill the NULL ones."""
-    path = _fresh_project()
+    path = _fresh_project(tmp_path)
     conn = open_project(path)
     try:
         from datetime import datetime, timezone
@@ -198,9 +196,9 @@ def test_backfill_preserves_existing_chords_in_mixed_state():
         conn.close()
 
 
-def test_backfill_handles_zero_indexed_sort_order():
+def test_backfill_handles_zero_indexed_sort_order(tmp_path):
     """Codes with 0-indexed sort_orders (e.g. legacy projects) backfill correctly."""
-    path = _fresh_project()
+    path = _fresh_project(tmp_path)
     conn = open_project(path)
     try:
         from datetime import datetime, timezone

@@ -36,16 +36,12 @@ class TestCollisions:
         assert result == "pa"
 
 
-class TestNumericEscape:
-    def test_falls_back_to_numeric_after_alphabet_exhausted(self):
+class TestExhaustion:
+    def test_raises_when_prefix_exhausted(self):
+        # All 26 'p*' chords taken
         taken = {"p" + c for c in "abcdefghijklmnopqrstuvwxyz"}
-        result = assign_chord("Privacy", taken)
-        assert result == "p1"
-
-    def test_continues_numeric(self):
-        taken = {"p" + c for c in "abcdefghijklmnopqrstuvwxyz"} | {"p1"}
-        result = assign_chord("Privacy", taken)
-        assert result == "p2"
+        with pytest.raises(RuntimeError, match="prefix 'p'"):
+            assign_chord("Privacy", taken)
 
 
 class TestNonAscii:

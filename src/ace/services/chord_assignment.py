@@ -1,12 +1,12 @@
 """Mnemonic 2-letter chord assignment for codebook codes.
 
-Used when a project has more than 32 codes — the keyboard's single-key slots
-(1-9, 0, a-p, r-w, y) are exhausted, so codes past slot 32 get a chord
-shortcut (;<chord>) instead.
+Used when a project has more than 31 codes — the keyboard's single-key slots
+(1-9, 0, a-p minus n, r-y minus v and x) total 31, so the 32nd code onward
+gets a chord shortcut (;<chord>) instead.
 
 The algorithm prefers mnemonic chords (first letters of distinctive words in
 the name) so users can guess shortcuts without memorising. Collisions are
-resolved by walking through consonants, then alphabet, then numeric.
+resolved by walking through consonants, then alphabet.
 """
 
 import string
@@ -19,8 +19,6 @@ STOP_WORDS: frozenset[str] = frozenset({
 
 _CONSONANTS = "bcdfghjklmnpqrstvwxyz"
 _LOWERCASE = string.ascii_lowercase
-# 0 is excluded — reserved as a single-key code slot in the UI keyboard layout.
-_DIGITS = "123456789"
 
 
 def _meaningful_words(name: str) -> list[str]:
@@ -49,17 +47,7 @@ def _alphabetical_pair(taken: set[str]) -> str:
             chord = first + second
             if chord not in taken:
                 return chord
-    # All 676 alphabetical pairs taken — fall through to numeric
-    return _numeric_escape("a", taken)
-
-
-def _numeric_escape(prefix: str, taken: set[str]) -> str:
-    """After alphabet exhausted, append digits: a1, a2..."""
-    for digit in _DIGITS:
-        chord = prefix + digit
-        if chord not in taken:
-            return chord
-    raise RuntimeError(f"Chord space exhausted: all 35 chords for prefix '{prefix}' are taken")
+    raise RuntimeError("Chord space exhausted: all 676 alphabetical pairs taken")
 
 
 def assign_chord(name: str, taken: set[str]) -> str:
@@ -71,7 +59,7 @@ def assign_chord(name: str, taken: set[str]) -> str:
     3. If 1 word: try first 2 letters.
     4. On collision: walk consonants of word 2, then word 1, then alphabet.
     5. If first letter is non-ASCII or words list is empty: alphabetical fallback.
-    6. Past 26 alphabetical fallbacks for the same first letter: numeric escape.
+    6. All 26 alphabetical fallbacks for the same first letter exhausted: RuntimeError.
     """
     words = _meaningful_words(name)
 
@@ -113,5 +101,5 @@ def assign_chord(name: str, taken: set[str]) -> str:
         if (chord := _try_chord(first + letter, taken)):
             return chord
 
-    # All `first*` chords taken — numeric escape
-    return _numeric_escape(first, taken)
+    # All `first*` chords taken
+    raise RuntimeError(f"Chord space exhausted: all 26 chords for prefix '{first}' are taken")

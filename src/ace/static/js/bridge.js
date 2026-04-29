@@ -166,15 +166,17 @@
       // Also skip rows hidden by search filter
       if (row.style.display === "none") return;
 
-      _currentKeyMap.push(row.getAttribute("data-code-id"));
-
       if (row.dataset.chord) {
-        // Chord cap is rendered server-side; record id but don't assign a single-key label.
+        // Chord row — has a chord cap rendered server-side. Don't include in
+        // the single-key map (else hotkey index would target the wrong row if
+        // a chord code is reordered into the first 31 positions).
         // aria-keyshortcuts is intentionally omitted — its spec uses spaces for ALTERNATIVES,
         // not key sequences, so "; xy" would announce as "either ; or xy". The chord cap's
         // title attribute ("Press ; then xy to apply") carries the accessible hint instead.
         return;
       }
+
+      _currentKeyMap.push(row.getAttribute("data-code-id"));
 
       const label = _keylabel(labelIdx);
       const keycap = row.querySelector(".ace-keycap");
@@ -1685,9 +1687,10 @@
       cap.contentEditable = "false";
       cap.classList.remove("ace-keycap--editing");
       const newChord = cap.textContent.trim().toLowerCase();
-      // Restore nested span structure
-      const displayChord = (save && /^[a-z]{2}$/.test(newChord) && newChord !== original) ? newChord : original;
-      cap.innerHTML = '<span class="ace-chord-lead">;</span><span class="ace-chord-tail">' + displayChord + '</span>';
+      // Always restore the original chord. On success the OOB sidebar swap will
+      // render the new chord from server state; on error (409 conflict, etc.)
+      // the UI correctly reflects what's actually persisted.
+      cap.innerHTML = '<span class="ace-chord-lead">;</span><span class="ace-chord-tail">' + original + '</span>';
 
       if (!save) {
         _focusTreeItem(row);
