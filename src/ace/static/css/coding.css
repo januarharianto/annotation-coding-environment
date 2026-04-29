@@ -3,7 +3,7 @@
 :root {
   --ace-annotation-alpha: 0.3;
   --ace-sidebar-width: 360px;
-  --ace-grid-height: 35vh;
+  --ace-grid-height: 18vh;
 }
 
 /* ---- Workspace (full viewport flex column) ---- */

@@ -597,7 +597,7 @@
     if (!handle || handle.dataset.aceResizeWired) return;
     handle.dataset.aceResizeWired = "1";
 
-    const DEFAULT_VH = 35;
+    const DEFAULT_VH = 18;
     const MIN_VH = 10;
     const MAX_VH = 70;
     const KEY_STEP_PX = 8;
