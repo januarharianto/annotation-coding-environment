@@ -1334,3 +1334,110 @@ def test_applied_codes_caption_when_present(client_with_codes):
     label_pos = body.index('Applied codes</span>')
     chip_pos = body.index('class="ace-code-chip"')
     assert label_pos < chip_pos
+
+
+# ---------------------------------------------------------------------------
+# PATCH /api/codes/{id}/chord — Task 7
+# ---------------------------------------------------------------------------
+
+
+def test_patch_code_chord_success(tmp_path):
+    """PATCH /api/codes/{id}/chord with valid chord updates DB."""
+    from ace.db.connection import open_project
+    from ace.models.codebook import list_codes
+
+    project_path = tmp_path / "patch_chord.ace"
+    conn = create_project(str(project_path), "Test")
+
+    # Seed 32 codes so the 32nd has a chord
+    try:
+        for i in range(32):
+            add_code(conn, f"Code {i:02d}", "#A91818")
+        codes = list_codes(conn)
+        last_id = codes[31]["id"]  # 32nd code (0-indexed), has a chord
+    finally:
+        conn.close()
+
+    app = create_app()
+    with TestClient(app) as c:
+        c.post("/api/project/open", data={"path": str(project_path)})
+        response = c.patch(f"/api/codes/{last_id}/chord", data={"chord": "xy"})
+        assert response.status_code == 200
+
+    # Verify in DB
+    conn = open_project(str(project_path))
+    try:
+        row = conn.execute(
+            "SELECT chord FROM codebook_code WHERE id = ?", (last_id,)
+        ).fetchone()
+        assert row["chord"] == "xy"
+    finally:
+        conn.close()
+
+
+def test_patch_code_chord_conflict_returns_409(tmp_path):
+    """PATCH with chord already in use returns 409."""
+    from ace.db.connection import open_project
+    from ace.models.codebook import list_codes
+
+    project_path = tmp_path / "patch_conflict.ace"
+    conn = create_project(str(project_path), "Test")
+
+    # Seed 33 codes so two codes have chords
+    try:
+        for i in range(33):
+            add_code(conn, f"Code {i:02d}", "#A91818")
+        codes = list_codes(conn)
+        id_a = codes[31]["id"]  # 32nd
+        id_b = codes[32]["id"]  # 33rd
+    finally:
+        conn.close()
+
+    app = create_app()
+    with TestClient(app) as c:
+        c.post("/api/project/open", data={"path": str(project_path)})
+        # First: set ab on code A
+        r1 = c.patch(f"/api/codes/{id_a}/chord", data={"chord": "ab"})
+        assert r1.status_code == 200
+        # Then: try ab on code B — must fail
+        r2 = c.patch(f"/api/codes/{id_b}/chord", data={"chord": "ab"})
+        assert r2.status_code == 409
+
+
+def test_patch_code_chord_invalid_format_returns_400(tmp_path):
+    """PATCH with non-2-lowercase-letter chord returns 400."""
+    from ace.db.connection import open_project
+    from ace.models.codebook import list_codes
+
+    project_path = tmp_path / "patch_invalid.ace"
+    conn = create_project(str(project_path), "Test")
+
+    try:
+        for i in range(32):
+            add_code(conn, f"Code {i:02d}", "#A91818")
+        codes = list_codes(conn)
+        last_id = codes[31]["id"]
+    finally:
+        conn.close()
+
+    app = create_app()
+    with TestClient(app) as c:
+        c.post("/api/project/open", data={"path": str(project_path)})
+        for bad in ["a", "abc", "AB", "1a", "a1", ""]:
+            r = c.patch(f"/api/codes/{last_id}/chord", data={"chord": bad})
+            assert r.status_code in (400, 422), (
+                f"expected 400/422 for chord={bad!r}, got {r.status_code}"
+            )
+
+
+def test_patch_code_chord_unknown_id_returns_404(tmp_path):
+    """PATCH with non-existent code_id returns 404."""
+    project_path = tmp_path / "patch_404.ace"
+    conn = create_project(str(project_path), "Test")
+    conn.close()
+
+    app = create_app()
+    with TestClient(app) as c:
+        c.post("/api/project/open", data={"path": str(project_path)})
+        r = c.patch("/api/codes/nonexistent-uuid/chord", data={"chord": "ab"})
+        assert r.status_code == 404

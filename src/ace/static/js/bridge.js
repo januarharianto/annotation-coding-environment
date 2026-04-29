@@ -156,6 +156,7 @@
     if (!tree) return;
     const rows = tree.querySelectorAll('.ace-code-row');
     _currentKeyMap = [];
+    let labelIdx = 0; // Counter that only increments for non-chord rows
     rows.forEach(function (row) {
       const groupDiv = row.closest('[role="group"]');
       if (groupDiv) {
@@ -164,10 +165,22 @@
       }
       // Also skip rows hidden by search filter
       if (row.style.display === "none") return;
+
       _currentKeyMap.push(row.getAttribute("data-code-id"));
+
+      if (row.dataset.chord) {
+        // Chord cap is rendered server-side; record id but don't assign a single-key label.
+        // aria-keyshortcuts is intentionally omitted — its spec uses spaces for ALTERNATIVES,
+        // not key sequences, so "; xy" would announce as "either ; or xy". The chord cap's
+        // title attribute ("Press ; then xy to apply") carries the accessible hint instead.
+        return;
+      }
+
+      const label = _keylabel(labelIdx);
       const keycap = row.querySelector(".ace-keycap");
-      if (keycap) keycap.textContent = _keylabel(_currentKeyMap.length - 1);
-      row.setAttribute("aria-keyshortcuts", _keylabel(_currentKeyMap.length - 1));
+      if (keycap) keycap.textContent = label;
+      row.setAttribute("aria-keyshortcuts", label);
+      labelIdx++;
     });
   }
 
@@ -191,6 +204,104 @@
     const pos = _KEYCAP_POSITIONS[k];
     return pos !== undefined ? pos : -1;
   }
+
+  /* ================================================================
+   * Chord-key state machine — `;` enters chord mode; two letters
+   * resolve to a matching .ace-code-row[data-chord]; Esc cancels.
+   * ================================================================ */
+
+  let _chordMode = null;        // null | "awaiting"
+  let _chordBuffer = "";
+
+  function _enterChordMode() {
+    _chordMode = "awaiting";
+    _chordBuffer = "";
+    document.body.dataset.chordMode = "awaiting";
+  }
+
+  function _exitChordMode() {
+    _chordMode = null;
+    _chordBuffer = "";
+    delete document.body.dataset.chordMode;
+    delete document.body.dataset.chordBuffer;
+    document.querySelectorAll(".ace-chord-match").forEach(function (el) {
+      el.classList.remove("ace-chord-match");
+    });
+  }
+
+  function _onChordBufferChange() {
+    if (_chordBuffer.length === 1) {
+      document.body.dataset.chordBuffer = _chordBuffer;
+      const tree = document.getElementById("code-tree");
+      if (tree) {
+        tree.querySelectorAll(".ace-keycap--chord").forEach(function (cap) {
+          const row = cap.closest(".ace-code-row");
+          const chord = row && row.dataset.chord;
+          cap.classList.toggle(
+            "ace-chord-match",
+            !!(chord && chord.startsWith(_chordBuffer))
+          );
+        });
+      }
+    }
+  }
+
+  function _resolveChord(chord) {
+    const tree = document.getElementById("code-tree");
+    if (tree) {
+      const row = tree.querySelector(`.ace-code-row[data-chord="${chord}"]`);
+      if (row) {
+        const codeId = row.getAttribute("data-code-id");
+        if (codeId) _applyCode(codeId);
+      }
+    }
+    _exitChordMode();
+  }
+
+  document.addEventListener("keydown", function (evt) {
+    if (!document.getElementById("text-panel")) return;
+    if (evt.target.matches("input, textarea, [contenteditable='true']")) return;
+    if (evt.metaKey || evt.ctrlKey || evt.altKey) return;
+
+    if (_chordMode === "awaiting") {
+      if (evt.key === "Escape") {
+        evt.preventDefault();
+        evt.stopImmediatePropagation();
+        _exitChordMode();
+        return;
+      }
+      if (evt.key === ";") {
+        evt.preventDefault();
+        evt.stopImmediatePropagation();
+        _exitChordMode();
+        return;
+      }
+      if (/^[a-z]$/.test(evt.key)) {
+        evt.preventDefault();
+        evt.stopImmediatePropagation();
+        _chordBuffer += evt.key;
+        _onChordBufferChange();
+        if (_chordBuffer.length === 2) {
+          _resolveChord(_chordBuffer);
+        }
+        return;
+      }
+      // Fallthrough: any other key cancels chord mode without applying.
+      // Suppress so the canceling key doesn't ALSO fire its normal handler
+      // (e.g. `;1` shouldn't both cancel chord and apply code 1).
+      evt.preventDefault();
+      evt.stopImmediatePropagation();
+      _exitChordMode();
+      return;
+    }
+
+    if (evt.key === ";") {
+      evt.preventDefault();
+      evt.stopImmediatePropagation();
+      _enterChordMode();
+      return;
+    }
+  }, true);  // capture phase — runs before the single-key handler below
 
   /* ================================================================
    * 5. Apply code — uses parameter queue to avoid hx-sync race condition
@@ -279,6 +390,7 @@
   }
 
   document.addEventListener("keydown", function (e) {
+    if (_chordMode === "awaiting") return;
     if (_isTyping()) return;
     if (_menuOpen) return;
 
@@ -1203,12 +1315,18 @@
   // Re-bind sidebar event wiring after an HTMX swap replaces sidebar DOM.
   // opts: { sortable: bool, gridResize: bool } — both default false.
   // Sortable re-init is skipped while a drag is in progress.
+  // Always restores tree scrollTop (saved in htmx:beforeSwap) so applying a
+  // code via hotkey/click doesn't bounce the sidebar back to the top.
   function _syncSidebarAfterSwap(opts) {
     opts = opts || {};
     if (opts.sortable && !_isDragging) _initSortable();
     _restoreCollapseState();
     _updateKeycaps();
     if (opts.gridResize) _initGridResize();
+    const tree = document.getElementById("code-tree");
+    if (tree && _sidebarFocusState.scrollTop) {
+      tree.scrollTop = _sidebarFocusState.scrollTop;
+    }
   }
 
   // Re-render the source grid if its data blob is present in the swapped
@@ -1277,9 +1395,7 @@
       }
 
       const tree = document.getElementById("code-tree");
-      if (tree && _sidebarFocusState.scrollTop) {
-        tree.scrollTop = _sidebarFocusState.scrollTop;
-      }
+      // Scroll already restored in _syncSidebarAfterSwap.
 
       if (_sidebarFocusState.zone === "tree") {
         let item = null;
@@ -1541,6 +1657,83 @@
     });
   }
 
+  function _beginChordEdit(codeId) {
+    const row = document.querySelector(`.ace-code-row[data-code-id="${codeId}"]`);
+    if (!row) return;
+    const cap = row.querySelector(".ace-keycap--chord");
+    if (!cap) return;
+
+    const original = row.dataset.chord;
+
+    // Replace nested spans with plain text so contenteditable works cleanly
+    cap.contentEditable = "true";
+    cap.classList.add("ace-keycap--editing");
+    cap.textContent = original;
+
+    const range = document.createRange();
+    range.selectNodeContents(cap);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+    cap.focus();
+
+    let done = false;
+
+    function finish(save) {
+      if (done) return;
+      done = true;
+      cap.contentEditable = "false";
+      cap.classList.remove("ace-keycap--editing");
+      const newChord = cap.textContent.trim().toLowerCase();
+      // Restore nested span structure
+      const displayChord = (save && /^[a-z]{2}$/.test(newChord) && newChord !== original) ? newChord : original;
+      cap.innerHTML = '<span class="ace-chord-lead">;</span><span class="ace-chord-tail">' + displayChord + '</span>';
+
+      if (!save) {
+        _focusTreeItem(row);
+        return;
+      }
+      if (!/^[a-z]{2}$/.test(newChord)) {
+        window._setStatus('"' + newChord + '" must be 2 lowercase letters', "err");
+        _focusTreeItem(row);
+        return;
+      }
+      if (newChord === original) {
+        _focusTreeItem(row);
+        return;
+      }
+
+      htmx.ajax("PATCH", `/api/codes/${codeId}/chord`, {
+        target: "#code-sidebar",
+        swap: "outerHTML",
+        values: { chord: newChord, current_index: window.__aceCurrentIndex || 0 }
+      });
+    }
+
+    cap.addEventListener("keydown", function handler(e) {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        cap.removeEventListener("keydown", handler);
+        finish(true);
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        cap.removeEventListener("keydown", handler);
+        finish(false);
+      }
+    });
+
+    cap.addEventListener("blur", function blurHandler() {
+      cap.removeEventListener("blur", blurHandler);
+      setTimeout(function () { finish(true); }, 50);
+    });
+
+    cap.addEventListener("paste", function (e) {
+      e.preventDefault();
+      const text = (e.clipboardData || window.clipboardData).getData("text/plain");
+      document.execCommand("insertText", false, text.replace(/\n/g, " "));
+    });
+  }
+
   document.addEventListener("dblclick", function (e) {
     const nameEl = e.target.closest(".ace-code-name");
     if (!nameEl) return;
@@ -1694,6 +1887,9 @@
     const menu = document.createElement("div");
     menu.className = "ace-code-menu";
 
+    const targetRow = document.querySelector(`.ace-code-row[data-code-id="${codeId}"]`);
+    const hasChord = targetRow && targetRow.dataset.chord;
+
     const items = [
       { label: "Rename", hint: "F2", action: function () { _closeCodeMenu(); _startInlineRename(codeId); } },
       { label: "Colour", hint: "", action: function () { _closeCodeMenu(); _openColourPopover(codeId); } },
@@ -1706,6 +1902,10 @@
       { label: "Move Down", hint: "Alt+Shift+\u2193", action: function () { _closeCodeMenu(); _moveCode(codeId, 1); } },
       { label: "Delete", hint: "\u232b", danger: true, action: function () { _closeCodeMenu(); _executeDelete(codeId); } },
     ];
+
+    if (hasChord) {
+      items.push({ label: "Set chord\u2026", hint: "", action: function () { _closeCodeMenu(); _beginChordEdit(codeId); } });
+    }
 
     // Add "Move to Group" submenu
     const groups = _getGroupNames();
@@ -2894,6 +3094,7 @@
   // --- Tree keydown handler ---
 
   document.addEventListener("keydown", function (e) {
+    if (_chordMode === "awaiting") return;
     const tree = document.getElementById("code-tree");
     if (!tree || !tree.contains(document.activeElement)) return;
     const active = document.activeElement;
@@ -3105,6 +3306,7 @@
   // keeps keyboard-first nav working without having to land on a row first.
   // Same precedent as n/q/x/z: reserved letter for a global action.
   document.addEventListener("keydown", function (evt) {
+    if (_chordMode === "awaiting") return;
     if (evt.key !== "v" && evt.key !== "V") return;
     if (evt.metaKey || evt.ctrlKey || evt.altKey || evt.shiftKey) return;
     const tag = (evt.target.tagName || "").toLowerCase();
@@ -3634,6 +3836,7 @@
   });
 
   document.addEventListener("keydown", function (e) {
+    if (_chordMode === "awaiting") return;
     if (e.key !== "Escape") return;
     if (!_isDrawerOpen()) return;
     if (document.getElementById("ace-cheat-sheet")) return;

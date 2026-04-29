@@ -8,9 +8,17 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
+from ace.services.chord_assignment import assign_chord
+
+# Single-key shortcut slots: 10 digits (1-9, 0) + a-p minus n (15) +
+# r-y minus v and x (6) = 31. Reserved keys: q, x, z, n, v.
+# Codes at position >= 31 (0-indexed by sort_order rank) get a 2-letter chord shortcut.
+SINGLE_KEY_LIMIT = 31
+
 _INSERT_CODE_SQL = (
-    "INSERT INTO codebook_code (id, name, colour, sort_order, group_name, created_at) "
-    "VALUES (?, ?, ?, ?, ?, ?)"
+    "INSERT INTO codebook_code "
+    "(id, name, colour, sort_order, group_name, chord, created_at) "
+    "VALUES (?, ?, ?, ?, ?, ?, ?)"
 )
 
 
@@ -41,6 +49,16 @@ def next_colour(existing_count: int) -> str:
 _UNSET = object()
 
 
+def _taken_chords(conn: sqlite3.Connection) -> set[str]:
+    """Return the set of chord values currently in use (non-NULL only, undeleted)."""
+    return {
+        r[0] for r in conn.execute(
+            "SELECT chord FROM codebook_code "
+            "WHERE chord IS NOT NULL AND deleted_at IS NULL"
+        )
+    }
+
+
 def add_code(
     conn: sqlite3.Connection,
     name: str,
@@ -55,9 +73,18 @@ def add_code(
     ).fetchone()[0]
     sort_order = max_order + 1
 
+    # Position of the new code = current count (0-indexed). If position >= SINGLE_KEY_LIMIT,
+    # the keyboard's single-key slots are exhausted and the code needs a chord shortcut.
+    existing_count = conn.execute(
+        "SELECT COUNT(*) FROM codebook_code WHERE deleted_at IS NULL"
+    ).fetchone()[0]
+    chord = None
+    if existing_count >= SINGLE_KEY_LIMIT:
+        chord = assign_chord(name, _taken_chords(conn))
+
     conn.execute(
         _INSERT_CODE_SQL,
-        (code_id, name, colour, sort_order, group_name, now),
+        (code_id, name, colour, sort_order, group_name, chord, now),
     )
     conn.commit()
     return code_id
@@ -95,6 +122,57 @@ def update_code(
         params,
     )
     conn.commit()
+
+
+def set_chord(conn: sqlite3.Connection, code_id: str, chord: str | None) -> None:
+    """Set or clear the chord for a code. Raises IntegrityError on conflict."""
+    conn.execute(
+        "UPDATE codebook_code SET chord = ? WHERE id = ?",
+        (chord, code_id),
+    )
+    conn.commit()
+
+
+def backfill_chords(conn: sqlite3.Connection) -> int:
+    """Assign chords to any code at position >= SINGLE_KEY_LIMIT with chord IS NULL.
+
+    Position is 0-indexed rank ordered by sort_order, so this is robust to
+    0-indexed, 1-indexed, or sparse sort_order values. Idempotent: codes that
+    already have a chord are untouched. Returns the number of chords assigned.
+
+    NOTE: does NOT commit. Caller is responsible for committing — this is the
+    only write function in this module with that contract, intentionally so
+    that bulk-import callers can keep inserts + backfill in one transaction.
+    """
+    rows = conn.execute(
+        """
+        WITH ranked AS (
+          SELECT id, name, chord,
+                 ROW_NUMBER() OVER (ORDER BY sort_order) - 1 AS pos
+          FROM codebook_code
+          WHERE deleted_at IS NULL
+        )
+        SELECT id, name FROM ranked
+        WHERE pos >= ? AND chord IS NULL
+        ORDER BY pos
+        """,
+        (SINGLE_KEY_LIMIT,),
+    ).fetchall()
+
+    if not rows:
+        return 0
+
+    taken = _taken_chords(conn)
+    assigned = 0
+    for row in rows:
+        chord = assign_chord(row["name"], taken)
+        conn.execute(
+            "UPDATE codebook_code SET chord = ? WHERE id = ?",
+            (chord, row["id"]),
+        )
+        taken.add(chord)
+        assigned += 1
+    return assigned
 
 
 def rename_group(
@@ -275,12 +353,13 @@ def import_selected_codes(conn: sqlite3.Connection, codes: list[dict]) -> list[s
         for i, code in enumerate(to_insert):
             code_id = uuid.uuid4().hex
             conn.execute(
-                "INSERT INTO codebook_code (id, name, colour, sort_order, group_name, created_at) "
-                "VALUES (?, ?, ?, ?, ?, ?)",
+                "INSERT INTO codebook_code (id, name, colour, sort_order, group_name, chord, created_at) "
+                "VALUES (?, ?, ?, ?, ?, NULL, ?)",
                 (code_id, code["name"], code["colour"], max_order + i + 1,
                  code.get("group_name"), now),
             )
             inserted_ids.append(code_id)
+        backfill_chords(conn)
         conn.commit()
     except Exception:
         conn.rollback()
@@ -296,10 +375,11 @@ def import_codebook_from_csv(conn: sqlite3.Connection, path: str | Path) -> int:
         for i, row in enumerate(rows_to_insert):
             code_id = uuid.uuid4().hex
             conn.execute(
-                "INSERT INTO codebook_code (id, name, colour, sort_order, group_name, created_at) "
-                "VALUES (?, ?, ?, ?, ?, ?)",
+                "INSERT INTO codebook_code (id, name, colour, sort_order, group_name, chord, created_at) "
+                "VALUES (?, ?, ?, ?, ?, NULL, ?)",
                 (code_id, row["name"], row["colour"], i + 1, row.get("group_name"), now),
             )
+        backfill_chords(conn)
         conn.commit()
     except Exception:
         conn.rollback()
