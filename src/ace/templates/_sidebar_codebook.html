@@ -45,11 +45,19 @@
     {% set n = (code_counts_by_id or {}).get(code['id'], 0) %}
     <div role="treeitem" aria-level="2"
          class="ace-code-row" data-code-id="{{ code['id'] }}"
+         {% if code['chord'] %}data-chord="{{ code['chord'] }}"{% endif %}
          style="border-left-color: {{ code['colour'] }}"
          tabindex="-1">
       <span class="ace-code-name">{{ code['name'] }}</span>
       <span class="ace-code-count" title="{{ n }} annotation{{ 's' if n != 1 else '' }} in this source">{{ n }}</span>
+      {% if code['chord'] %}
+      <span class="ace-keycap ace-keycap--chord"
+            title="Press ; then {{ code['chord'] }} to apply">
+        <span class="ace-chord-lead">;</span><span class="ace-chord-tail">{{ code['chord'] }}</span>
+      </span>
+      {% else %}
       <span class="ace-keycap" title="Click to apply"></span>
+      {% endif %}
     </div>
     {% endfor %}
   </div>
@@ -63,11 +71,19 @@
     {% set n = (code_counts_by_id or {}).get(code['id'], 0) %}
     <div role="treeitem" aria-level="2"
          class="ace-code-row" data-code-id="{{ code['id'] }}"
+         {% if code['chord'] %}data-chord="{{ code['chord'] }}"{% endif %}
          style="border-left-color: {{ code['colour'] }}"
          tabindex="-1">
       <span class="ace-code-name">{{ code['name'] }}</span>
       <span class="ace-code-count" title="{{ n }} annotation{{ 's' if n != 1 else '' }} in this source">{{ n }}</span>
+      {% if code['chord'] %}
+      <span class="ace-keycap ace-keycap--chord"
+            title="Press ; then {{ code['chord'] }} to apply">
+        <span class="ace-chord-lead">;</span><span class="ace-chord-tail">{{ code['chord'] }}</span>
+      </span>
+      {% else %}
       <span class="ace-keycap" title="Click to apply"></span>
+      {% endif %}
     </div>
     {% endfor %}
   </div>

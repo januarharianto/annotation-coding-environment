@@ -97,12 +97,67 @@ def _migrate_v3_to_v4(conn: sqlite3.Connection) -> None:
         conn.execute("PRAGMA foreign_keys = ON")
 
 
+def _migrate_v4_to_v5(conn: sqlite3.Connection) -> None:
+    """Add `chord` column to codebook_code for chord-key shortcuts.
+
+    The column is nullable: the first 31 codes (positions 0-30 by sort_order
+    rank) use single-key shortcuts and have NULL chord. Codes at position 31+
+    get a 2-letter chord assigned by `services.chord_assignment.assign_chord`.
+
+    Defensive: skips if codebook_code doesn't exist (some test fixtures build
+    minimal schemas without it).
+
+    See spec: docs/superpowers/specs/2026-04-29-codebook-chord-keys-design.md
+    """
+    has_codebook = conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='codebook_code'"
+    ).fetchone()
+    if has_codebook is None:
+        return
+
+    # Column-existence probe — SQLite has no `ADD COLUMN IF NOT EXISTS`, and a
+    # second ALTER raises OperationalError("duplicate column name: chord").
+    existing_cols = {r[1] for r in conn.execute("PRAGMA table_info(codebook_code)").fetchall()}
+    if "chord" not in existing_cols:
+        conn.execute("ALTER TABLE codebook_code ADD COLUMN chord TEXT")
+
+    # Unique partial index — multiple NULL allowed, but values must be unique
+    conn.execute("""
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_codebook_chord
+            ON codebook_code(chord) WHERE chord IS NOT NULL AND deleted_at IS NULL
+    """)
+
+
+def _migrate_v5_to_v6(conn: sqlite3.Connection) -> None:
+    """Tighten chord uniqueness index to exclude soft-deleted rows.
+
+    The v5 index `idx_codebook_chord` only excluded NULL chords. This meant a
+    soft-deleted code's chord still occupied the unique slot, blocking re-use
+    after deletion and causing IntegrityErrors on backfill (since
+    `_taken_chords` correctly excludes deleted rows).
+
+    See PR #2 review.
+    """
+    has_codebook = conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='codebook_code'"
+    ).fetchone()
+    if has_codebook is None:
+        return
+    conn.execute("DROP INDEX IF EXISTS idx_codebook_chord")
+    conn.execute("""
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_codebook_chord
+            ON codebook_code(chord) WHERE chord IS NOT NULL AND deleted_at IS NULL
+    """)
+
+
 # Registry of migration functions keyed by target version.
 # Each function takes a connection and migrates from version (key - 1) to key.
 MIGRATIONS: dict[int, Callable[[sqlite3.Connection], None]] = {
     2: _migrate_v1_to_v2,
     3: _migrate_v2_to_v3,
     4: _migrate_v3_to_v4,
+    5: _migrate_v4_to_v5,
+    6: _migrate_v5_to_v6,
 }
 
 

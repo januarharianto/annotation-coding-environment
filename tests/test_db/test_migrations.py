@@ -110,7 +110,8 @@ def test_v2_to_v3_migration_adds_deleted_at_to_codebook(tmp_path):
         "UPDATE codebook_code SET deleted_at = '2025-01-02' WHERE id = 'cc1'"
     )
     conn.execute(
-        "INSERT INTO codebook_code VALUES ('cc2', 'Alpha', '#00FF00', 2, NULL, '2025-01-02', NULL)"
+        "INSERT INTO codebook_code (id, name, colour, sort_order, group_name, created_at, deleted_at)"
+        " VALUES ('cc2', 'Alpha', '#00FF00', 2, NULL, '2025-01-02', NULL)"
     )
     conn.commit()
     # Two rows with name 'Alpha' but only one active — succeeds
@@ -145,7 +146,8 @@ def test_v2_to_v3_partial_index_blocks_two_active_with_same_name(tmp_path):
     conn = open_project(db_path)
     with pytest.raises(sqlite3.IntegrityError):
         conn.execute(
-            "INSERT INTO codebook_code VALUES ('cc2', 'Alpha', '#00FF00', 2, NULL, '2025-01-02', NULL)"
+            "INSERT INTO codebook_code (id, name, colour, sort_order, group_name, created_at, deleted_at)"
+            " VALUES ('cc2', 'Alpha', '#00FF00', 2, NULL, '2025-01-02', NULL)"
         )
     conn.close()
 

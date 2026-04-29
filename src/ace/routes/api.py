@@ -364,6 +364,11 @@ async def project_open(request: Request, path: str = Form(...)):
         request.app.state.coder_id = coder_id
     request.app.state.active_projects.add(str(path))
 
+    from ace.models.codebook import backfill_chords
+    with _project_db(request) as conn:
+        backfill_chords(conn)
+        conn.commit()
+
     redirect = "/code" if sources else "/import"
     return Response(
         status_code=200,
@@ -1546,6 +1551,37 @@ async def update_code_route(
                 mgr.record_code_change_group(code_id, prev["group_name"], new_group)
 
         content = _render_full_coding_oob(request, conn, coder_id, current_index)
+        return HTMLResponse(content)
+
+
+@router.patch("/codes/{code_id}/chord")
+async def patch_code_chord(
+    request: Request,
+    code_id: str,
+    chord: str = Form(...),
+    current_index: int = Form(default=0),
+):
+    """Set a chord override for a code. Returns updated sidebar."""
+    from ace.models.codebook import set_chord
+
+    coder_id = _require_coder(request)
+
+    if not re.fullmatch(r"[a-z]{2}", chord):
+        raise HTTPException(status_code=400, detail="chord must be 2 lowercase letters")
+
+    with _project_db(request) as conn:
+        exists = conn.execute(
+            "SELECT 1 FROM codebook_code WHERE id = ? AND deleted_at IS NULL", (code_id,)
+        ).fetchone()
+        if not exists:
+            raise HTTPException(status_code=404, detail=f"code {code_id} not found")
+
+        try:
+            set_chord(conn, code_id, chord)
+        except sqlite3.IntegrityError:
+            raise HTTPException(status_code=409, detail=f"chord '{chord}' already in use")
+
+        content = _render_code_sidebar(request, conn, coder_id, current_index)
         return HTMLResponse(content)
 
 

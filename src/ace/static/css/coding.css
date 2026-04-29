@@ -275,14 +275,14 @@
 }
 
 .ace-code-group-header {
-  padding: 10px 8px 6px;
+  padding: 6px 8px 4px;
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--ace-text);
   border-bottom: 1px solid var(--ace-border-light);
-  margin-bottom: 4px;
+  margin-bottom: 2px;
   cursor: default;
   user-select: none;
 }
@@ -363,13 +363,13 @@
 
 .ace-code-row {
   display: grid;
-  grid-template-columns: 1fr auto 24px;
+  grid-template-columns: 1fr auto 32px;
   gap: 6px;
   align-items: center;
-  height: 28px;
+  height: 22px;
   padding: 0 8px;
-  border-left: 3px solid transparent;
-  font-size: var(--ace-font-size-sm);
+  border-left: 2px solid transparent;
+  font-size: var(--ace-font-size-2xs);
   color: var(--ace-text);
   cursor: pointer;
   transition: background var(--ace-transition);
@@ -463,34 +463,96 @@
   padding: 0 2px;
 }
 
+/* #f6f3eb is an intentional warm off-white tint for the keycap face. */
 .ace-keycap {
   font-family: var(--ace-font-mono);
-  font-size: var(--ace-font-size-2xs);
-  padding: 1px 0;
-  border: 1px solid var(--ace-border-light);
-  border-radius: var(--ace-radius);
-  background: var(--ace-bg-muted);
-  color: var(--ace-text-muted);
-  width: 18px;
-  text-align: center;
-  line-height: var(--ace-leading-tight);
-  cursor: pointer;
-  min-height: 24px;
+  font-size: 11px;
+  height: 18px;
   min-width: 24px;
+  padding: 0 4px;
+  border: 1px solid var(--ace-border);
+  border-bottom-width: 2px;
+  border-radius: var(--ace-radius);
+  background: linear-gradient(var(--ace-bg), #f6f3eb);
+  color: var(--ace-text);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  transition: background var(--ace-transition), border-color var(--ace-transition);
+  line-height: 1;
+  user-select: none;
+  cursor: pointer;
+  transition: transform 60ms, border-color var(--ace-transition);
 }
 
 .ace-keycap:hover {
-  border-color: var(--ace-text-muted);
-  background: var(--ace-bg-muted);
+  border-color: var(--ace-text);
+}
+
+.ace-keycap:active {
+  transform: translateY(1px);
+  border-bottom-width: 1px;
 }
 
 .ace-keycap:focus-visible {
   outline: 2px solid var(--ace-focus);
   outline-offset: 1px;
+}
+
+/* Chord cap variant — wider; renders ;<chord> with faded prefix. */
+.ace-keycap--chord {
+  min-width: 32px;
+  padding: 0 3px;
+  gap: 0;
+  font-size: 10px;
+}
+
+.ace-keycap--chord .ace-chord-lead {
+  opacity: 0.45;
+  font-weight: 500;
+}
+
+.ace-keycap--chord .ace-chord-tail {
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  margin-left: 1px;
+}
+
+.ace-keycap--editing {
+  outline: 2px solid var(--ace-focus);
+  outline-offset: 1px;
+  cursor: text;
+}
+
+/* Chord mode active: dim single-key caps; vermillion glow on chord caps. */
+body[data-chord-mode] .ace-keycap:not(.ace-keycap--chord) {
+  opacity: 0.22;
+  filter: grayscale(1);
+}
+
+body[data-chord-mode] .ace-keycap--chord {
+  background: linear-gradient(#fbede0, #fde2c7);
+  border-color: #d55e00;
+}
+
+body[data-chord-mode] .ace-keycap--chord .ace-chord-lead {
+  color: #d55e00;
+  opacity: 0.5;
+}
+
+body[data-chord-mode] .ace-keycap--chord .ace-chord-tail {
+  color: #d55e00;
+}
+
+/* Partial-buffer state: revert non-matching chord caps to neutral styling
+ * so they recede as a distinct visual category, not a dimmed-vermillion variant. */
+body[data-chord-buffer] .ace-keycap--chord:not(.ace-chord-match) {
+  opacity: 0.5;
+  background: linear-gradient(var(--ace-bg), #f6f3eb);
+  border-color: var(--ace-border);
+}
+body[data-chord-buffer] .ace-keycap--chord:not(.ace-chord-match) .ace-chord-lead,
+body[data-chord-buffer] .ace-keycap--chord:not(.ace-chord-match) .ace-chord-tail {
+  color: var(--ace-text);
 }
 
 /* ---- Hotkey hints ---- */
@@ -901,8 +963,9 @@ dialog::backdrop {
   border-radius: 0;
 }
 
-/* Absolute keycap on the right edge of the search input. Sized to match
-   .ace-keycap so the sidebar's visual rhythm is consistent. */
+/* Absolute keycap on the right edge of the search input. Height matches
+   .ace-keycap (22px) so the sidebar's vertical rhythm is consistent;
+   min-width is intentionally narrower (24px) since the `/` glyph is thin. */
 .ace-sidebar-search-hint {
   position: absolute;
   right: 6px;
@@ -911,7 +974,7 @@ dialog::backdrop {
   pointer-events: none;
   font-size: var(--ace-font-size-2xs);
   min-width: 24px;
-  height: 24px;
+  height: 22px;
   padding: 0;
 }
 
