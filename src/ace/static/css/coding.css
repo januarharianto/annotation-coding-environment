@@ -28,54 +28,40 @@
 
 /* ---- Sidebar branding ---- */
 
-.ace-sidebar-brand {
+/* ─── Sidebar header strip ───────────────────────────────────────────
+   Slim 32 px masthead at the top of the codebook sidebar. Replaces
+   the old stacked brand block + "Codebook" heading bar. The wordmark
+   is a home link; the gear button on the right opens the dropdown
+   (which now also carries "Keyboard shortcuts"). The project filename
+   lives in the status bar — see .ace-statusbar-ambient. */
+.ace-sidebar-strip {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: var(--ace-space-1);
-  padding: var(--ace-space-2) var(--ace-space-2);
+  justify-content: space-between;
+  height: 32px;
+  padding: 0 var(--ace-space-2) 0 var(--ace-space-3);
+  border-bottom: 1px solid var(--ace-border-light);
   flex-shrink: 0;
+  background: var(--ace-bg);
 }
 
-.ace-sidebar-brand-link {
-  display: inline-flex;
-  align-items: center;
+.ace-sidebar-strip-mark {
+  font-family: var(--ace-font-mono);
+  font-weight: 700;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 2.8px;
+  color: var(--ace-text);
   text-decoration: none;
 }
 
-.ace-sidebar-brand-project {
-  font-size: var(--ace-font-size-2xs);
-  color: var(--ace-text-muted);
-  font-weight: 400;
-  letter-spacing: 0.2px;
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  padding: 0 var(--ace-space-2);
-}
-
-.ace-sidebar-logo {
-  height: 40px;
-  width: auto;
-}
-
-.ace-sidebar-brand-link:focus-visible,
-.ace-sidebar-help-btn:focus-visible,
+.ace-sidebar-strip-mark:focus-visible,
 .ace-flag-btn:focus-visible {
   outline: 2px solid var(--ace-focus);
   outline-offset: 2px;
   border-radius: var(--ace-radius);
 }
 
-.ace-sidebar-brand-actions {
-  display: flex;
-  align-items: center;
-  gap: var(--ace-space-1);
-}
-
-.ace-sidebar-help-btn,
 .ace-codebook-menu-btn {
   background: none;
   border: none;
@@ -84,17 +70,18 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 26px;
-  height: 26px;
+  width: 24px;
+  height: 24px;
   border-radius: var(--ace-radius);
   padding: 0;
-  transition: color var(--ace-transition), background var(--ace-transition);
+  opacity: 0.55;
+  transition: color var(--ace-transition), background var(--ace-transition), opacity var(--ace-transition);
 }
 
-.ace-sidebar-help-btn:hover,
 .ace-codebook-menu-btn:hover {
   color: var(--ace-text);
   background: var(--ace-bg-muted);
+  opacity: 1;
 }
 
 /* ---- Flag row ---- */
@@ -956,8 +943,11 @@ dialog::backdrop {
 .ace-codebook-dropdown {
   position: absolute;
   top: 100%;
-  left: 50%;
-  transform: translateX(-50%);
+  /* Anchor to the gear button's right edge so the dropdown opens
+     leftward into the sidebar — the strip places the gear at the
+     right edge, so a centred dropdown would extend past the sidebar
+     boundary and get clipped by .ace-sidebar { overflow:hidden }. */
+  right: 0;
   background: var(--ace-bg);
   border: 1px solid var(--ace-border);
   border-radius: var(--ace-radius);
@@ -1619,4 +1609,64 @@ body[data-active-zone="codebook"] .ace-code-folder-row[tabindex="0"] {
 .ace-sidebar-legend .k {
   color: rgba(43, 48, 56, 0.72);
   font-weight: 500;
+}
+
+/* ─── Long-name hover peek ─────────────────────────────────────────────
+   Side-popover that surfaces the full code or folder name when hover /
+   focus lands on a row whose label is truncated. Portaled to body so
+   the sidebar's overflow:hidden can't clip it. The left-stripe colour
+   is set per-show via --ace-code-peek-stripe so the peek inherits the
+   row's identity. */
+
+.ace-code-peek {
+  position: fixed;
+  z-index: 1000;
+  width: 320px;
+  max-width: min(360px, 90vw);
+  background: var(--ace-bg);
+  border: 1px solid var(--ace-border);
+  border-left: 2px solid var(--ace-code-peek-stripe, var(--ace-border));
+  border-radius: var(--ace-radius);
+  box-shadow: var(--ace-shadow);
+  padding: 10px 12px 11px;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateX(-4px);
+  transition: opacity var(--ace-transition), transform var(--ace-transition);
+  visibility: hidden;
+}
+
+.ace-code-peek--visible {
+  opacity: 1;
+  transform: translateX(0);
+  visibility: visible;
+}
+
+.ace-code-peek-name {
+  font-family: var(--ace-font-sans);
+  font-size: var(--ace-font-size-sm);
+  line-height: 1.35;
+  color: var(--ace-text);
+  word-break: break-word;
+  margin: 0 0 6px;
+}
+
+.ace-code-peek-name:last-child {
+  margin-bottom: 0;
+}
+
+.ace-code-peek-meta {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  font-family: var(--ace-font-mono);
+  font-size: 11px;
+  color: rgba(0, 0, 0, 0.55);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+}
+
+.ace-code-peek-meta strong {
+  font-weight: 600;
+  color: var(--ace-text);
 }

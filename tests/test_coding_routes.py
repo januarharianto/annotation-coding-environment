@@ -168,14 +168,43 @@ def test_coding_page_auto_creates_assignments(client_with_sources):
 
 
 def test_sidebar_has_brand_and_nav_has_source(client_with_sources):
-    """Sidebar shows ACE brand, nav shows flag button."""
+    """Sidebar shows the ACE wordmark strip, nav shows flag button."""
     client, _ = client_with_sources
     resp = client.get("/code")
     assert resp.status_code == 200
     html = resp.text
-    assert "ace-sidebar-brand" in html
-    assert "ACE" in html
+    assert 'class="ace-sidebar-strip"' in html
+    assert 'class="ace-sidebar-strip-mark"' in html
+    assert ">ACE</a>" in html
     assert 'aria-label="Toggle flag (Shift+F)"' in html
+
+
+def test_sidebar_strip_wordmark_links_home(client_with_sources):
+    """Clicking the ACE wordmark returns to the landing page."""
+    client, _ = client_with_sources
+    resp = client.get("/code")
+    assert resp.status_code == 200
+    body = resp.text
+    # The wordmark anchor must point at "/" and carry the version in
+    # its title (hover reveal). Asserts the masthead role too — the
+    # strip is the page banner.
+    assert 'class="ace-sidebar-strip" role="banner"' in body
+    assert 'href="/" class="ace-sidebar-strip-mark"' in body
+    assert 'title="ACE v' in body
+
+
+def test_sidebar_dropdown_carries_keyboard_shortcuts(client_with_sources):
+    """The gear dropdown absorbs the old `?` button as its first item."""
+    client, _ = client_with_sources
+    resp = client.get("/code")
+    assert resp.status_code == 200
+    body = resp.text
+    assert 'id="codebook-menu-shortcuts-btn"' in body
+    assert ">Keyboard shortcuts<" in body
+    # Sits at the top of the dropdown — before the import/export group.
+    shortcuts_pos = body.index("codebook-menu-shortcuts-btn")
+    import_pos = body.index("codebook-menu-import-btn")
+    assert shortcuts_pos < import_pos
 
 
 def test_sidebar_has_aria_tree_roles(client_with_sources, tmp_path):
@@ -1131,18 +1160,6 @@ def test_oob_status_emits_both_statusbar_and_pill_fragments():
     assert 'id="ace-live-region-assertive"' in body
 
 
-def test_coding_page_shows_project_name_in_sidebar_brand(client_with_sources):
-    """Project name appears inside the sidebar brand section."""
-    client, _ = client_with_sources
-    r = client.get("/code?index=0")
-    assert r.status_code == 200
-    body = r.text
-    # Class is unique to this span
-    assert 'class="ace-sidebar-brand-project"' in body
-    # Fixture uses test.ace → stem is "test"
-    assert ">test<" in body
-
-
 def test_oob_status_ok_kind_uses_ok_class_suffix():
     """_oob_status with kind='ok' uses --ok class suffix on both fragments."""
     from ace.routes.api import _oob_status
@@ -1282,20 +1299,6 @@ def test_apply_merge_then_undo_then_redo(client_with_codes):
 
     client.post("/api/redo", data={"current_index": 0})
     assert _active_annotation_ranges(db_path, 0) == [(0, 15)]
-
-
-def test_coding_page_has_codebook_heading(client_with_codes):
-    """Sidebar shows a visible 'Codebook' panel heading above the search input."""
-    client, coder_id, _, _, _ = client_with_codes
-    client.cookies.set("coder_id", coder_id)
-    r = client.get("/code?index=0")
-    assert r.status_code == 200
-    body = r.text
-    assert '<h2 class="ace-panel-heading">Codebook</h2>' in body
-    # Appears before the search input in document order
-    heading_pos = body.index('ace-panel-heading">Codebook')
-    search_pos = body.index('id="code-search-input"')
-    assert heading_pos < search_pos
 
 
 def test_coding_page_has_page_title(client_with_codes):

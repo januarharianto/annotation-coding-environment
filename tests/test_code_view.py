@@ -90,8 +90,8 @@ def test_view_redirects_when_unknown_code(client_with_annotations):
     assert resp.headers.get("location") == "/code"
 
 
-def test_view_page_has_codebook_heading(client_with_annotations):
-    """Coded-text-view shares the Codebook panel heading with /code.
+def test_view_page_shares_sidebar_strip_with_code_page(client_with_annotations):
+    """Coded-text-view shares the sidebar strip masthead with /code.
 
     Guards against someone inlining the shared sidebar partial on only
     one of the two routes that render it.
@@ -99,7 +99,10 @@ def test_view_page_has_codebook_heading(client_with_annotations):
     client, _, code_id, _ = client_with_annotations
     resp = client.get(f"/code/{code_id}/view")
     assert resp.status_code == 200
-    assert '<h2 class="ace-panel-heading">Codebook</h2>' in resp.text
+    body = resp.text
+    assert 'class="ace-sidebar-strip"' in body
+    assert 'class="ace-sidebar-strip-mark"' in body
+    assert ">ACE</a>" in body
 
 
 def test_code_view_has_column_headings(client_with_annotations):

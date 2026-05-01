@@ -179,13 +179,6 @@
   // double-click-to-rename was deleted with the /api/codes/rename-group
   // endpoint; folders share the PUT /api/codes/{id} route with codes.
 
-  // Sidebar: ? help button (delegated — survives OOB swaps)
-  document.addEventListener("click", function (e) {
-    if (e.target.closest("#sidebar-help-btn")) {
-      _toggleCheatSheet();
-    }
-  });
-
   // Nav: flag toggle button (delegated — survives OOB swaps)
   let _pendingFlagAnnounce = false;
   document.addEventListener("click", function (e) {
@@ -3898,9 +3891,16 @@
    * 18. Codebook menu
    * ================================================================ */
 
-  // Codebook menu: toggle, import, export
+  // Codebook menu: toggle, import, export, shortcuts
   document.addEventListener("click", function (e) {
     const dropdown = document.getElementById("codebook-dropdown");
+
+    // Keyboard shortcuts (absorbed from the old `?` button)
+    if (e.target.closest("#codebook-menu-shortcuts-btn")) {
+      if (dropdown) dropdown.style.display = "none";
+      _toggleCheatSheet();
+      return;
+    }
 
     // Import button
     if (e.target.closest("#codebook-menu-import-btn")) {
@@ -4092,6 +4092,177 @@
   });
 
   /* ================================================================
+   * 19b. Long-name hover peek — side popover for truncated code /
+   *      folder names in the codebook sidebar. Portal-style: the peek
+   *      element lives at body level so the sidebar's overflow:hidden
+   *      can't clip it. Event delegation means it survives every OOB
+   *      sidebar swap without re-binding.
+   * ================================================================ */
+
+  const _peek = {
+    el: null,
+    showTimer: null,
+    hideTimer: null,
+    currentRow: null,
+  };
+  const _PEEK_SHOW_MS = 220;
+  const _PEEK_HIDE_GRACE_MS = 80;
+
+  function _peekEl() {
+    if (_peek.el) return _peek.el;
+    const div = document.createElement("div");
+    div.className = "ace-code-peek";
+    div.setAttribute("role", "tooltip");
+    div.setAttribute("aria-hidden", "true");
+    document.body.appendChild(div);
+    _peek.el = div;
+    return div;
+  }
+
+  function _peekSuppressed() {
+    if (document.querySelector(".ace-context-menu")) return true;
+    if (document.querySelector(".ace-code-row--reordering")) return true;
+    if (document.querySelector("#code-tree [contenteditable=\"true\"]")) return true;
+    return false;
+  }
+
+  function _peekContent(row) {
+    const isFolder = row.classList.contains("ace-code-folder-row");
+    const labelEl = row.querySelector(isFolder ? ".ace-folder-label" : ".ace-code-name");
+    if (!labelEl) return null;
+    if (labelEl.scrollWidth <= labelEl.clientWidth) return null;
+
+    const fullName = labelEl.textContent;
+    const parts = [];
+    let stripe = "";
+
+    if (isFolder) {
+      const cnt = row.querySelector(".ace-folder-count");
+      if (cnt && cnt.textContent.trim()) {
+        parts.push(`<span><strong>${_escapeHtml(cnt.textContent.trim())}</strong> codes</span>`);
+      }
+    } else {
+      stripe = row.style.borderLeftColor || "";
+      const cnt = row.querySelector(".ace-code-count");
+      if (cnt && cnt.textContent.trim()) {
+        parts.push(`<span><strong>${_escapeHtml(cnt.textContent.trim())}</strong>&times;</span>`);
+      }
+      const keycap = row.querySelector(".ace-keycap");
+      if (keycap) {
+        const txt = keycap.textContent.trim();
+        if (txt) {
+          const isChord = keycap.classList.contains("ace-keycap--chord");
+          parts.push(`<span>${isChord ? "chord" : "key"} <strong>${_escapeHtml(txt)}</strong></span>`);
+        }
+      }
+    }
+    return { fullName, stripe, metaHtml: parts.join("") };
+  }
+
+  function _peekShow(row) {
+    if (_peekSuppressed()) return;
+    const content = _peekContent(row);
+    if (!content) return;
+
+    const el = _peekEl();
+    el.style.setProperty("--ace-code-peek-stripe", content.stripe || "var(--ace-border)");
+    el.innerHTML =
+      `<p class="ace-code-peek-name">${_escapeHtml(content.fullName)}</p>` +
+      (content.metaHtml ? `<div class="ace-code-peek-meta">${content.metaHtml}</div>` : "");
+
+    el.classList.add("ace-code-peek--visible");
+    el.setAttribute("aria-hidden", "false");
+
+    const rect = row.getBoundingClientRect();
+    const peekW = el.offsetWidth;
+    const peekH = el.offsetHeight;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+
+    let left = rect.right + 6;
+    if (left + peekW > vw - 8) left = Math.max(8, rect.left - peekW - 6);
+
+    let top = rect.top + rect.height / 2 - peekH / 2;
+    if (top < 8) top = 8;
+    if (top + peekH > vh - 8) top = vh - peekH - 8;
+
+    el.style.left = left + "px";
+    el.style.top = top + "px";
+    _peek.currentRow = row;
+  }
+
+  function _peekHide() {
+    if (_peek.showTimer) { clearTimeout(_peek.showTimer); _peek.showTimer = null; }
+    if (_peek.hideTimer) { clearTimeout(_peek.hideTimer); _peek.hideTimer = null; }
+    if (!_peek.el) return;
+    _peek.el.classList.remove("ace-code-peek--visible");
+    _peek.el.setAttribute("aria-hidden", "true");
+    _peek.currentRow = null;
+  }
+
+  function _peekScheduleShow(row) {
+    if (_peek.hideTimer) { clearTimeout(_peek.hideTimer); _peek.hideTimer = null; }
+    if (_peek.showTimer) clearTimeout(_peek.showTimer);
+    if (_peek.currentRow && _peek.currentRow !== row) _peekHide();
+    _peek.showTimer = setTimeout(function () { _peekShow(row); }, _PEEK_SHOW_MS);
+  }
+
+  function _initCodePeek() {
+    const ROW_SEL = "#code-tree .ace-code-row, #code-tree .ace-code-folder-row";
+
+    document.addEventListener("mouseover", function (e) {
+      if (!e.target.closest) return;
+      const row = e.target.closest(ROW_SEL);
+      if (!row || row === _peek.currentRow) return;
+      _peekScheduleShow(row);
+    });
+
+    document.addEventListener("mouseout", function (e) {
+      if (!e.target.closest) return;
+      const row = e.target.closest(ROW_SEL);
+      if (!row) return;
+      const to = e.relatedTarget;
+      if (to && row.contains(to)) return;
+      if (_peek.showTimer) { clearTimeout(_peek.showTimer); _peek.showTimer = null; }
+      _peek.hideTimer = setTimeout(_peekHide, _PEEK_HIDE_GRACE_MS);
+    });
+
+    document.addEventListener("focusin", function (e) {
+      if (!e.target.closest) return;
+      const row = e.target.closest(ROW_SEL);
+      if (!row) return;
+      _peekScheduleShow(row);
+    });
+
+    document.addEventListener("focusout", function (e) {
+      if (!e.target.closest) return;
+      if (!e.target.closest("#code-tree")) return;
+      const to = e.relatedTarget;
+      if (!to || !to.closest || !to.closest("#code-tree")) _peekHide();
+    });
+
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape") _peekHide();
+    }, true);
+
+    document.addEventListener("contextmenu", _peekHide);
+    document.addEventListener("ace-navigate", _peekHide);
+    window.addEventListener("resize", _peekHide);
+
+    document.addEventListener("scroll", function (e) {
+      if (e.target && e.target.id === "code-tree") _peekHide();
+    }, true);
+
+    document.body.addEventListener("htmx:beforeSwap", function (e) {
+      const t = e.detail && e.detail.target;
+      if (!t) return;
+      if (t.id === "code-sidebar" || t.id === "text-panel" || t.id === "coding-workspace") {
+        _peekHide();
+      }
+    });
+  }
+
+  /* ================================================================
    * 20. DOMContentLoaded init
    * ================================================================ */
 
@@ -4100,6 +4271,7 @@
     _syncSidebarAfterSwap({ sortable: true, gridResize: true });
     _paintSvg();
     _setAmbient();
+    _initCodePeek();
 
     // Set initial roving tabindex — first treeitem gets tabindex="0"
     const items = _getTreeItems();
