@@ -3,7 +3,7 @@ import pytest
 
 from ace.db.connection import open_project, create_project
 from ace.models.codebook import (
-    add_code, add_folder, move_code_to_parent, delete_code, list_codes,
+    add_code, add_folder, move_code_to_parent, delete_code, list_codes, set_chord,
 )
 from ace.services.undo import UndoManager
 
@@ -91,6 +91,31 @@ def test_undo_indent_promote_to_folder_removes_folder_and_lifts_codes(conn):
         ).fetchone()
         assert row["parent_id"] is None
         assert row["sort_order"] == prev_sort
+
+
+def test_undo_code_chord_round_trip(conn):
+    """Setting a chord then undoing restores the prior NULL; redoing
+    re-applies. Covers the new code_chord op type end-to-end."""
+    mgr = UndoManager()
+    cid = add_code(conn, "Identity", "#D55E00")
+    prior = conn.execute(
+        "SELECT chord FROM codebook_code WHERE id = ?", (cid,)
+    ).fetchone()["chord"]
+
+    set_chord(conn, cid, "qz")
+    mgr.record_code_chord(cid, prior, "qz")
+
+    assert mgr.undo(conn) is not None
+    after_undo = conn.execute(
+        "SELECT chord FROM codebook_code WHERE id = ?", (cid,)
+    ).fetchone()["chord"]
+    assert after_undo == prior
+
+    assert mgr.redo(conn) is not None
+    after_redo = conn.execute(
+        "SELECT chord FROM codebook_code WHERE id = ?", (cid,)
+    ).fetchone()["chord"]
+    assert after_redo == "qz"
 
 
 def test_undo_delete_folder_cascade_relinks_children(conn):

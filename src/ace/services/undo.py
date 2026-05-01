@@ -31,6 +31,7 @@ OpType = Literal[
     "code_delete",
     "code_rename",
     "code_recolour",
+    "code_chord",
     "code_reorder",
     "flag_toggle",
     "codebook_import",
@@ -120,6 +121,16 @@ class UndoManager:
         self._push(UndoEntry(
             op="code_recolour",
             payload={"code_id": code_id, "prev_colour": prev_colour, "new_colour": new_colour},
+        ))
+
+    def record_code_chord(
+        self, code_id: str, prev_chord: str | None, new_chord: str | None
+    ) -> None:
+        # `prev_chord` may be None (the code had no chord override before) —
+        # the undo handler restores it via set_chord which accepts NULL.
+        self._push(UndoEntry(
+            op="code_chord",
+            payload={"code_id": code_id, "prev_chord": prev_chord, "new_chord": new_chord},
         ))
 
     def record_code_reorder(
@@ -405,6 +416,19 @@ def _redo_code_recolour(conn, entry):
     return f"code '{_code_name(conn, entry.payload['code_id'])}' recoloured", None
 
 
+def _undo_code_chord(conn, entry):
+    # set_chord accepts NULL — used to restore the prior unset state.
+    from ace.models.codebook import set_chord
+    set_chord(conn, entry.payload["code_id"], entry.payload["prev_chord"])
+    return f"chord on '{_code_name(conn, entry.payload['code_id'])}' reverted", None
+
+
+def _redo_code_chord(conn, entry):
+    from ace.models.codebook import set_chord
+    set_chord(conn, entry.payload["code_id"], entry.payload["new_chord"])
+    return f"chord on '{_code_name(conn, entry.payload['code_id'])}' reapplied", None
+
+
 def _apply_reorder(conn, ordering: list[tuple[str, int]]) -> None:
     try:
         for code_id, sort_order in ordering:
@@ -607,6 +631,7 @@ _HANDLERS: dict[OpType, tuple[Handler, Handler]] = {
     "code_delete":                   (_undo_code_delete,                 _redo_code_delete),
     "code_rename":                   (_undo_code_rename,                 _redo_code_rename),
     "code_recolour":                 (_undo_code_recolour,               _redo_code_recolour),
+    "code_chord":                    (_undo_code_chord,                  _redo_code_chord),
     "code_reorder":                  (_undo_code_reorder,                _redo_code_reorder),
     "flag_toggle":                   (_undo_flag_toggle,                 _redo_flag_toggle),
     "codebook_import":               (_undo_codebook_import,             _redo_codebook_import),

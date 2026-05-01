@@ -1515,9 +1515,9 @@ async def reorder_in_scope_route(
     """Reorder codes within a single scope. Returns text-panel + sidebar OOB.
 
     Same response shape as the parent / cut-paste / indent-promote routes
-    so the count chips stay consistent. No undo entry is recorded — drag
-    reorder is not stack-able per existing convention (the older
-    ``/codes/reorder`` route only records when the order actually changes).
+    so the count chips stay consistent. Records an undo entry for the
+    affected scope so Z reverts the drag — matches the legacy
+    ``/codes/reorder`` route's behaviour.
 
     The UPDATE is scoped to ``parent_id`` defensively: only rows already in
     that scope have their ``sort_order`` rewritten, so a stale client that
@@ -1537,6 +1537,19 @@ async def reorder_in_scope_route(
     scope_value: str | None = scope or None
 
     with _project_db(request) as conn:
+        # Snapshot the scope's current (id, sort_order) BEFORE the UPDATE so
+        # undo can restore the prior order. Scoped to kind='code' to mirror
+        # the UPDATE's defence-in-depth filter.
+        prev = [
+            (r["id"], r["sort_order"])
+            for r in conn.execute(
+                "SELECT id, sort_order FROM codebook_code "
+                "WHERE deleted_at IS NULL AND kind = 'code' "
+                "AND ((? IS NULL AND parent_id IS NULL) OR parent_id = ?) "
+                "ORDER BY id",
+                (scope_value, scope_value),
+            ).fetchall()
+        ]
         for i, cid in enumerate(new_order):
             # `kind = 'code'` is defence in depth — folders are reordered
             # via the tree-aware /codes/reorder-tree endpoint, never here.
@@ -1547,6 +1560,19 @@ async def reorder_in_scope_route(
                 (i, cid, scope_value, scope_value),
             )
         conn.commit()
+        new = [
+            (r["id"], r["sort_order"])
+            for r in conn.execute(
+                "SELECT id, sort_order FROM codebook_code "
+                "WHERE deleted_at IS NULL AND kind = 'code' "
+                "AND ((? IS NULL AND parent_id IS NULL) OR parent_id = ?) "
+                "ORDER BY id",
+                (scope_value, scope_value),
+            ).fetchall()
+        ]
+        # Skip recording on no-ops so one drag doesn't burn two undo presses.
+        if prev != new:
+            _get_undo_manager(request).record_code_reorder(prev, new)
         content = _render_full_coding_oob(request, conn, coder_id, current_index)
         return HTMLResponse(content)
 
@@ -1567,9 +1593,8 @@ async def reorder_tree_route(
     `sort_order` for every id regardless of kind, which is what the
     visual order needs to round-trip through the next render.
 
-    No undo entry is recorded — folder reorder is parallel to drag
-    reorder, and the existing convention there is to skip the undo
-    stack (the user re-drags to revert).
+    Records an undo entry covering every id in the reorder so Z reverts
+    a folder shuffle just like a code drag.
     """
     coder_id = _require_coder(request)
     try:
@@ -1582,7 +1607,37 @@ async def reorder_tree_route(
     from ace.models.codebook import reorder_tree
 
     with _project_db(request) as conn:
+        # Snapshot prev/new (id, sort_order) for every id in the tree
+        # reorder. _apply_reorder is kind-agnostic so the same handler
+        # works for the folder + code mix that this route persists.
+        if ids:
+            placeholders = ",".join("?" * len(ids))
+            prev = [
+                (r["id"], r["sort_order"])
+                for r in conn.execute(
+                    f"SELECT id, sort_order FROM codebook_code "
+                    f"WHERE id IN ({placeholders}) AND deleted_at IS NULL "
+                    f"ORDER BY id",
+                    ids,
+                ).fetchall()
+            ]
+        else:
+            prev = []
         reorder_tree(conn, ids)
+        if ids:
+            new = [
+                (r["id"], r["sort_order"])
+                for r in conn.execute(
+                    f"SELECT id, sort_order FROM codebook_code "
+                    f"WHERE id IN ({placeholders}) AND deleted_at IS NULL "
+                    f"ORDER BY id",
+                    ids,
+                ).fetchall()
+            ]
+        else:
+            new = []
+        if prev != new:
+            _get_undo_manager(request).record_code_reorder(prev, new)
         content = _render_full_coding_oob(request, conn, coder_id, current_index)
         return HTMLResponse(content)
 
@@ -1865,16 +1920,23 @@ async def patch_code_chord(
         raise HTTPException(status_code=400, detail="chord must be 2 lowercase letters")
 
     with _project_db(request) as conn:
-        exists = conn.execute(
-            "SELECT 1 FROM codebook_code WHERE id = ? AND deleted_at IS NULL", (code_id,)
+        prev_row = conn.execute(
+            "SELECT chord FROM codebook_code WHERE id = ? AND deleted_at IS NULL",
+            (code_id,),
         ).fetchone()
-        if not exists:
+        if not prev_row:
             raise HTTPException(status_code=404, detail=f"code {code_id} not found")
+        prev_chord = prev_row["chord"]
 
         try:
             set_chord(conn, code_id, chord)
         except sqlite3.IntegrityError:
             raise HTTPException(status_code=409, detail=f"chord '{chord}' already in use")
+
+        # Skip recording when the chord didn't actually change — a no-op
+        # PATCH (re-saving the same value) shouldn't pollute the undo stack.
+        if prev_chord != chord:
+            _get_undo_manager(request).record_code_chord(code_id, prev_chord, chord)
 
         content = _render_code_sidebar(request, conn, coder_id, current_index)
         return HTMLResponse(content)

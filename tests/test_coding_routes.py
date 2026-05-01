@@ -1461,6 +1461,71 @@ def test_patch_code_chord_unknown_id_returns_404(tmp_path):
         assert r.status_code == 404
 
 
+def test_patch_code_chord_records_undo(tmp_path):
+    """Setting a chord pushes an undo entry — Z restores the prior chord
+    (NULL in this case, since the seed code had no chord override)."""
+    from ace.db.connection import open_project
+    from ace.models.codebook import list_codes
+
+    project_path = tmp_path / "chord_undo.ace"
+    conn = create_project(str(project_path), "Test")
+    try:
+        for i in range(32):
+            add_code(conn, f"Code {i:02d}", "#A91818")
+        codes = list_codes(conn)
+        target_id = codes[0]["id"]
+        prior_chord = codes[0]["chord"]  # row 0 is in the single-key range → None
+    finally:
+        conn.close()
+
+    app = create_app()
+    with TestClient(app) as c:
+        c.post("/api/project/open", data={"path": str(project_path)})
+        r = c.patch(f"/api/codes/{target_id}/chord", data={"chord": "qz"})
+        assert r.status_code == 200
+
+        r = c.post("/api/undo", data={"current_index": 0})
+        assert r.status_code == 200
+        assert "Undone:" in r.text
+
+    conn = open_project(str(project_path))
+    try:
+        row = conn.execute(
+            "SELECT chord FROM codebook_code WHERE id = ?", (target_id,)
+        ).fetchone()
+    finally:
+        conn.close()
+    assert row["chord"] == prior_chord, "undo must restore the prior chord value"
+
+
+def test_patch_code_chord_noop_does_not_record(tmp_path):
+    """Re-saving the same chord is a no-op — the undo stack stays empty."""
+    from ace.models.codebook import list_codes
+
+    project_path = tmp_path / "chord_noop.ace"
+    conn = create_project(str(project_path), "Test")
+    try:
+        for i in range(32):
+            add_code(conn, f"Code {i:02d}", "#A91818")
+        target_id = list_codes(conn)[31]["id"]  # 32nd code has an auto-chord
+        existing_chord = list_codes(conn)[31]["chord"]
+    finally:
+        conn.close()
+
+    assert existing_chord, "setup precondition — 32nd code should have a chord"
+
+    app = create_app()
+    with TestClient(app) as c:
+        c.post("/api/project/open", data={"path": str(project_path)})
+        # PATCH with the same chord — should be a no-op for undo.
+        r = c.patch(f"/api/codes/{target_id}/chord", data={"chord": existing_chord})
+        assert r.status_code == 200
+
+        r = c.post("/api/undo", data={"current_index": 0})
+        assert r.status_code == 200
+        assert "Nothing to undo" in r.text
+
+
 # ---------------------------------------------------------------------------
 # Folder + parent + cut-paste routes (Task 5)
 # ---------------------------------------------------------------------------
@@ -1815,10 +1880,14 @@ def test_reorder_in_scope_ignores_codes_outside_scope(client_with_codes):
     assert set(after_folder.keys()) == set(before_folder.keys())
 
 
-def test_reorder_in_scope_does_not_record_undo(client_with_codes):
-    """Drag-reorder is not stack-able by existing convention — an undo
-    immediately after a reorder-in-scope must NOT undo it."""
-    client, _coder_id, a, b, _db_path = client_with_codes
+def test_reorder_in_scope_records_undo(client_with_codes):
+    """Drag-reorder must be undoable — a Z press right after a swap puts
+    the codes back in their previous order. Regression guard: the route
+    used to silently skip undo, so Z would either pop an unrelated entry
+    or report "Nothing to undo"."""
+    client, _coder_id, a, b, db_path = client_with_codes
+
+    before = _sort_orders_at_root(db_path)
 
     r = client.post(
         "/api/codes/reorder-in-scope",
@@ -1829,10 +1898,46 @@ def test_reorder_in_scope_does_not_record_undo(client_with_codes):
         },
     )
     assert r.status_code == 200
+    after_swap = _sort_orders_at_root(db_path)
+    assert after_swap[b] < after_swap[a], "swap should put b before a"
 
     r = client.post("/api/undo", data={"current_index": 0})
     assert r.status_code == 200
-    # Empty stack message — confirms reorder-in-scope didn't push an entry.
+    assert "Undone:" in r.text
+
+    after_undo = _sort_orders_at_root(db_path)
+    assert after_undo == before, "undo must restore prior sort_order"
+
+
+def test_reorder_in_scope_noop_does_not_record(client_with_codes):
+    """Re-saving the current order is a no-op — the undo stack stays clean
+    so one user drag is one Z press, not two. Mirrors the legacy
+    /codes/reorder no-op behaviour."""
+    client, _coder_id, a, b, _db_path = client_with_codes
+
+    # Real swap first to land sort_order at 0,1 (the route always renumbers
+    # from 0, so the fixture's 1,2 needs to be normalised before identity
+    # comparisons make sense).
+    r = client.post(
+        "/api/codes/reorder-in-scope",
+        data={"code_ids": json.dumps([b, a]), "parent_id": "", "current_index": 0},
+    )
+    assert r.status_code == 200
+
+    # Identity reorder of the new state — should NOT record an entry.
+    r = client.post(
+        "/api/codes/reorder-in-scope",
+        data={"code_ids": json.dumps([b, a]), "parent_id": "", "current_index": 0},
+    )
+    assert r.status_code == 200
+
+    # First undo reverses the swap; second says nothing — confirms the
+    # identity call did not push.
+    r = client.post("/api/undo", data={"current_index": 0})
+    assert r.status_code == 200
+    assert "Undone:" in r.text
+    r = client.post("/api/undo", data={"current_index": 0})
+    assert r.status_code == 200
     assert "Nothing to undo" in r.text
 
 
@@ -2030,6 +2135,50 @@ def test_reorder_tree_persists_folder_order(client_with_codes):
         conn.close()
     ordered_ids = [r["id"] for r in rows]
     assert ordered_ids == new_order
+
+
+def test_reorder_tree_records_undo(client_with_codes):
+    """Folder reorder via /api/codes/reorder-tree must be undoable too —
+    same regression guard as reorder-in-scope."""
+    from ace.db.connection import open_project
+    from ace.models.codebook import add_folder
+
+    client, _coder, code_a, code_b, db_path = client_with_codes
+
+    conn = open_project(db_path)
+    try:
+        f1 = add_folder(conn, "Themes")
+        f2 = add_folder(conn, "Methods")
+        before = {
+            r["id"]: r["sort_order"]
+            for r in conn.execute(
+                "SELECT id, sort_order FROM codebook_code WHERE deleted_at IS NULL"
+            ).fetchall()
+        }
+    finally:
+        conn.close()
+
+    r = client.post(
+        "/api/codes/reorder-tree",
+        data={"tree_ids": json.dumps([f2, f1, code_a, code_b]), "current_index": 0},
+    )
+    assert r.status_code == 200
+
+    r = client.post("/api/undo", data={"current_index": 0})
+    assert r.status_code == 200
+    assert "Undone:" in r.text
+
+    conn = open_project(db_path)
+    try:
+        after = {
+            r["id"]: r["sort_order"]
+            for r in conn.execute(
+                "SELECT id, sort_order FROM codebook_code WHERE deleted_at IS NULL"
+            ).fetchall()
+        }
+    finally:
+        conn.close()
+    assert after == before, "undo must restore the prior tree order"
 
 
 def test_reorder_tree_rejects_malformed_payload(client_with_codes):
