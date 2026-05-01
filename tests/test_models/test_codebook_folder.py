@@ -83,6 +83,22 @@ def test_list_codes_with_tree_returns_dfs_order(conn):
     assert folder_row["child_count"] == 2
 
 
+def test_list_codes_with_tree_surfaces_orphan_codes(conn):
+    """Codes whose parent_id refers to a soft-deleted folder show at root."""
+    fid = add_folder(conn, "Themes")
+    add_code(conn, "Identity", "#D55E00", parent_id=fid)
+    # Soft-delete the folder directly (skip the cascade so child stays orphaned)
+    conn.execute(
+        "UPDATE codebook_code SET deleted_at = '2026-01-02' WHERE id = ?", (fid,)
+    )
+    conn.commit()
+    tree = list_codes_with_tree(conn)
+    # Folder is gone; Identity surfaces as a root code
+    assert [r["kind"] for r in tree] == ["code"]
+    assert tree[0]["name"] == "Identity"
+    assert tree[0]["parent_id"] is None
+
+
 def test_delete_folder_lifts_children_to_root(conn):
     fid = add_folder(conn, "Themes")
     cid = add_code(conn, "Identity", "#D55E00", parent_id=fid)

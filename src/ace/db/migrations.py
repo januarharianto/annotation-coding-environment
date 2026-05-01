@@ -197,12 +197,14 @@ def _migrate_v6_to_v7(conn: sqlite3.Connection) -> None:
     )
 
     # Step C: migrate group_name → folder rows. Skip if column already gone.
-    # Include soft-deleted rows in the scan so undo can later restore them
-    # with their original folder context.
+    # Only consider live rows — undo lives in memory, so a soft-deleted v6
+    # row would never come back into a phantom folder. Including them just
+    # creates empty folder rows that confuse the renderer.
     if "group_name" in cols:
         groups = conn.execute(
             "SELECT DISTINCT group_name FROM codebook_code "
-            "WHERE group_name IS NOT NULL AND group_name != ''"
+            "WHERE group_name IS NOT NULL AND group_name != '' "
+            "AND deleted_at IS NULL"
         ).fetchall()
 
         # Place folder rows below all existing codes' sort_order so the migration

@@ -13,8 +13,10 @@ of failing them.
 from __future__ import annotations
 
 import os
+import platform
 import socket
 import subprocess
+import sys
 import time
 import urllib.parse
 import urllib.request
@@ -35,9 +37,17 @@ def _playwright_cache_dir() -> Path:
     env = os.environ.get("PLAYWRIGHT_BROWSERS_PATH")
     if env:
         return Path(env)
-    if os.uname().sysname == "Darwin":
+    sysname = platform.system()
+    if sysname == "Darwin":
         return Path.home() / "Library" / "Caches" / "ms-playwright"
-    return Path.home() / ".cache" / "ms-playwright"
+    if sysname == "Linux":
+        return Path.home() / ".cache" / "ms-playwright"
+    if sysname == "Windows":
+        local_appdata = os.environ.get(
+            "LOCALAPPDATA", str(Path.home() / "AppData" / "Local")
+        )
+        return Path(local_appdata) / "ms-playwright"
+    raise RuntimeError(f"Unsupported platform: {sysname}")
 
 
 def _installed_browsers() -> list[str]:
@@ -131,7 +141,7 @@ def ace_server(tmp_path):
     port = _free_port()
     proc = subprocess.Popen(
         [
-            "uv", "run", "uvicorn", "ace.app:create_app", "--factory",
+            sys.executable, "-m", "uvicorn", "ace.app:create_app", "--factory",
             "--host", "127.0.0.1", "--port", str(port),
         ],
         stdout=subprocess.DEVNULL,

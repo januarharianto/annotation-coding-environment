@@ -152,7 +152,17 @@ def list_codes_with_tree(conn: sqlite3.Connection) -> list[dict]:
             by_parent.setdefault(r["parent_id"], []).append(r)
 
     folders = [r for r in rows if r["kind"] == "folder"]
+    folder_ids = {f["id"] for f in folders}
     root_codes = by_parent.get(None, [])
+
+    # Orphan codes: parent_id refers to a folder that no longer exists
+    # (soft-deleted out from under them). Surface as root so they don't
+    # vanish from the sidebar.
+    orphan_codes: list[sqlite3.Row] = []
+    for parent_id, codes in by_parent.items():
+        if parent_id is None or parent_id in folder_ids:
+            continue
+        orphan_codes.extend(codes)
 
     out: list[dict] = []
     for f in folders:
@@ -175,6 +185,13 @@ def list_codes_with_tree(conn: sqlite3.Connection) -> list[dict]:
             "id": c["id"], "name": c["name"], "colour": c["colour"],
             "sort_order": c["sort_order"], "kind": "code",
             "parent_id": None, "chord": c["chord"],
+        })
+    for c in orphan_codes:
+        out.append({
+            "id": c["id"], "name": c["name"], "colour": c["colour"],
+            "sort_order": c["sort_order"], "kind": "code",
+            "parent_id": None,  # display as root
+            "chord": c["chord"],
         })
     return out
 

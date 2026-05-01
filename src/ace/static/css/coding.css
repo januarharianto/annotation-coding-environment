@@ -1591,7 +1591,7 @@ body[data-active-zone="codebook"] .ace-code-folder-row[tabindex="0"] {
 }
 
 .ace-root-divider-label {
-  font-size: 10px;
+  font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 1.2px;
   color: var(--ace-text-muted);

@@ -404,6 +404,25 @@ def test_v7_check_constraint_blocks_folder_with_chord(tmp_path):
         )
 
 
+def test_v7_migration_skips_groups_with_only_soft_deleted_children(tmp_path):
+    """A v6 group whose codes are all soft-deleted should NOT migrate to a folder."""
+    conn = _build_v6_codebook(tmp_path)
+    # Soft-delete the two Themes codes
+    conn.execute(
+        "UPDATE codebook_code SET deleted_at = '2026-01-02' "
+        "WHERE group_name = 'Themes'"
+    )
+    conn.commit()
+    _migrate_v6_to_v7(conn)
+    # Themes folder should NOT exist; Process folder should
+    folders = conn.execute(
+        "SELECT name FROM codebook_code WHERE kind = 'folder' AND deleted_at IS NULL"
+    ).fetchall()
+    folder_names = {r[0] for r in folders}
+    assert "Themes" not in folder_names
+    assert "Process" in folder_names
+
+
 def test_v7_idempotent_after_partial_completion(tmp_path):
     """Half-completed migration: columns added but DROP COLUMN failed.
     Re-running must not duplicate folder rows."""

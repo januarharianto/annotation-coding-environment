@@ -52,10 +52,16 @@
     if (!t || !t.closest) return;
     if (t.closest("#code-sidebar")) {
       _setActiveZone("codebook");
-      // First-ever focus into the codebook — show the Tab hint once per
-      // browser. Persists in localStorage so power users don't see it again.
-      // Skipped on /code/{id}/view (audit page) where the hint is moot.
-      if (!localStorage.getItem("ace-tab-hint-seen")
+      // First Tab from the source panel into the codebook — show the hint
+      // once per browser. Gated on relatedTarget being inside #text-panel
+      // so a mouse click into the sidebar (or a focus arriving from a
+      // dialog/statusbar) doesn't burn the one-shot. Persists in
+      // localStorage so power users don't see it again. Skipped on
+      // /code/{id}/view (audit page) where the hint is moot.
+      const fromTextPanel = e.relatedTarget && e.relatedTarget.closest
+        && e.relatedTarget.closest("#text-panel");
+      if (fromTextPanel
+          && !localStorage.getItem("ace-tab-hint-seen")
           && document.getElementById("text-panel")
           && typeof window._setStatus === "function") {
         window._setStatus(
