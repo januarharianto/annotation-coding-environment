@@ -43,38 +43,42 @@ def test_v4_to_v5_migration_adds_column():
         conn.commit()
         conn.close()
 
-        # Open: triggers migration to v6 (via v5 → v6 chain)
+        # Open: triggers migration through to current schema (v7).
         conn = open_project(str(path))
         version = conn.execute("PRAGMA user_version").fetchone()[0]
         cols = {r["name"] for r in conn.execute("PRAGMA table_info(codebook_code)")}
         conn.close()
-        assert version == 6
+        assert version == 7
         assert "chord" in cols
 
 
 def test_migration_is_idempotent():
-    """Running migrations twice on a v5 file is a no-op."""
+    """Running migrations twice on a fresh project is a no-op."""
     with tempfile.TemporaryDirectory() as tmp:
         path = Path(tmp) / "fresh.ace"
         create_project(str(path), "Test")
 
-        # First open → already at v5
+        # First open
         conn = open_project(str(path))
         v1 = conn.execute("PRAGMA user_version").fetchone()[0]
         conn.close()
 
-        # Second open → still v5, no errors
+        # Second open — no errors, same version
         conn = open_project(str(path))
         v2 = conn.execute("PRAGMA user_version").fetchone()[0]
         cols = {r["name"] for r in conn.execute("PRAGMA table_info(codebook_code)")}
         conn.close()
 
-        assert v1 == v2 == 6
+        assert v1 == v2 == 7
         assert "chord" in cols
 
 
 def test_v5_to_v6_tightens_index_for_soft_deletes():
-    """v5→v6 migration recreates idx_codebook_chord to exclude deleted rows."""
+    """v5→v6 migration recreates idx_codebook_chord to exclude deleted rows.
+
+    Migration chain runs through to v7. The behaviour under test (re-using a
+    soft-deleted chord) still holds.
+    """
     with tempfile.TemporaryDirectory() as tmp:
         path = Path(tmp) / "v5.ace"
 
@@ -106,13 +110,14 @@ def test_v5_to_v6_tightens_index_for_soft_deletes():
         conn.commit()
         conn.close()
 
-        # Open: triggers v5→v6 migration. New code with chord "ab" should now be insertable.
+        # Open: triggers full v5→v7 migration chain. New code with chord "ab"
+        # should now be insertable.
         conn = open_project(str(path))
         try:
-            assert conn.execute("PRAGMA user_version").fetchone()[0] == 6
+            assert conn.execute("PRAGMA user_version").fetchone()[0] == 7
             conn.execute(
-                "INSERT INTO codebook_code (id, name, colour, sort_order, chord, created_at) "
-                "VALUES ('b', 'B', '#557FE6', 1, 'ab', datetime('now'))"
+                "INSERT INTO codebook_code (id, name, colour, sort_order, kind, chord, created_at) "
+                "VALUES ('b', 'B', '#557FE6', 1, 'code', 'ab', datetime('now'))"
             )
             conn.commit()
         finally:
@@ -120,25 +125,35 @@ def test_v5_to_v6_tightens_index_for_soft_deletes():
 
 
 def test_chord_unique_when_set():
-    """Two codes can both have NULL chord, but not duplicate non-null values."""
+    """Two codes can both have NULL chord, but not duplicate non-null values.
+
+    Uses raw SQL inserts (not add_code) because Task 1 lands the v7 schema
+    before Task 2 rewrites the model layer to drop the group_name parameter.
+    """
     with tempfile.TemporaryDirectory() as tmp:
         path = Path(tmp) / "fresh.ace"
         create_project(str(path), "Test")
 
         conn = open_project(str(path))
-        from ace.models.codebook import add_code
-        id1 = add_code(conn, "Code A", "#A91818")
-        id2 = add_code(conn, "Code B", "#557FE6")
-
-        # Both NULL — fine
-        conn.execute("UPDATE codebook_code SET chord = NULL WHERE id = ?", (id1,))
-        conn.execute("UPDATE codebook_code SET chord = NULL WHERE id = ?", (id2,))
+        now = "2026-01-01"
+        conn.execute(
+            "INSERT INTO codebook_code "
+            "(id, name, colour, sort_order, kind, parent_id, chord, created_at) "
+            "VALUES ('id1', 'Code A', '#A91818', 1, 'code', NULL, NULL, ?)",
+            (now,),
+        )
+        conn.execute(
+            "INSERT INTO codebook_code "
+            "(id, name, colour, sort_order, kind, parent_id, chord, created_at) "
+            "VALUES ('id2', 'Code B', '#557FE6', 2, 'code', NULL, NULL, ?)",
+            (now,),
+        )
         conn.commit()
 
         # Set same chord on both — must fail
-        conn.execute("UPDATE codebook_code SET chord = 'pd' WHERE id = ?", (id1,))
+        conn.execute("UPDATE codebook_code SET chord = 'pd' WHERE id = 'id1'")
         conn.commit()
         with pytest.raises(sqlite3.IntegrityError):
-            conn.execute("UPDATE codebook_code SET chord = 'pd' WHERE id = ?", (id2,))
+            conn.execute("UPDATE codebook_code SET chord = 'pd' WHERE id = 'id2'")
             conn.commit()
         conn.close()

@@ -692,6 +692,10 @@ def _render_colour_style_oob(codes: list[dict]) -> str:
     """
     parts = []
     for code in codes:
+        # Folders carry colour='' (NOT NULL column); skip them — only kind='code'
+        # rows ever paint annotation rects or sidebar dots.
+        if code.get("kind") == "folder" or not code.get("colour"):
+            continue
         r, g, b = _hex_to_rgb(code["colour"])
         cid = code["id"]
         parts.append(
@@ -1242,10 +1246,15 @@ async def create_code(
     request: Request,
     name: str = Form(...),
     current_index: int = Form(default=0),
-    group_name: str | None = Form(default=None),
+    parent_id: str | None = Form(default=None),
 ):
     """Create a new code and return updated sidebar."""
-    from ace.models.codebook import add_code, list_codes, next_colour
+    from ace.models.codebook import (
+        InvariantError,
+        add_code,
+        list_codes,
+        next_colour,
+    )
 
     coder_id = _require_coder(request)
 
@@ -1256,13 +1265,272 @@ async def create_code(
     with _project_db(request) as conn:
         existing = list_codes(conn)
         colour = next_colour(len(existing))
-        gn = group_name.strip() if group_name else None
+        pid = parent_id.strip() if parent_id else None
         try:
-            new_code_id = add_code(conn, name, colour, group_name=gn or None)
-        except Exception:
+            new_code_id = add_code(conn, name, colour, parent_id=pid or None)
+        except InvariantError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        except sqlite3.IntegrityError:
             return _oob_status(f"A code named '{name}' already exists.")
         _get_undo_manager(request).record_code_add(new_code_id)
         content = _render_code_sidebar(request, conn, coder_id, current_index)
+        return HTMLResponse(content)
+
+
+@router.post("/codes/folder")
+async def create_folder_route(
+    request: Request,
+    name: str = Form(...),
+    current_index: int = Form(default=0),
+):
+    """Create a new folder and return updated sidebar + text panel."""
+    from ace.models.codebook import add_folder
+
+    coder_id = _require_coder(request)
+
+    name = name.strip()
+    if not name:
+        return _oob_status("Folder name cannot be empty.")
+
+    with _project_db(request) as conn:
+        try:
+            folder_id = add_folder(conn, name)
+        except sqlite3.IntegrityError:
+            return _oob_status(f"A folder named '{name}' already exists.")
+        _get_undo_manager(request).record_create_folder(folder_id)
+        content = _render_full_coding_oob(request, conn, coder_id, current_index)
+        content += _oob_announce(f"Created folder {name}")
+        return HTMLResponse(content)
+
+
+def _scope_ordering(conn, scope_parent_id: str | None) -> list[tuple[str, int]]:
+    """Snapshot (id, sort_order) for every active row in the given scope.
+
+    `scope_parent_id` is None for root scope, else a folder id. Used by the
+    parent-move and cut-paste routes to capture pre-move state for undo.
+    """
+    rows = conn.execute(
+        "SELECT id, sort_order FROM codebook_code "
+        "WHERE deleted_at IS NULL "
+        "AND ((? IS NULL AND parent_id IS NULL) OR parent_id = ?)",
+        (scope_parent_id, scope_parent_id),
+    ).fetchall()
+    return [(r["id"], r["sort_order"]) for r in rows]
+
+
+@router.put("/codes/{code_id}/parent")
+async def set_code_parent_route(
+    request: Request,
+    code_id: str,
+    parent_id: str = Form(default=""),
+    current_index: int = Form(default=0),
+):
+    """Move `code_id` into the scope of `parent_id` (folder id or empty for root)."""
+    from ace.models.codebook import InvariantError, move_code_to_parent
+
+    coder_id = _require_coder(request)
+    new_parent: str | None = parent_id.strip() if parent_id else None
+    new_parent = new_parent or None
+
+    with _project_db(request) as conn:
+        prev = conn.execute(
+            "SELECT parent_id FROM codebook_code WHERE id = ?", (code_id,)
+        ).fetchone()
+        if prev is None:
+            raise HTTPException(status_code=404, detail=f"code {code_id} not found")
+        prev_parent = prev["parent_id"]
+
+        # Snapshot orderings BEFORE the move so undo can restore sibling
+        # sort_orders that move_code_to_parent renumbered.
+        prev_source_ordering = _scope_ordering(conn, prev_parent)
+        prev_dest_ordering = _scope_ordering(conn, new_parent)
+
+        try:
+            move_code_to_parent(conn, code_id, new_parent)
+        except InvariantError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+        _get_undo_manager(request).record_move_parent(
+            code_id=code_id,
+            prev_parent_id=prev_parent,
+            new_parent_id=new_parent,
+            prev_source_ordering=prev_source_ordering,
+            prev_dest_ordering=prev_dest_ordering,
+        )
+        content = _render_full_coding_oob(request, conn, coder_id, current_index)
+        return HTMLResponse(content)
+
+
+@router.post("/codes/{code_id}/indent-promote")
+async def indent_promote_route(
+    request: Request,
+    code_id: str,
+    above_code_id: str = Form(...),
+    folder_name: str = Form(default="New folder"),
+    current_index: int = Form(default=0),
+):
+    """Composite: create a folder, move (above_code_id, code_id) into it.
+
+    Used by ⌥⇧→ — wraps two adjacent root codes into a brand-new folder.
+    The three writes (folder + 2 moves) run inside a single BEGIN IMMEDIATE
+    transaction so a partial failure doesn't leave a half-built folder
+    behind. On rollback, the gesture is a true no-op.
+    """
+    from ace.models.codebook import (
+        InvariantError,
+        _add_folder_no_commit,
+        _move_code_to_parent_no_commit,
+    )
+
+    coder_id = _require_coder(request)
+    with _project_db(request) as conn:
+        # Validate both rows exist and are codes (not folders / deleted).
+        rows = conn.execute(
+            "SELECT id, kind, sort_order FROM codebook_code "
+            "WHERE id IN (?, ?) AND deleted_at IS NULL",
+            (above_code_id, code_id),
+        ).fetchall()
+        by_id = {r["id"]: r for r in rows}
+        if above_code_id not in by_id or code_id not in by_id:
+            raise HTTPException(status_code=400, detail="code not found")
+        if by_id[above_code_id]["kind"] != "code" or by_id[code_id]["kind"] != "code":
+            raise HTTPException(status_code=400, detail="indent-promote requires two codes")
+        prev_orders = {
+            above_code_id: by_id[above_code_id]["sort_order"],
+            code_id: by_id[code_id]["sort_order"],
+        }
+
+        # Atomic transaction — folder creation + two parent moves all-or-nothing.
+        try:
+            conn.execute("BEGIN IMMEDIATE")
+            folder_id = _add_folder_no_commit(conn, folder_name)
+            _move_code_to_parent_no_commit(conn, above_code_id, folder_id)
+            _move_code_to_parent_no_commit(conn, code_id, folder_id)
+            conn.commit()
+        except sqlite3.IntegrityError:
+            conn.rollback()
+            # OOB-only response (no #text-panel content) — tell HTMX to skip the
+            # primary swap; otherwise it would replace the text panel with empty.
+            return _with_headers(
+                _oob_status(f"A folder named '{folder_name}' already exists."),
+                {"HX-Reswap": "none"},
+            )
+        except InvariantError as e:
+            conn.rollback()
+            raise HTTPException(status_code=400, detail=str(e))
+
+        _get_undo_manager(request).record_indent_promote_to_folder(
+            folder_id=folder_id,
+            code_ids=[above_code_id, code_id],
+            prev_sort_orders=[prev_orders[above_code_id], prev_orders[code_id]],
+        )
+        # Look up the names for the announcement.
+        name_rows = conn.execute(
+            "SELECT id, name FROM codebook_code WHERE id IN (?, ?)",
+            (above_code_id, code_id),
+        ).fetchall()
+        names = {r["id"]: r["name"] for r in name_rows}
+        content = _render_full_coding_oob(request, conn, coder_id, current_index)
+        content += _oob_announce(
+            f"Created folder containing {names.get(above_code_id, '?')} and {names.get(code_id, '?')}"
+        )
+        return HTMLResponse(content)
+
+
+@router.post("/codes/cut-paste")
+async def cut_paste_route(
+    request: Request,
+    code_id: str = Form(...),
+    target_id: str = Form(...),
+    current_index: int = Form(default=0),
+):
+    """Move `code_id` into the scope determined by `target_id`.
+
+    `target_id` is either a folder id (move into that folder) or a code id
+    (move into the same scope as that code).
+    """
+    from ace.models.codebook import InvariantError, move_code_to_parent
+
+    coder_id = _require_coder(request)
+
+    with _project_db(request) as conn:
+        target = conn.execute(
+            "SELECT id, kind, parent_id FROM codebook_code "
+            "WHERE id = ? AND deleted_at IS NULL",
+            (target_id,),
+        ).fetchone()
+        if target is None:
+            raise HTTPException(status_code=404, detail="target_id not found")
+        if target["kind"] == "folder":
+            new_parent: str | None = target["id"]
+        else:
+            new_parent = target["parent_id"]
+
+        prev = conn.execute(
+            "SELECT parent_id FROM codebook_code WHERE id = ?", (code_id,)
+        ).fetchone()
+        if prev is None:
+            raise HTTPException(status_code=404, detail="code_id not found")
+        prev_parent = prev["parent_id"]
+
+        # Snapshot orderings BEFORE the move so undo can restore sibling
+        # sort_orders that move_code_to_parent renumbered.
+        prev_source_ordering = _scope_ordering(conn, prev_parent)
+        prev_dest_ordering = _scope_ordering(conn, new_parent)
+
+        try:
+            move_code_to_parent(conn, code_id, new_parent)
+        except InvariantError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+        _get_undo_manager(request).record_move_parent(
+            code_id=code_id,
+            prev_parent_id=prev_parent,
+            new_parent_id=new_parent,
+            prev_source_ordering=prev_source_ordering,
+            prev_dest_ordering=prev_dest_ordering,
+        )
+        content = _render_full_coding_oob(request, conn, coder_id, current_index)
+        return HTMLResponse(content)
+
+
+@router.post("/codes/reorder-in-scope")
+async def reorder_in_scope_route(
+    request: Request,
+    code_ids: str = Form(...),
+    parent_id: str = Form(default=""),
+    current_index: int = Form(default=0),
+):
+    """Reorder codes within a single scope. Returns text-panel + sidebar OOB.
+
+    Same response shape as the parent / cut-paste / indent-promote routes
+    so the count chips stay consistent. No undo entry is recorded — drag
+    reorder is not stack-able per existing convention (the older
+    ``/codes/reorder`` route only records when the order actually changes).
+
+    The UPDATE is scoped to ``parent_id`` defensively: only rows already in
+    that scope have their ``sort_order`` rewritten, so a stale client that
+    sends ids from another scope can't accidentally move them.
+    """
+    coder_id = _require_coder(request)
+    try:
+        new_order = json.loads(code_ids)
+    except (json.JSONDecodeError, TypeError):
+        return _oob_status("Invalid code_ids format.")
+
+    scope = parent_id.strip() if parent_id else ""
+    scope_value: str | None = scope or None
+
+    with _project_db(request) as conn:
+        for i, cid in enumerate(new_order):
+            conn.execute(
+                "UPDATE codebook_code SET sort_order = ? "
+                "WHERE id = ? AND deleted_at IS NULL "
+                "AND ((? IS NULL AND parent_id IS NULL) OR parent_id = ?)",
+                (i, cid, scope_value, scope_value),
+            )
+        conn.commit()
+        content = _render_full_coding_oob(request, conn, coder_id, current_index)
         return HTMLResponse(content)
 
 
@@ -1476,39 +1744,19 @@ async def import_codebook(
 # ---------------------------------------------------------------------------
 
 
-@router.put("/codes/rename-group")
-async def rename_group_route(
-    request: Request,
-    old_name: str = Form(...),
-    new_name: str = Form(...),
-    current_index: int = Form(default=0),
-):
-    """Rename a code group and return updated sidebar + text panel."""
-    from ace.models.codebook import rename_group
-
-    coder_id = _require_coder(request)
-
-    new_name = new_name.strip()
-    if not new_name:
-        return _oob_status("Group name cannot be empty.")
-
-    with _project_db(request) as conn:
-        rename_group(conn, old_name, new_name)
-        _get_undo_manager(request).record_group_rename(old_name, new_name)
-        content = _render_full_coding_oob(request, conn, coder_id, current_index)
-        return HTMLResponse(content)
-
-
 @router.put("/codes/{code_id}")
 async def update_code_route(
     request: Request,
     code_id: str,
     name: str | None = Form(default=None),
     colour: str | None = Form(default=None),
-    group_name: str | None = Form(default=None),
     current_index: int = Form(default=0),
 ):
-    """Update a code (rename, recolour, move group) and return sidebar + text panel."""
+    """Update a code (rename, recolour) and return sidebar + text panel.
+
+    Folder rename uses this same endpoint — folders share the `name` column
+    and `kind='folder'` is preserved by `update_code`.
+    """
     from ace.models.codebook import update_code
 
     coder_id = _require_coder(request)
@@ -1524,20 +1772,18 @@ async def update_code_route(
             if not re.fullmatch(r'#[0-9a-fA-F]{6}', colour):
                 return _oob_status("Invalid colour format.")
             kwargs["colour"] = colour
-        if group_name is not None:
-            kwargs["group_name"] = group_name
 
         # Read the prior state so we can record the right inverse op(s).
         prev = conn.execute(
-            "SELECT name, colour, group_name FROM codebook_code WHERE id = ?",
+            "SELECT name, colour FROM codebook_code WHERE id = ?",
             (code_id,),
         ).fetchone()
         if prev is None:
-            return _oob_status("Code not found.")
+            raise HTTPException(status_code=404, detail=f"code {code_id} not found")
 
         try:
             update_code(conn, code_id, **kwargs)
-        except Exception:
+        except sqlite3.IntegrityError:
             return _oob_status("A code with that name already exists.")
 
         mgr = _get_undo_manager(request)
@@ -1545,10 +1791,6 @@ async def update_code_route(
             mgr.record_code_rename(code_id, prev["name"], kwargs["name"])
         if "colour" in kwargs and kwargs["colour"] != prev["colour"]:
             mgr.record_code_recolour(code_id, prev["colour"], kwargs["colour"])
-        if "group_name" in kwargs:
-            new_group = kwargs["group_name"] if kwargs["group_name"] != "" else None
-            if new_group != prev["group_name"]:
-                mgr.record_code_change_group(code_id, prev["group_name"], new_group)
 
         content = _render_full_coding_oob(request, conn, coder_id, current_index)
         return HTMLResponse(content)
@@ -1591,24 +1833,43 @@ async def delete_code_route(
     code_id: str,
     current_index: int = Query(default=0),
 ):
-    """Delete a code (cascades annotations) and return sidebar + text panel."""
+    """Delete a code or folder (cascades annotations / lifts children) and
+    return sidebar + text panel."""
     from ace.models.codebook import delete_code
 
     coder_id = _require_coder(request)
 
     with _project_db(request) as conn:
-        # Capture the name before deletion — the row is gone afterwards.
-        name_row = conn.execute(
-            "SELECT name FROM codebook_code WHERE id = ?", (code_id,)
+        # Capture the prior row (name + parent + sort_order + kind) before
+        # deletion — the row's deleted_at is set afterwards but we still need
+        # the pre-delete shape for the undo entry.
+        prev = conn.execute(
+            "SELECT name, kind, parent_id, sort_order "
+            "FROM codebook_code WHERE id = ?",
+            (code_id,),
         ).fetchone()
-        code_name = name_row["name"] if name_row else "(deleted code)"
+        code_name = prev["name"] if prev else "(deleted code)"
 
-        affected = delete_code(conn, code_id)
-        _get_undo_manager(request).record_code_delete(code_id, affected)
+        affected_anns, affected_children = delete_code(conn, code_id)
+        mgr = _get_undo_manager(request)
+        if prev and prev["kind"] == "folder":
+            mgr.record_delete_folder_cascade(
+                folder_id=code_id,
+                child_ids=affected_children,
+                annotation_ids=affected_anns,
+            )
+        else:
+            mgr.record_code_delete(
+                code_id=code_id,
+                affected_annotation_ids=affected_anns,
+                prev_parent_id=prev["parent_id"] if prev else None,
+                prev_sort_order=prev["sort_order"] if prev else 0,
+                children_lifted_ids=affected_children,
+            )
         content = _render_full_coding_oob(request, conn, coder_id, current_index)
 
         # Soft-delete affordance: status bar carries an inline [Z] undo keycap.
-        n = len(affected)
+        n = len(affected_anns)
         if n > 0:
             unit = "annotation" if n == 1 else "annotations"
             message = f'Deleted "{code_name}" · {n} {unit} removed'

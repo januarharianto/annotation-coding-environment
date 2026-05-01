@@ -152,8 +152,12 @@ def test_code_delete_cascade_round_trip(project):
     a1 = add_annotation(conn, project["src1"], project["coder_id"], project["code_id"], 0, 5, "Hello")
     a2 = add_annotation(conn, project["src2"], project["coder_id"], project["code_id"], 0, 7, "Goodbye")
 
-    affected = delete_code(conn, project["code_id"])
-    mgr.record_code_delete(project["code_id"], affected)
+    annotations, children_lifted = delete_code(conn, project["code_id"])
+    mgr.record_code_delete(
+        project["code_id"],
+        annotations,
+        children_lifted_ids=children_lifted,
+    )
 
     # Verify deletion
     assert list_codes(conn) == []

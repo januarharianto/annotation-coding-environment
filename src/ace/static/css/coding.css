@@ -274,91 +274,10 @@
   border-right: 1px solid var(--ace-border);
 }
 
-.ace-code-group-header {
-  padding: 6px 8px 4px;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--ace-text);
-  border-bottom: 1px solid var(--ace-border-light);
-  margin-bottom: 2px;
-  cursor: default;
-  user-select: none;
-}
-
-/* "Ungrouped" pseudo-group reads as "everything else", not a peer of named
-   groups — revert to the plain pre-redesign treatment. Its children also
-   lose the indent + rail (rules below). */
-.ace-code-group-header[data-group=""] {
-  padding: 3px 8px;
-  font-size: var(--ace-font-size-sm);
-  font-weight: 400;
-  letter-spacing: normal;
-  text-transform: none;
-  border-bottom: none;
-  margin-bottom: 0;
-}
-
-.ace-group-toggle {
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-  vertical-align: middle;
-  color: var(--ace-text-muted);
-  transition: color var(--ace-transition);
-}
-
-.ace-group-toggle:hover {
-  color: var(--ace-text);
-}
-
-.ace-group-label {
-  cursor: default;
-}
-
-/* Collapsed group: hide the role="group" sibling's children */
-.ace-code-group-header[aria-expanded="false"] + [role="group"] .ace-code-row {
-  display: none;
-}
-
-/* And kill the connector rail when collapsed — belt-and-braces in case the
-   role=group container retains any residual height. */
-.ace-code-group-header[aria-expanded="false"] + [role="group"]::before {
-  display: none;
-}
-
 .ace-sidebar-codes {
   flex: 1;
   overflow-y: auto;
   padding: var(--ace-space-1) 0;
-}
-
-/* Indent + 1px connector rail under each group, anchoring children to the
-   chevron above. Rail at left:17px aligns with the chevron's centre. */
-.ace-sidebar-codes [role="group"] {
-  position: relative;
-  padding-left: 24px;
-}
-.ace-sidebar-codes [role="group"]::before {
-  content: "";
-  position: absolute;
-  left: 17px;
-  top: 0;
-  bottom: 6px;
-  width: 1px;
-  background: var(--ace-border);
-}
-
-/* "Ungrouped" pseudo-group: no indent, no rail. Reverts the rules above. */
-.ace-code-group-header[data-group=""] + [role="group"] {
-  padding-left: 0;
-}
-.ace-code-group-header[data-group=""] + [role="group"]::before {
-  display: none;
 }
 
 .ace-code-row {
@@ -376,16 +295,6 @@
   position: relative;
 }
 
-/* Inside a named group: reduce row padding-left so total visual indent is
-   sensible (group:24 + stripe:3 + row:12 = ~39px from the sidebar edge). */
-.ace-sidebar-codes [role="group"] .ace-code-row {
-  padding-left: 12px;
-}
-/* Ungrouped revert: codes stay at the original 8px left padding. */
-.ace-code-group-header[data-group=""] + [role="group"] .ace-code-row {
-  padding-left: 8px;
-}
-
 .ace-code-row:hover {
   background: var(--ace-bg-muted);
 }
@@ -399,18 +308,9 @@
   opacity: 0.4;
 }
 
-/* Focused treeitem (roving tabindex) */
-.ace-code-row:focus {
-  outline: none;
-}
-
-.ace-code-row:focus .ace-code-name {
-  font-weight: 600;
-}
-
-/* Focused group header */
-.ace-code-group-header:focus {
-  outline: none;
+/* Focused treeitem — bold persists via the roving tabindex marker so it
+   survives DOM focus moving to the source panel. */
+.ace-code-row[tabindex="0"] .ace-code-name {
   font-weight: 600;
 }
 
@@ -880,6 +780,63 @@ rect.ace-flash {
   height: 1px;
   background: var(--ace-border-light);
   margin: var(--ace-space-1) 0;
+}
+
+/* ---- Right-click context menu (Task 12) ----
+   Mouse-discovery surface for the keyboard codebook gestures (cut/paste,
+   move-to-folder, rename, delete). Built by `_buildCodeRowMenu` /
+   `_buildFolderRowMenu` / `_buildEmptyAreaMenu` in bridge.js. Submenus are
+   rendered in-place (parent menu replaced) with a "← Back" item. */
+
+.ace-context-menu {
+  position: fixed;
+  z-index: 200;
+  background: var(--ace-bg);
+  border: 1px solid var(--ace-border);
+  box-shadow: var(--ace-shadow);
+  min-width: 180px;
+  padding: 4px 0;
+  font-size: var(--ace-font-size-2xs);
+}
+
+.ace-context-menu-item {
+  display: block;
+  width: 100%;
+  padding: 6px 14px;
+  background: none;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  color: var(--ace-text);
+  font-size: inherit;
+}
+
+.ace-context-menu-item:hover:not([disabled]) { background: var(--ace-bg-muted); }
+.ace-context-menu-item[disabled] {
+  opacity: var(--ace-opacity-disabled);
+  cursor: default;
+}
+
+.ace-context-menu-shortcut {
+  float: right;
+  color: var(--ace-text-muted);
+  opacity: 0.6;
+  margin-left: 16px;
+  font-family: var(--ace-font-mono);
+  font-size: 11px;
+}
+
+.ace-context-menu-sep {
+  height: 1px;
+  background: var(--ace-border-light);
+  margin: 4px 0;
+}
+
+.ace-context-menu-submenu::after {
+  content: "\25B8"; /* ▸ */
+  float: right;
+  color: var(--ace-text-muted);
+  opacity: 0.5;
 }
 
 /* ---- Colour swatch popover ---- */
@@ -1525,4 +1482,135 @@ html[data-ace-grid-collapsed="1"] .ace-sidebar-grid {
 .ace-grid-inspector:empty::before {
   content: "\00a0"; /* non-breaking space so the row keeps its height */
   color: transparent;
+}
+
+/* ─── Active-zone gating ───────────────────────────────────────────────
+   `body[data-active-zone]` is set by JS on focusin events. Each side
+   wears its strong cue only when its column owns the keyboard.
+
+   2 px ring (not 1.5 px) because the audit found 1.5 px is borderline
+   for low-vision users; 2 px clears WCAG AA non-text at the slate hue. */
+
+body[data-active-zone="codebook"] .ace-code-row[tabindex="0"] {
+  background: rgba(84, 110, 122, 0.08);
+  box-shadow: inset 0 0 0 2px var(--ace-focus);
+}
+
+/* Dimmed sentence underline — 50 % alpha at 1.5 px. Original draft used
+   35 % @ 1 px which the audit flagged as below WCAG AA (1.4 : 1). */
+body[data-active-zone="codebook"] .ace-sentence--focused {
+  text-decoration-color: rgba(84, 110, 122, 0.50);
+  text-decoration-thickness: 1.5px;
+}
+/* The strong cue for source is the existing `.ace-sentence--focused`
+   (underline 2px var(--ace-focus)). It applies in the source-active state
+   by default — no extra rule needed. */
+
+/* ─── Folder rows ──────────────────────────────────────────────────── */
+
+.ace-code-folder-row {
+  display: flex;
+  align-items: center;
+  gap: var(--ace-space-1);
+  padding: 6px 12px 6px 8px;
+  cursor: default;
+  user-select: none;
+  border-left: 2px solid transparent;
+}
+
+.ace-code-folder-row:hover {
+  background: var(--ace-bg-muted);
+}
+
+.ace-code-folder-row .ace-folder-toggle {
+  width: 14px;
+  height: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ace-text-muted);
+  flex-shrink: 0;
+  transition: transform var(--ace-transition);
+}
+
+.ace-code-folder-row[aria-expanded="false"] .ace-folder-toggle {
+  transform: rotate(-90deg);
+}
+
+.ace-code-folder-row[aria-expanded="false"] + [role="group"] {
+  display: none;
+}
+
+.ace-code-folder-row .ace-folder-label {
+  flex: 1;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1.3px;
+  color: var(--ace-text);
+}
+
+.ace-code-folder-row .ace-folder-count {
+  /* font-size respects CLAUDE.md's 13 px floor on the coding page (--ace-font-size-2xs).
+     The original draft used 10 px which violates the rule. */
+  font-size: var(--ace-font-size-2xs);
+  color: var(--ace-text-muted);
+  font-variant-numeric: tabular-nums;
+  font-family: var(--ace-font-mono);
+  opacity: 0.6;
+}
+
+body[data-active-zone="codebook"] .ace-code-folder-row[tabindex="0"] {
+  background: rgba(84, 110, 122, 0.08);
+  box-shadow: inset 0 0 0 2px var(--ace-focus);
+}
+
+/* Code rows inside a folder get a left rail. Selector is scoped to
+   #code-tree so it doesn't match form fieldsets or grid header rows
+   elsewhere in the app that also use role="group". */
+#code-tree [role="group"] {
+  margin-left: 16px;
+  border-left: 1px solid var(--ace-border-light);
+}
+
+/* ─── "Ungrouped" divider before the root code section ─────────────── */
+
+.ace-root-divider {
+  display: flex;
+  align-items: center;
+  gap: var(--ace-space-2);
+  padding: 8px 8px 4px;
+  margin-top: 4px;
+  border-top: 1px dashed var(--ace-border-light);
+}
+
+.ace-root-divider-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  color: var(--ace-text-muted);
+  opacity: 0.6;
+}
+
+/* ─── Sidebar legend (mirrors .ace-legend on the source side) ─────── */
+
+.ace-sidebar-legend {
+  padding: 4px var(--ace-space-3) 6px;
+  text-align: center;
+  font-family: var(--ace-font-mono);
+  font-size: var(--ace-font-size-2xs);
+  color: rgba(43, 48, 56, 0.40);
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  user-select: none;
+  border-top: 1px solid var(--ace-border-light);
+  background: var(--ace-bg);
+  flex-shrink: 0;
+}
+
+.ace-sidebar-legend .k {
+  color: rgba(43, 48, 56, 0.72);
+  font-weight: 500;
 }

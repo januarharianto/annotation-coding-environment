@@ -178,9 +178,24 @@ def test_sidebar_has_brand_and_nav_has_source(client_with_sources):
     assert 'aria-label="Toggle flag (Shift+F)"' in html
 
 
-def test_sidebar_has_aria_tree_roles(client_with_sources):
-    """Sidebar renders with ARIA treeview roles."""
+def test_sidebar_has_aria_tree_roles(client_with_sources, tmp_path):
+    """Sidebar renders with ARIA treeview roles.
+
+    `role="group"` only wraps folder children in the new tree shape, so
+    seed one folder + child code to verify the wrapper still renders.
+    """
     client, _ = client_with_sources
+    # Seed a folder + nested code via the app's open project to exercise
+    # the tree renderer's `role="group"` branch.
+    from ace.db.connection import open_project
+    from ace.models.codebook import add_code, add_folder
+
+    project_path = client.app.state.project_path
+    conn = open_project(project_path)
+    folder_id = add_folder(conn, "Folder One")
+    add_code(conn, "Nested code", "#1976d2", parent_id=folder_id)
+    conn.close()
+
     resp = client.get("/code")
     assert resp.status_code == 200
     html = resp.text
@@ -1441,3 +1456,393 @@ def test_patch_code_chord_unknown_id_returns_404(tmp_path):
         c.post("/api/project/open", data={"path": str(project_path)})
         r = c.patch("/api/codes/nonexistent-uuid/chord", data={"chord": "ab"})
         assert r.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Folder + parent + cut-paste routes (Task 5)
+# ---------------------------------------------------------------------------
+
+
+def _latest_id_by_name(db_path: str, name: str, kind: str) -> str:
+    """Return the id of the most-recently-created row matching name+kind."""
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    row = conn.execute(
+        "SELECT id FROM codebook_code "
+        "WHERE name = ? AND kind = ? AND deleted_at IS NULL "
+        "ORDER BY created_at DESC LIMIT 1",
+        (name, kind),
+    ).fetchone()
+    conn.close()
+    assert row is not None, f"no {kind} named {name!r} found in {db_path}"
+    return row["id"]
+
+
+def _extract_folder_id(_html: str, name: str, db_path: str) -> str:
+    """Resolve a folder's id via the database (HTML markup is Task 6)."""
+    return _latest_id_by_name(db_path, name, "folder")
+
+
+def _create_folder(client, name: str, db_path: str) -> str:
+    """POST /api/codes/folder and return the new folder id."""
+    r = client.post(
+        "/api/codes/folder",
+        data={"name": name, "current_index": 0},
+    )
+    assert r.status_code == 200, r.text
+    return _latest_id_by_name(db_path, name, "folder")
+
+
+def _add_test_code(
+    client, name: str, db_path: str, parent_id: str | None = None,
+) -> str:
+    """POST /api/codes and return the new code id."""
+    data = {"name": name, "current_index": 0}
+    if parent_id is not None:
+        data["parent_id"] = parent_id
+    r = client.post("/api/codes", data=data)
+    assert r.status_code == 200, r.text
+    return _latest_id_by_name(db_path, name, "code")
+
+
+def test_create_folder_route(client_with_codes):
+    client, _coder_id, _a, _b, db_path = client_with_codes
+    r = client.post(
+        "/api/codes/folder",
+        data={"name": "Themes", "current_index": 0},
+    )
+    assert r.status_code == 200
+    # Folder row exists in the DB with kind='folder'
+    fid = _latest_id_by_name(db_path, "Themes", "folder")
+    assert fid
+
+
+def test_set_parent_to_folder(client_with_codes):
+    client, _coder_id, _a, _b, db_path = client_with_codes
+    folder_id = _create_folder(client, "Themes", db_path)
+    code_id = _add_test_code(client, "Identity", db_path)
+
+    r = client.put(
+        f"/api/codes/{code_id}/parent",
+        data={"parent_id": folder_id, "current_index": 0},
+    )
+    assert r.status_code == 200
+
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    row = conn.execute(
+        "SELECT parent_id FROM codebook_code WHERE id = ?", (code_id,),
+    ).fetchone()
+    conn.close()
+    assert row["parent_id"] == folder_id
+
+
+def test_set_parent_to_root(client_with_codes):
+    client, _coder_id, _a, _b, db_path = client_with_codes
+    folder_id = _create_folder(client, "Themes", db_path)
+    code_id = _add_test_code(client, "Identity", db_path, parent_id=folder_id)
+
+    r = client.put(
+        f"/api/codes/{code_id}/parent",
+        data={"parent_id": "", "current_index": 0},
+    )
+    assert r.status_code == 200
+
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    row = conn.execute(
+        "SELECT parent_id FROM codebook_code WHERE id = ?", (code_id,),
+    ).fetchone()
+    conn.close()
+    assert row["parent_id"] is None
+
+
+def test_set_parent_to_code_rejected(client_with_codes):
+    client, _coder_id, code_a, code_b, _db_path = client_with_codes
+    # Both code_a and code_b are kind='code'. Moving b under a must fail.
+    r = client.put(
+        f"/api/codes/{code_b}/parent",
+        data={"parent_id": code_a, "current_index": 0},
+    )
+    assert r.status_code == 400
+
+
+def test_cut_paste_moves_code(client_with_codes):
+    client, _coder_id, _a, _b, db_path = client_with_codes
+    folder_id = _create_folder(client, "Themes", db_path)
+    code_id = _add_test_code(client, "Identity", db_path)
+
+    r = client.post(
+        "/api/codes/cut-paste",
+        data={"code_id": code_id, "target_id": folder_id, "current_index": 0},
+    )
+    assert r.status_code == 200
+
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    row = conn.execute(
+        "SELECT parent_id FROM codebook_code WHERE id = ?", (code_id,),
+    ).fetchone()
+    conn.close()
+    assert row["parent_id"] == folder_id
+
+
+def test_rename_group_route_removed(client_with_codes):
+    client, *_ = client_with_codes
+    r = client.put(
+        "/api/codes/rename-group",
+        data={"old_name": "x", "new_name": "y"},
+    )
+    assert r.status_code == 404
+
+
+def test_indent_promote_creates_folder_and_moves_both_codes(client_with_codes):
+    client, _coder_id, _a, _b, db_path = client_with_codes
+    a = _add_test_code(client, "Alpha", db_path)
+    b = _add_test_code(client, "Beta", db_path)
+    r = client.post(
+        f"/api/codes/{b}/indent-promote",
+        data={
+            "above_code_id": a,
+            "folder_name": "Wrapped",
+            "current_index": 0,
+        },
+    )
+    assert r.status_code == 200, r.text
+
+    # Folder exists; both codes parented to it.
+    fid = _latest_id_by_name(db_path, "Wrapped", "folder")
+    assert fid
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    rows = conn.execute(
+        "SELECT id, parent_id FROM codebook_code WHERE id IN (?, ?)",
+        (a, b),
+    ).fetchall()
+    conn.close()
+    parents = {r["id"]: r["parent_id"] for r in rows}
+    assert parents[a] == fid
+    assert parents[b] == fid
+
+
+def test_indent_promote_rolls_back_on_name_collision(client_with_codes):
+    client, _coder_id, _a, _b, db_path = client_with_codes
+    # Pre-create the folder name we'll collide with.
+    existing = _create_folder(client, "Taken", db_path)
+    a = _add_test_code(client, "Alpha", db_path)
+    b = _add_test_code(client, "Beta", db_path)
+
+    r = client.post(
+        f"/api/codes/{b}/indent-promote",
+        data={
+            "above_code_id": a,
+            "folder_name": "Taken",
+            "current_index": 0,
+        },
+    )
+    # Returns OOB status fragment (200) carrying the error message; transaction rolled back.
+    assert r.status_code == 200
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    rows = conn.execute(
+        "SELECT id, parent_id FROM codebook_code WHERE id IN (?, ?)",
+        (a, b),
+    ).fetchall()
+    # Confirm only one folder named 'Taken' (the pre-existing one).
+    folder_count = conn.execute(
+        "SELECT COUNT(*) FROM codebook_code WHERE name = 'Taken' AND kind = 'folder' AND deleted_at IS NULL"
+    ).fetchone()[0]
+    conn.close()
+    assert folder_count == 1
+    parents = {r["id"]: r["parent_id"] for r in rows}
+    # Both codes still at root — no half-built folder, no orphan move.
+    assert parents[a] is None
+    assert parents[b] is None
+    assert existing  # silence unused-var lint
+
+
+def test_indent_promote_invalid_above_code_id_returns_400(client_with_codes):
+    client, _coder_id, _a, _b, db_path = client_with_codes
+    b = _add_test_code(client, "Beta", db_path)
+    r = client.post(
+        f"/api/codes/{b}/indent-promote",
+        data={
+            "above_code_id": "does-not-exist",
+            "folder_name": "Wrapped",
+            "current_index": 0,
+        },
+    )
+    assert r.status_code == 400
+
+
+# ---------------------------------------------------------------------------
+# Reorder-in-scope route (Task 11) — same-scope drag persists sort_order
+# without recording an undo entry, and returns the unified text-panel + OOB
+# sidebar shape so count chips stay consistent across the swap.
+# ---------------------------------------------------------------------------
+
+
+def _sort_orders_at_root(db_path: str) -> dict[str, int]:
+    """Return {code_id: sort_order} for every active code at root scope."""
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    rows = conn.execute(
+        "SELECT id, sort_order FROM codebook_code "
+        "WHERE deleted_at IS NULL AND parent_id IS NULL AND kind = 'code'"
+    ).fetchall()
+    conn.close()
+    return {r["id"]: r["sort_order"] for r in rows}
+
+
+def _sort_orders_in_folder(db_path: str, folder_id: str) -> dict[str, int]:
+    """Return {code_id: sort_order} for every active code parented to folder."""
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    rows = conn.execute(
+        "SELECT id, sort_order FROM codebook_code "
+        "WHERE deleted_at IS NULL AND parent_id = ? AND kind = 'code'",
+        (folder_id,),
+    ).fetchall()
+    conn.close()
+    return {r["id"]: r["sort_order"] for r in rows}
+
+
+def test_reorder_in_scope_updates_sort_order_within_root(client_with_codes):
+    """POST /api/codes/reorder-in-scope rewrites sort_order for the listed
+    ids in the order they're passed (root scope = empty parent_id)."""
+    client, _coder_id, a, b, db_path = client_with_codes
+    cc = _add_test_code(client, "Charlie", db_path)
+
+    # Reorder root: Charlie, Alpha (a), Bravo (b)
+    r = client.post(
+        "/api/codes/reorder-in-scope",
+        data={
+            "code_ids": json.dumps([cc, a, b]),
+            "parent_id": "",
+            "current_index": 0,
+        },
+    )
+    assert r.status_code == 200, r.text
+
+    orders = _sort_orders_at_root(db_path)
+    assert orders[cc] == 0
+    assert orders[a] == 1
+    assert orders[b] == 2
+
+
+def test_reorder_in_scope_returns_text_panel_and_sidebar(client_with_codes):
+    """The route returns the unified `_render_full_coding_oob` shape so the
+    count chips on the text panel + sidebar stay in sync."""
+    client, _coder_id, a, b, _db_path = client_with_codes
+    r = client.post(
+        "/api/codes/reorder-in-scope",
+        data={
+            "code_ids": json.dumps([b, a]),
+            "parent_id": "",
+            "current_index": 0,
+        },
+    )
+    assert r.status_code == 200
+    # text-panel primary swap + sidebar OOB
+    assert 'id="text-panel"' in r.text
+    assert 'id="code-sidebar"' in r.text
+    assert 'hx-swap-oob' in r.text
+
+
+def test_reorder_in_scope_within_folder(client_with_codes):
+    """Reorder works within a folder scope — only rows under that parent
+    get their sort_order updated."""
+    client, _coder_id, _a, _b, db_path = client_with_codes
+    folder_id = _create_folder(client, "Themes", db_path)
+    x = _add_test_code(client, "FX", db_path, parent_id=folder_id)
+    y = _add_test_code(client, "FY", db_path, parent_id=folder_id)
+    z = _add_test_code(client, "FZ", db_path, parent_id=folder_id)
+
+    # Reorder folder: FZ, FX, FY
+    r = client.post(
+        "/api/codes/reorder-in-scope",
+        data={
+            "code_ids": json.dumps([z, x, y]),
+            "parent_id": folder_id,
+            "current_index": 0,
+        },
+    )
+    assert r.status_code == 200, r.text
+
+    orders = _sort_orders_in_folder(db_path, folder_id)
+    assert orders[z] == 0
+    assert orders[x] == 1
+    assert orders[y] == 2
+
+
+def test_reorder_in_scope_ignores_codes_outside_scope(client_with_codes):
+    """If the client sends ids that live in a different scope, the UPDATE
+    is filtered to the requested parent — out-of-scope rows are untouched.
+
+    This is defensive: a stale client (e.g. mid-drag DOM) can't accidentally
+    move a code from one folder into another via the reorder endpoint.
+    """
+    client, _coder_id, root_a, root_b, db_path = client_with_codes
+    folder_id = _create_folder(client, "Themes", db_path)
+    inside = _add_test_code(client, "Inside", db_path, parent_id=folder_id)
+
+    before_root = _sort_orders_at_root(db_path)
+    before_folder = _sort_orders_in_folder(db_path, folder_id)
+
+    # Pretend client (incorrectly) lists a root code in the folder scope.
+    r = client.post(
+        "/api/codes/reorder-in-scope",
+        data={
+            "code_ids": json.dumps([inside, root_a]),
+            "parent_id": folder_id,
+            "current_index": 0,
+        },
+    )
+    assert r.status_code == 200, r.text
+
+    after_root = _sort_orders_at_root(db_path)
+    after_folder = _sort_orders_in_folder(db_path, folder_id)
+
+    # root_a's sort_order must NOT have changed (it's still in root scope).
+    assert after_root[root_a] == before_root[root_a]
+    assert after_root[root_b] == before_root[root_b]
+    # The in-scope row was renumbered to position 0.
+    assert after_folder[inside] == 0
+    # No spurious row got reparented.
+    assert set(after_folder.keys()) == set(before_folder.keys())
+
+
+def test_reorder_in_scope_does_not_record_undo(client_with_codes):
+    """Drag-reorder is not stack-able by existing convention — an undo
+    immediately after a reorder-in-scope must NOT undo it."""
+    client, _coder_id, a, b, _db_path = client_with_codes
+
+    r = client.post(
+        "/api/codes/reorder-in-scope",
+        data={
+            "code_ids": json.dumps([b, a]),
+            "parent_id": "",
+            "current_index": 0,
+        },
+    )
+    assert r.status_code == 200
+
+    r = client.post("/api/undo", data={"current_index": 0})
+    assert r.status_code == 200
+    # Empty stack message — confirms reorder-in-scope didn't push an entry.
+    assert "Nothing to undo" in r.text
+
+
+def test_reorder_in_scope_invalid_json_returns_oob_status(client_with_codes):
+    """Malformed code_ids must not 500 — return an OOB status fragment."""
+    client, *_ = client_with_codes
+    r = client.post(
+        "/api/codes/reorder-in-scope",
+        data={
+            "code_ids": "not-json",
+            "parent_id": "",
+            "current_index": 0,
+        },
+    )
+    assert r.status_code == 200
+    assert "Invalid code_ids format" in r.text

@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from typing import Callable, Literal
 
 logger = logging.getLogger(__name__)
@@ -30,11 +31,14 @@ OpType = Literal[
     "code_delete",
     "code_rename",
     "code_recolour",
-    "code_change_group",
     "code_reorder",
-    "group_rename",
     "flag_toggle",
     "codebook_import",
+    # NEW for v7 folder model:
+    "code_create_folder",
+    "code_move_parent",
+    "code_indent_promote_to_folder",
+    "code_delete_folder_cascade",
 ]
 
 
@@ -87,12 +91,22 @@ class UndoManager:
     def record_code_add(self, code_id: str) -> None:
         self._push(UndoEntry(op="code_add", payload={"code_id": code_id}))
 
-    def record_code_delete(self, code_id: str, affected_annotation_ids: list[str]) -> None:
+    def record_code_delete(
+        self,
+        code_id: str,
+        affected_annotation_ids: list[str],
+        prev_parent_id: str | None = None,
+        prev_sort_order: int = 0,
+        children_lifted_ids: list[str] | None = None,
+    ) -> None:
         self._push(UndoEntry(
             op="code_delete",
             payload={
                 "code_id": code_id,
                 "affected_annotation_ids": list(affected_annotation_ids),
+                "prev_parent_id": prev_parent_id,
+                "prev_sort_order": prev_sort_order,
+                "children_lifted_ids": list(children_lifted_ids or []),
             },
         ))
 
@@ -108,26 +122,12 @@ class UndoManager:
             payload={"code_id": code_id, "prev_colour": prev_colour, "new_colour": new_colour},
         ))
 
-    def record_code_change_group(
-        self, code_id: str, prev_group: str | None, new_group: str | None
-    ) -> None:
-        self._push(UndoEntry(
-            op="code_change_group",
-            payload={"code_id": code_id, "prev_group": prev_group, "new_group": new_group},
-        ))
-
     def record_code_reorder(
         self, prev: list[tuple[str, int]], new: list[tuple[str, int]]
     ) -> None:
         self._push(UndoEntry(
             op="code_reorder",
             payload={"prev": list(prev), "new": list(new)},
-        ))
-
-    def record_group_rename(self, old_name: str | None, new_name: str | None) -> None:
-        self._push(UndoEntry(
-            op="group_rename",
-            payload={"old_name": old_name, "new_name": new_name},
         ))
 
     def record_flag_toggle(self, source_id: str, coder_id: str, prev_flagged: bool) -> None:
@@ -143,6 +143,70 @@ class UndoManager:
         self._push(UndoEntry(
             op="codebook_import",
             payload={"imported_code_ids": list(imported_code_ids)},
+        ))
+
+    def record_create_folder(self, folder_id: str) -> None:
+        self._push(UndoEntry(
+            op="code_create_folder",
+            payload={"folder_id": folder_id},
+        ))
+
+    def record_move_parent(
+        self,
+        code_id: str,
+        prev_parent_id: str | None,
+        new_parent_id: str | None,
+        prev_source_ordering: list[tuple[str, int]],
+        prev_dest_ordering: list[tuple[str, int]],
+    ) -> None:
+        """Record a parent change.
+
+        Both source-scope and dest-scope orderings are snapshotted in full
+        so undo can restore sibling sort_orders that move_code_to_parent
+        renumbered when it placed the moved code at MAX(sort_order)+1.
+
+        `prev_source_ordering` / `prev_dest_ordering` — list of (id, sort_order)
+        pairs captured BEFORE the move.
+        """
+        self._push(UndoEntry(
+            op="code_move_parent",
+            payload={
+                "code_id": code_id,
+                "prev_parent_id": prev_parent_id,
+                "new_parent_id": new_parent_id,
+                "prev_source_ordering": list(prev_source_ordering),
+                "prev_dest_ordering": list(prev_dest_ordering),
+            },
+        ))
+
+    def record_indent_promote_to_folder(
+        self,
+        folder_id: str,
+        code_ids: list[str],
+        prev_sort_orders: list[int],
+    ) -> None:
+        self._push(UndoEntry(
+            op="code_indent_promote_to_folder",
+            payload={
+                "folder_id": folder_id,
+                "code_ids": list(code_ids),
+                "prev_sort_orders": list(prev_sort_orders),
+            },
+        ))
+
+    def record_delete_folder_cascade(
+        self,
+        folder_id: str,
+        child_ids: list[str],
+        annotation_ids: list[str],
+    ) -> None:
+        self._push(UndoEntry(
+            op="code_delete_folder_cascade",
+            payload={
+                "folder_id": folder_id,
+                "child_ids": list(child_ids),
+                "annotation_ids": list(annotation_ids),
+            },
         ))
 
     def can_undo(self) -> bool:
@@ -283,7 +347,21 @@ def _redo_code_add(conn, entry):
 def _undo_code_delete(conn, entry):
     from ace.models.codebook import restore_code
     affected = entry.payload["affected_annotation_ids"]
-    restore_code(conn, entry.payload["code_id"], affected)
+    children_lifted = entry.payload.get("children_lifted_ids", [])
+    restore_code(conn, entry.payload["code_id"], affected, children_lifted)
+    # Restore the row's prior parent and sort_order so undo puts the code
+    # back where it was, not at root / end-of-list.
+    prev_parent = entry.payload.get("prev_parent_id")
+    prev_sort_order = entry.payload.get("prev_sort_order", 0)
+    try:
+        conn.execute(
+            "UPDATE codebook_code SET parent_id = ?, sort_order = ? WHERE id = ?",
+            (prev_parent, prev_sort_order, entry.payload["code_id"]),
+        )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
     code_name = _code_name(conn, entry.payload["code_id"])
     suffix = f" ({len(affected)} annotations restored)" if affected else ""
     flash_id = affected[0] if affected else None
@@ -293,8 +371,9 @@ def _undo_code_delete(conn, entry):
 def _redo_code_delete(conn, entry):
     from ace.models.codebook import delete_code
     code_name = _code_name(conn, entry.payload["code_id"])
-    # Linear-undo invariant: delete_code's return matches the recorded
-    # affected_annotation_ids, so we don't need it.
+    # delete_code now returns (annotation_ids, children_lifted_ids); we
+    # discard both because the recorded payload matches the linear-undo
+    # state at the time the entry was first pushed.
     delete_code(conn, entry.payload["code_id"])
     return f"deleted '{code_name}'", None
 
@@ -326,18 +405,6 @@ def _redo_code_recolour(conn, entry):
     return f"code '{_code_name(conn, entry.payload['code_id'])}' recoloured", None
 
 
-def _undo_code_change_group(conn, entry):
-    _set_code_field(conn, entry.payload["code_id"], "group_name", entry.payload["prev_group"])
-    name = _code_name(conn, entry.payload["code_id"])
-    return f"moved '{name}' to group '{entry.payload['prev_group'] or 'none'}'", None
-
-
-def _redo_code_change_group(conn, entry):
-    _set_code_field(conn, entry.payload["code_id"], "group_name", entry.payload["new_group"])
-    name = _code_name(conn, entry.payload["code_id"])
-    return f"moved '{name}' to group '{entry.payload['new_group'] or 'none'}'", None
-
-
 def _apply_reorder(conn, ordering: list[tuple[str, int]]) -> None:
     try:
         for code_id, sort_order in ordering:
@@ -359,18 +426,6 @@ def _undo_code_reorder(conn, entry):
 def _redo_code_reorder(conn, entry):
     _apply_reorder(conn, entry.payload["new"])
     return "code order", None
-
-
-def _undo_group_rename(conn, entry):
-    from ace.models.codebook import rename_group
-    rename_group(conn, entry.payload["new_name"] or "", entry.payload["old_name"] or "")
-    return f"renamed group '{entry.payload['new_name']}' back to '{entry.payload['old_name']}'", None
-
-
-def _redo_group_rename(conn, entry):
-    from ace.models.codebook import rename_group
-    rename_group(conn, entry.payload["old_name"] or "", entry.payload["new_name"] or "")
-    return f"renamed group '{entry.payload['old_name']}' to '{entry.payload['new_name']}'", None
 
 
 def _set_flag(conn, source_id: str, coder_id: str, flagged: bool) -> str:
@@ -397,6 +452,9 @@ def _undo_codebook_import(conn, entry):
     from ace.models.codebook import delete_code
     ids = entry.payload["imported_code_ids"]
     for cid in ids:
+        # delete_code returns (annotation_ids, children_lifted_ids); we
+        # discard both since linear-undo guarantees there are no annotations
+        # on a freshly-imported (and not-yet-used) code.
         delete_code(conn, cid)
     n = len(ids)
     return f"imported {n} code{'s' if n != 1 else ''}", None
@@ -411,19 +469,149 @@ def _redo_codebook_import(conn, entry):
     return f"imported {n} code{'s' if n != 1 else ''}", None
 
 
+# ---------------------------------------------------------------------------
+# Folder-tree op handlers (v7).
+# ---------------------------------------------------------------------------
+
+
+def _undo_create_folder(conn, entry):
+    fid = entry.payload["folder_id"]
+    now = datetime.now(timezone.utc).isoformat()
+    conn.execute("UPDATE codebook_code SET deleted_at = ? WHERE id = ?", (now, fid))
+    conn.commit()
+    name = conn.execute("SELECT name FROM codebook_code WHERE id = ?", (fid,)).fetchone()
+    return (f"Removed folder {name[0]!r}" if name else "Removed folder", None)
+
+
+def _redo_create_folder(conn, entry):
+    fid = entry.payload["folder_id"]
+    conn.execute("UPDATE codebook_code SET deleted_at = NULL WHERE id = ?", (fid,))
+    conn.commit()
+    name = conn.execute("SELECT name FROM codebook_code WHERE id = ?", (fid,)).fetchone()
+    return (f"Restored folder {name[0]!r}" if name else "Restored folder", None)
+
+
+def _undo_move_parent(conn, entry):
+    """Restore parent_id AND every sibling's sort_order in both scopes.
+
+    Wrapped in try/rollback per audit finding — multi-statement undos must
+    not leave the DB in a half-applied state if any step fails.
+    """
+    p = entry.payload
+    try:
+        # Restore moved code's parent_id (sort_order is restored via the
+        # source-ordering update below).
+        conn.execute(
+            "UPDATE codebook_code SET parent_id = ? WHERE id = ?",
+            (p["prev_parent_id"], p["code_id"]),
+        )
+        # Restore source-scope ordering (siblings move_code_to_parent renumbered)
+        for cid, sort_order in p["prev_source_ordering"]:
+            conn.execute(
+                "UPDATE codebook_code SET sort_order = ? WHERE id = ?",
+                (sort_order, cid),
+            )
+        # Restore destination-scope ordering (siblings shifted by the inserted code)
+        for cid, sort_order in p["prev_dest_ordering"]:
+            conn.execute(
+                "UPDATE codebook_code SET sort_order = ? WHERE id = ?",
+                (sort_order, cid),
+            )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    return ("Moved code back", None)
+
+
+def _redo_move_parent(conn, entry):
+    from ace.models.codebook import move_code_to_parent
+    p = entry.payload
+    move_code_to_parent(conn, p["code_id"], p["new_parent_id"])
+    return ("Moved code", None)
+
+
+def _undo_indent_promote_to_folder(conn, entry):
+    """Soft-delete the auto-created folder and lift both codes back to root
+    with their original sort_orders. Wrapped in try/rollback."""
+    p = entry.payload
+    now = datetime.now(timezone.utc).isoformat()
+    try:
+        conn.execute(
+            "UPDATE codebook_code SET deleted_at = ? WHERE id = ?",
+            (now, p["folder_id"]),
+        )
+        for cid, prev_sort in zip(p["code_ids"], p["prev_sort_orders"]):
+            conn.execute(
+                "UPDATE codebook_code SET parent_id = NULL, sort_order = ? WHERE id = ?",
+                (prev_sort, cid),
+            )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    return ("Removed new folder", None)
+
+
+def _redo_indent_promote_to_folder(conn, entry):
+    """Re-create the folder grouping in a single transaction.
+
+    Uses `_move_code_to_parent_no_commit` so all writes commit atomically;
+    if any step raises mid-loop we roll back cleanly rather than leaving a
+    partial regrouping behind.
+    """
+    from ace.models.codebook import _move_code_to_parent_no_commit
+    p = entry.payload
+    try:
+        conn.execute(
+            "UPDATE codebook_code SET deleted_at = NULL WHERE id = ?",
+            (p["folder_id"],),
+        )
+        for cid in p["code_ids"]:
+            _move_code_to_parent_no_commit(conn, cid, p["folder_id"])
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    return ("Re-grouped", None)
+
+
+def _undo_delete_folder_cascade(conn, entry):
+    """Restore the folder and re-link children. restore_code handles
+    its own try/rollback internally."""
+    from ace.models.codebook import restore_code
+    p = entry.payload
+    restore_code(
+        conn,
+        code_id=p["folder_id"],
+        annotation_ids=p["annotation_ids"],
+        children_lifted_ids=p["child_ids"],
+    )
+    return ("Restored folder", None)
+
+
+def _redo_delete_folder_cascade(conn, entry):
+    from ace.models.codebook import delete_code
+    p = entry.payload
+    delete_code(conn, p["folder_id"])
+    return ("Deleted folder", None)
+
+
 # Single registry of (undo, redo) handler pairs, keyed by op type. Adding a
 # new op is one entry here plus one record_* method on UndoManager.
 _HANDLERS: dict[OpType, tuple[Handler, Handler]] = {
-    "annotation_add":       (_undo_annotation_add,        _redo_annotation_add),
-    "annotation_delete":    (_undo_annotation_delete,     _redo_annotation_delete),
-    "annotation_merge_add": (_undo_annotation_merge_add,  _redo_annotation_merge_add),
-    "code_add":             (_undo_code_add,              _redo_code_add),
-    "code_delete":          (_undo_code_delete,           _redo_code_delete),
-    "code_rename":          (_undo_code_rename,           _redo_code_rename),
-    "code_recolour":        (_undo_code_recolour,         _redo_code_recolour),
-    "code_change_group":    (_undo_code_change_group,     _redo_code_change_group),
-    "code_reorder":         (_undo_code_reorder,          _redo_code_reorder),
-    "group_rename":         (_undo_group_rename,          _redo_group_rename),
-    "flag_toggle":          (_undo_flag_toggle,           _redo_flag_toggle),
-    "codebook_import":      (_undo_codebook_import,       _redo_codebook_import),
+    "annotation_add":                (_undo_annotation_add,              _redo_annotation_add),
+    "annotation_delete":             (_undo_annotation_delete,           _redo_annotation_delete),
+    "annotation_merge_add":          (_undo_annotation_merge_add,        _redo_annotation_merge_add),
+    "code_add":                      (_undo_code_add,                    _redo_code_add),
+    "code_delete":                   (_undo_code_delete,                 _redo_code_delete),
+    "code_rename":                   (_undo_code_rename,                 _redo_code_rename),
+    "code_recolour":                 (_undo_code_recolour,               _redo_code_recolour),
+    "code_reorder":                  (_undo_code_reorder,                _redo_code_reorder),
+    "flag_toggle":                   (_undo_flag_toggle,                 _redo_flag_toggle),
+    "codebook_import":               (_undo_codebook_import,             _redo_codebook_import),
+    "code_create_folder":            (_undo_create_folder,               _redo_create_folder),
+    "code_move_parent":              (_undo_move_parent,                 _redo_move_parent),
+    "code_indent_promote_to_folder": (_undo_indent_promote_to_folder,    _redo_indent_promote_to_folder),
+    "code_delete_folder_cascade":    (_undo_delete_folder_cascade,       _redo_delete_folder_cascade),
 }
