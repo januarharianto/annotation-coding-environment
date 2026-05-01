@@ -132,6 +132,10 @@ body {
   color: #2f6b3f;
 }
 
+.ace-statusbar-event--ok-sticky {
+  color: #2f6b3f;
+}
+
 .ace-statusbar-event--err {
   color: #a8332e;
 }

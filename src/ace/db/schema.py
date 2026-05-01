@@ -3,7 +3,7 @@
 import sqlite3
 
 ACE_APPLICATION_ID = 0x41434500  # "ACE\0"
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 
 _SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS project (
@@ -40,10 +40,12 @@ CREATE TABLE IF NOT EXISTS codebook_code (
     name        TEXT NOT NULL,
     colour      TEXT NOT NULL,
     sort_order  INTEGER NOT NULL,
-    group_name  TEXT,
+    kind        TEXT NOT NULL DEFAULT 'code' CHECK (kind IN ('code', 'folder')),
+    parent_id   TEXT REFERENCES codebook_code(id) ON DELETE SET NULL,
     chord       TEXT,
     created_at  TEXT NOT NULL,
-    deleted_at  TEXT
+    deleted_at  TEXT,
+    CHECK ((kind = 'code') OR (parent_id IS NULL AND colour = '' AND chord IS NULL))
 );
 
 CREATE TABLE IF NOT EXISTS coder (
@@ -99,7 +101,7 @@ CREATE INDEX IF NOT EXISTS idx_assignment_source
     ON assignment(source_id);
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_codebook_code_name_active
-    ON codebook_code(name) WHERE deleted_at IS NULL;
+    ON codebook_code(name COLLATE NOCASE, kind) WHERE deleted_at IS NULL;
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_codebook_chord
     ON codebook_code(chord) WHERE chord IS NOT NULL AND deleted_at IS NULL;

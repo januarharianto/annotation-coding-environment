@@ -62,8 +62,8 @@ def test_backfill_assigns_chord_to_unchorded_tail(tmp_path):
         for i in range(35):
             cid = f"code-{i:02d}"
             conn.execute(
-                "INSERT INTO codebook_code (id, name, colour, sort_order, group_name, chord, created_at) "
-                "VALUES (?, ?, ?, ?, NULL, NULL, ?)",
+                "INSERT INTO codebook_code (id, name, colour, sort_order, kind, parent_id, chord, created_at) "
+                "VALUES (?, ?, ?, ?, 'code', NULL, NULL, ?)",
                 (cid, f"Code {i:02d}", "#A91818", i + 1, now),
             )
         conn.commit()
@@ -158,21 +158,21 @@ def test_backfill_preserves_existing_chords_in_mixed_state(tmp_path):
         # 31 fillers + 3 chord-tail codes
         for i in range(SINGLE_KEY_LIMIT):
             conn.execute(
-                "INSERT INTO codebook_code (id, name, colour, sort_order, group_name, chord, created_at) "
-                "VALUES (?, ?, ?, ?, NULL, NULL, ?)",
+                "INSERT INTO codebook_code (id, name, colour, sort_order, kind, parent_id, chord, created_at) "
+                "VALUES (?, ?, ?, ?, 'code', NULL, NULL, ?)",
                 (f"f-{i:02d}", f"Filler {i:02d}", "#A91818", i + 1, now),
             )
         # Code 32: already chorded (e.g. user manually set "xy")
         conn.execute(
-            "INSERT INTO codebook_code (id, name, colour, sort_order, group_name, chord, created_at) "
-            "VALUES (?, ?, ?, ?, NULL, ?, ?)",
+            "INSERT INTO codebook_code (id, name, colour, sort_order, kind, parent_id, chord, created_at) "
+            "VALUES (?, ?, ?, ?, 'code', NULL, ?, ?)",
             ("c-32", "Privacy of data", "#A91818", 32, "xy", now),
         )
         # Code 33, 34: NULL chord, awaiting backfill
         for i, name in [(33, "AI replacing humans"), (34, "Repetitive feedback")]:
             conn.execute(
-                "INSERT INTO codebook_code (id, name, colour, sort_order, group_name, chord, created_at) "
-                "VALUES (?, ?, ?, ?, NULL, NULL, ?)",
+                "INSERT INTO codebook_code (id, name, colour, sort_order, kind, parent_id, chord, created_at) "
+                "VALUES (?, ?, ?, ?, 'code', NULL, NULL, ?)",
                 (f"c-{i:02d}", name, "#A91818", i, now),
             )
         conn.commit()
@@ -207,8 +207,8 @@ def test_backfill_handles_zero_indexed_sort_order(tmp_path):
         # Insert 33 codes with 0-indexed sort_orders (0..32). Mimics legacy SWA project.
         for i in range(33):
             conn.execute(
-                "INSERT INTO codebook_code (id, name, colour, sort_order, group_name, chord, created_at) "
-                "VALUES (?, ?, ?, ?, NULL, NULL, ?)",
+                "INSERT INTO codebook_code (id, name, colour, sort_order, kind, parent_id, chord, created_at) "
+                "VALUES (?, ?, ?, ?, 'code', NULL, NULL, ?)",
                 (f"z-{i:02d}", f"Code {i:02d}", "#A91818", i, now),
             )
         conn.commit()

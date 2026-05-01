@@ -35,6 +35,47 @@
   }
 
   /* ================================================================
+   * 1b. Active-zone tracking — flips body[data-active-zone] between
+   *     "source" (text panel + scroll wrapper) and "codebook" (sidebar).
+   *     Used by CSS (e.g. dim highlights when codebook is active) and by
+   *     the Esc-to-source handler. Installed early so it runs on /code,
+   *     /code/{id}/view, and any other page sharing bridge.js.
+   * ================================================================ */
+
+  function _setActiveZone(zone) {
+    if (document.body.dataset.activeZone === zone) return;
+    document.body.dataset.activeZone = zone;
+  }
+
+  document.addEventListener("focusin", function (e) {
+    const t = e.target;
+    if (!t || !t.closest) return;
+    if (t.closest("#code-sidebar")) {
+      _setActiveZone("codebook");
+      // First-ever focus into the codebook — show the Tab hint once per
+      // browser. Persists in localStorage so power users don't see it again.
+      // Skipped on /code/{id}/view (audit page) where the hint is moot.
+      if (!localStorage.getItem("ace-tab-hint-seen")
+          && document.getElementById("text-panel")
+          && typeof window._setStatus === "function") {
+        window._setStatus(
+          "Tab moves between panels · ⌥→ to move into a folder",
+          "ok",
+        );
+        localStorage.setItem("ace-tab-hint-seen", "1");
+      }
+    } else if (t.closest("#text-panel, #content-scroll")) {
+      _setActiveZone("source");
+    }
+    // Other targets (body, dialogs, statusbar) — leave the current zone.
+  });
+
+  // Default zone on first paint. bridge.js loads at end of <body>, so the
+  // DOM is parsed and we can read body. The focusin listener will flip it
+  // as soon as the user clicks/Tabs into a zone.
+  _setActiveZone("source");
+
+  /* ================================================================
    * 2. Sentence navigation
    * ================================================================ */
 
@@ -70,62 +111,67 @@
   }
 
   /* ================================================================
-   * 3. Group collapse / expand
+   * 3. Folder collapse / expand
+   *
+   * Folders are <div class="ace-code-folder-row" aria-expanded="…"
+   * data-folder-id="…"> rows. The sibling <div role="group"
+   * data-folder-children="…"> child container is hidden by CSS when
+   * aria-expanded="false" (see coding.css). Toggling collapse is just
+   * flipping the attribute on the folder row.
+   *
+   * Collapse state is per-tab in-memory (folder id → bool). We default
+   * to expanded on first paint; explicit collapse persists across
+   * sidebar OOB swaps within the session.
    * ================================================================ */
 
-  const _collapsedGroups = {};
+  const _collapsedFolders = {};
 
-  function _toggleGroupCollapse(header) {
-    if (!header) return;
-    const expanded = header.getAttribute("aria-expanded") === "true";
+  function _toggleFolderCollapse(folderRow) {
+    if (!folderRow) return;
+    const expanded = folderRow.getAttribute("aria-expanded") === "true";
     if (expanded) {
-      _collapseGroup(header);
+      _collapseFolder(folderRow);
     } else {
-      _expandGroup(header);
+      _expandFolder(folderRow);
     }
   }
 
   function _restoreCollapseState() {
-    const headers = document.querySelectorAll(".ace-code-group-header");
-    headers.forEach(function (header) {
-      let groupName = header.getAttribute("data-group");
-      if (_collapsedGroups[groupName]) {
-        _collapseGroup(header);
+    const rows = document.querySelectorAll(".ace-code-folder-row");
+    rows.forEach(function (row) {
+      const folderId = row.getAttribute("data-folder-id");
+      if (folderId && _collapsedFolders[folderId]) {
+        _collapseFolder(row);
       }
     });
   }
 
-  // Click handler for group headers — toggle only on the triangle
+  // Click handler for folder rows — toggle on the chevron, focus on label.
   document.addEventListener("click", function (e) {
-    const toggle = e.target.closest(".ace-group-toggle");
+    const toggle = e.target.closest(".ace-folder-toggle");
     if (toggle) {
-      const header = toggle.closest(".ace-code-group-header");
-      if (header) {
-        _focusTreeItem(header);
-        _toggleGroupCollapse(header);
-        const groupName = header.getAttribute("data-group") || "Ungrouped";
-        const expanded = header.getAttribute("aria-expanded") === "true";
-        _announce(`Group ${groupName}${expanded ? " expanded" : " collapsed"}`);
+      const row = toggle.closest(".ace-code-folder-row");
+      if (row) {
+        _focusTreeItem(row);
+        _toggleFolderCollapse(row);
+        const labelEl = row.querySelector(".ace-folder-label");
+        const name = labelEl ? labelEl.textContent.trim() : "folder";
+        const expanded = row.getAttribute("aria-expanded") === "true";
+        _announce(`${name}${expanded ? " expanded" : " collapsed"}`);
       }
       return;
     }
-    // Click on the label or header (not toggle) — just focus
-    const header = e.target.closest(".ace-code-group-header");
-    if (header && !e.target.closest(".ace-code-menu")) {
-      _focusTreeItem(header);
+    // Click on the label or row (not chevron) — just focus the row
+    const row = e.target.closest(".ace-code-folder-row");
+    if (row && !e.target.closest(".ace-code-menu")) {
+      _focusTreeItem(row);
     }
   });
 
-  // Double-click on group label — inline rename
-  document.addEventListener("dblclick", function (e) {
-    const label = e.target.closest(".ace-group-label");
-    if (!label) return;
-    const header = label.closest(".ace-code-group-header");
-    if (!header) return;
-    const groupName = header.getAttribute("data-group");
-    if (groupName === "") return; // Can't rename "Ungrouped"
-    _startGroupRename(header);
-  });
+  // Folder rename: F2 on a focused folder row enters inline edit on the
+  // .ace-folder-label (handled in the tree keydown listener). Legacy
+  // double-click-to-rename was deleted with the /api/codes/rename-group
+  // endpoint; folders share the PUT /api/codes/{id} route with codes.
 
   // Sidebar: ? help button (delegated — survives OOB swaps)
   document.addEventListener("click", function (e) {
@@ -644,10 +690,17 @@
       _shortcutRow("Ctrl/⌘ + Shift + Z", "Redo") +
       _shortcutRow("Shift + F", "Flag/unflag source") +
       _shortcutRow("N", "Open / close note panel") +
-      _shortcutRow("F2", "Rename code (in sidebar)") +
-      _shortcutRow("Delete", "Delete code (in sidebar; Z to undo)") +
+      _shortcutRow("Tab", "Cycle source → search → tree → source") +
+      _shortcutRow("⌥ + →", "Move code into the folder above") +
+      _shortcutRow("⌥ + ⇧ + →", "Wrap two root codes into a new folder") +
+      _shortcutRow("⌥ + ←", "Move code out of folder, back to root") +
+      _shortcutRow("⌘/Ctrl + X", "Cut focused code") +
+      _shortcutRow("⌘/Ctrl + V", "Paste cut code into focused folder/row") +
+      _shortcutRow("Shift + Enter (in filter)", "Create new folder at root") +
+      _shortcutRow("F2", "Rename code or folder (in sidebar)") +
+      _shortcutRow("Delete / ⌫", "Delete code or folder (in sidebar; Z to undo)") +
       _shortcutRow("?", "Toggle this cheat sheet") +
-      _shortcutRow("Esc", "Close overlay / clear") +
+      _shortcutRow("Esc", "Codebook → source · cancel cut · clear filter") +
       "</table>";
 
     overlay.appendChild(card);
@@ -1287,7 +1340,7 @@
 
   const _sidebarFocusState = {
     codeId: null,
-    groupName: null,
+    folderId: null,
     searchText: "",
     scrollTop: 0,
     zone: null,
@@ -1304,7 +1357,7 @@
     if (zone === "tree") {
       const active = _getActiveTreeItem();
       _sidebarFocusState.codeId = active ? active.getAttribute("data-code-id") : null;
-      _sidebarFocusState.groupName = active ? active.getAttribute("data-group") : null;
+      _sidebarFocusState.folderId = active ? active.getAttribute("data-folder-id") : null;
     }
 
     let search = document.getElementById("code-search-input");
@@ -1370,6 +1423,17 @@
       // sidebar-primary swap.
       if (document.getElementById("code-tree")) {
         _syncSidebarAfterSwap({ sortable: true, gridResize: true });
+        // Re-apply ghost class if a cut is staged and the row still exists.
+        // If the row vanished (deleted by another action), clear the cut state.
+        if (_cutCode) {
+          const r = document.querySelector(`.ace-code-row[data-code-id="${_cutCode}"]`);
+          if (r) {
+            r.classList.add("ace-code-row--ghost");
+          } else {
+            _setCut(null);
+            window._setStatus("Cut cleared (code removed)", "ok");
+          }
+        }
       }
       _rerenderSourceGridIfPresent();
 
@@ -1387,6 +1451,17 @@
 
     if (target.id === "code-sidebar" || target.id === "coding-workspace") {
       _syncSidebarAfterSwap({ sortable: true, gridResize: true });
+      // Re-apply ghost class if a cut is staged and the row still exists.
+      // If the row vanished (deleted by another action), clear the cut state.
+      if (_cutCode) {
+        const r = document.querySelector(`.ace-code-row[data-code-id="${_cutCode}"]`);
+        if (r) {
+          r.classList.add("ace-code-row--ghost");
+        } else {
+          _setCut(null);
+          window._setStatus("Cut cleared (code removed)", "ok");
+        }
+      }
       _rerenderSourceGridIfPresent();
 
       // Restore focus state
@@ -1403,8 +1478,8 @@
         let item = null;
         if (_sidebarFocusState.codeId && tree) {
           item = tree.querySelector(`[data-code-id="${_sidebarFocusState.codeId}"]`);
-        } else if (_sidebarFocusState.groupName !== null && tree) {
-          item = tree.querySelector(`.ace-code-group-header[data-group="${_sidebarFocusState.groupName}"]`);
+        } else if (_sidebarFocusState.folderId && tree) {
+          item = tree.querySelector(`.ace-code-folder-row[data-folder-id="${_sidebarFocusState.folderId}"]`);
         }
         if (item) {
           _focusTreeItem(item);
@@ -1418,7 +1493,7 @@
 
       // Reset sidebar state
       _sidebarFocusState.codeId = null;
-      _sidebarFocusState.groupName = null;
+      _sidebarFocusState.folderId = null;
       _sidebarFocusState.searchText = "";
       _sidebarFocusState.zone = null;
     }
@@ -1443,6 +1518,12 @@
 
   // ace-navigate event from HX-Trigger header
   document.addEventListener("ace-navigate", function (e) {
+    // Spec §3.5.3 — cut state is per-source. When the user navigates
+    // between sources (Shift+←/→ etc.) the pending cut is dropped so
+    // a stale ⌘V on a different source can't move the wrong code.
+    if (typeof _setCut === "function") {
+      _setCut(null);
+    }
     const detail = e.detail || {};
     if (detail.index !== undefined) {
       window.__aceCurrentIndex = parseInt(detail.index, 10);
@@ -1470,6 +1551,24 @@
 
   let _menuOpen = false;
   let _lastSelectedCodeId = null;
+
+  // Cut/paste state for the codebook sidebar (⌘X / ⌘V).
+  // `_cutCode` holds the id of the code currently flagged for paste; the
+  // matching row carries `.ace-code-row--ghost` so the user sees what's cut.
+  // Cleared on paste, on Esc, or when a sibling write swaps the sidebar.
+  let _cutCode = null;
+
+  function _setCut(codeId) {
+    if (_cutCode) {
+      const old = document.querySelector(`.ace-code-row[data-code-id="${_cutCode}"]`);
+      if (old) old.classList.remove("ace-code-row--ghost");
+    }
+    _cutCode = codeId;
+    if (codeId) {
+      const row = document.querySelector(`.ace-code-row[data-code-id="${codeId}"]`);
+      if (row) row.classList.add("ace-code-row--ghost");
+    }
+  }
 
   const _COLOUR_PALETTE = ["#A91818","#557FE6","#6DA918","#E655D4","#18A991","#E6A455","#3C18A9","#5BE655","#A91848","#55B0E6","#9DA918","#C855E6","#18A960","#E67355","#1824A9","#8CE655","#A91879","#55E1E6","#A98418","#9755E6","#18A930","#E65567","#1855A9","#BCE655","#A918A9","#55E6BB","#A95418","#6755E6","#30A918","#E65598","#1885A9","#E6E055","#7818A9","#55E68B","#A92318","#5574E6"];
 
@@ -1525,14 +1624,9 @@
     if (e.key === "Escape") _closeColourPopover();
   }
 
-  document.addEventListener("contextmenu", function (e) {
-    let row = e.target.closest(".ace-code-row");
-    if (!row) return;
-    e.preventDefault();
-    e.stopPropagation();
-    let codeId = row.getAttribute("data-code-id");
-    if (codeId) _openColourPopover(codeId);
-  });
+  // Right-click contextmenu wiring lives in section 14 below
+  // (`_renderContextMenu` dispatcher). The colour popover is reachable from
+  // the new menu via "Change colour…".
 
   function _closeAllPopovers() {
     _closeCodeMenu();
@@ -1560,11 +1654,25 @@
     });
   }
 
-  function _startInlineRename(codeId) {
-    let row = document.querySelector(`.ace-code-row[data-code-id="${codeId}"]`);
+  function _startInlineRename(elementOrId, opts) {
+    opts = opts || {};
+    const isFolder = !!opts.isFolder;
+    let row;
+    if (typeof elementOrId === "string") {
+      // String → code id. Folder rename always passes the row element.
+      row = document.querySelector(`.ace-code-row[data-code-id="${elementOrId}"]`);
+    } else {
+      row = elementOrId;
+    }
     if (!row) return;
-    const nameEl = row.querySelector(".ace-code-name");
+    const nameEl = isFolder
+      ? row.querySelector(".ace-folder-label")
+      : row.querySelector(".ace-code-name");
     if (!nameEl) return;
+    const targetId = isFolder
+      ? row.getAttribute("data-folder-id")
+      : row.getAttribute("data-code-id");
+    if (!targetId) return;
 
     const original = nameEl.textContent;
     nameEl.contentEditable = "true";
@@ -1587,7 +1695,7 @@
         _focusTreeItem(row);
         return;
       }
-      _codeAction("PUT", `/api/codes/${codeId}`,
+      _codeAction("PUT", `/api/codes/${targetId}`,
         `name=${encodeURIComponent(newName)}&current_index=${window.__aceCurrentIndex}`
       ).catch(function () { nameEl.textContent = original; });
       _focusTreeItem(row);
@@ -1610,54 +1718,10 @@
     });
   }
 
-  function _startGroupRename(header) {
-    const label = header.querySelector(".ace-group-label");
-    if (!label) return;
-    const original = label.textContent;
-    const oldGroup = header.getAttribute("data-group");
-
-    label.contentEditable = "true";
-    label.focus();
-
-    const range = document.createRange();
-    range.selectNodeContents(label);
-    const sel = window.getSelection();
-    sel.removeAllRanges();
-    sel.addRange(range);
-
-    let done = false;
-    function save() {
-      if (done) return;
-      done = true;
-      const newName = label.textContent.trim();
-      label.contentEditable = "false";
-      if (!newName || newName === original) {
-        label.textContent = original;
-        _focusTreeItem(header);
-        return;
-      }
-      _codeAction("PUT", "/api/codes/rename-group",
-        `old_name=${encodeURIComponent(oldGroup)}&new_name=${encodeURIComponent(newName)}&current_index=${window.__aceCurrentIndex}`
-      ).catch(function () { label.textContent = original; });
-      _focusTreeItem(header);
-    }
-
-    label.addEventListener("keydown", function handler(e) {
-      if (e.key === "Enter") { e.preventDefault(); label.removeEventListener("keydown", handler); save(); }
-      if (e.key === "Escape") { e.preventDefault(); label.removeEventListener("keydown", handler); done = true; label.textContent = original; label.contentEditable = "false"; _focusTreeItem(header); }
-    });
-
-    label.addEventListener("blur", function blurHandler() {
-      label.removeEventListener("blur", blurHandler);
-      setTimeout(function () { save(); }, 50);
-    });
-
-    label.addEventListener("paste", function pasteHandler(e) {
-      e.preventDefault();
-      const text = (e.clipboardData || window.clipboardData).getData("text/plain");
-      document.execCommand("insertText", false, text.replace(/\n/g, " "));
-    });
-  }
+  // _startGroupRename was removed: the underlying PUT /api/codes/rename-group
+  // route was deleted with the v7 migration (commit 769e51d). Folder rename
+  // will be re-introduced in Task 9 against PUT /api/codes/{id} (folders share
+  // the same `name` column as codes; `kind='folder'` is preserved).
 
   function _beginChordEdit(codeId) {
     const row = document.querySelector(`.ace-code-row[data-code-id="${codeId}"]`);
@@ -1773,10 +1837,9 @@
       `code_ids=${encodeURIComponent(JSON.stringify(ids))}&current_index=${window.__aceCurrentIndex}`);
   }
 
-  function _moveToGroup(codeId, groupName) {
-    _codeAction("PUT", `/api/codes/${codeId}`,
-      `group_name=${encodeURIComponent(groupName)}&current_index=${window.__aceCurrentIndex}`);
-  }
+  // _moveToGroup was removed: PUT /api/codes/{id} no longer accepts
+  // `group_name` (v7 dropped that column in favour of parent_id). Code/folder
+  // re-parenting will be wired in Task 9 against PUT /api/codes/{id}/parent.
 
   let _sortableInstances = [];
   let _isDragging = false;
@@ -1790,84 +1853,102 @@
     // sidebar partial is shared but drag-to-reorder isn't wired — bail quietly.
     if (typeof Sortable === "undefined") return;
 
-    _sortableInstances.forEach(function (s) { s.destroy(); });
+    // Destroy any prior instances bound to detached DOM. Without this, OOB
+    // swaps accumulate Sortable bindings and onEnd fires multiple times per
+    // drop — every swap that re-renders the sidebar would otherwise leave
+    // stale instances pointing at orphaned nodes.
+    _sortableInstances.forEach(function (s) {
+      try { s.destroy(); } catch (_) {}
+    });
     _sortableInstances = [];
 
-    const containers = document.querySelectorAll('#code-tree [role="group"]');
+    // Wire every container that can hold code rows: each folder's children
+    // group (`<div role="group" data-folder-children="…">`) plus the root
+    // tree itself (`#code-tree`, no `data-folder-children` attribute → empty
+    // string scope below). Folder rows inside #code-tree are filtered out so
+    // they can't be dragged via this Sortable — folder reordering is a
+    // separate gesture (not in scope here).
+    const containers = document.querySelectorAll(
+      '#code-tree [role="group"], #code-tree'
+    );
     containers.forEach(function (container) {
       const instance = new Sortable(container, {
         group: "codes",
+        handle: ".ace-code-row",
         animation: 150,
         delay: 200,
         delayOnTouchOnly: true,
         draggable: ".ace-code-row",
+        filter: ".ace-code-folder-row",
         ghostClass: "ace-code-row--ghost",
         onStart: function () { _isDragging = true; },
         onEnd: function (evt) {
           _isDragging = false;
-          let codeId = evt.item.getAttribute("data-code-id");
-          const newHeader = evt.to.previousElementSibling;
-          const newGroup = newHeader ? (newHeader.getAttribute("data-group") || "") : "";
-          const oldHeader = evt.from.previousElementSibling;
-          const oldGroup = oldHeader ? (oldHeader.getAttribute("data-group") || "") : "";
+          const codeId = evt.item.getAttribute("data-code-id");
+          if (!codeId) return;
 
-          if (newGroup !== oldGroup && codeId) {
-            fetch(`/api/codes/${codeId}`, {
-              method: "PUT",
-              headers: { "Content-Type": "application/x-www-form-urlencoded" },
-              body: `group_name=${encodeURIComponent(newGroup)}&current_index=${window.__aceCurrentIndex}`,
+          const newContainer = evt.to;
+          const newParentId = newContainer.getAttribute("data-folder-children") || "";
+          const oldContainer = evt.from;
+          const oldParentId = oldContainer.getAttribute("data-folder-children") || "";
+
+          if (newParentId === oldParentId) {
+            // Same-scope reorder. The new endpoint returns the unified
+            // text-panel + OOB sidebar shape so count chips stay consistent.
+            // Direct children only — when the container is `#code-tree` (root
+            // scope), descendants include folder children whose ids don't
+            // belong to the root scope. The server filters defensively, but
+            // sending only direct children keeps positions correct.
+            const ids = Array.from(newContainer.children)
+              .filter(function (el) { return el.classList && el.classList.contains("ace-code-row"); })
+              .map(function (el) { return el.getAttribute("data-code-id"); })
+              .filter(Boolean);
+            htmx.ajax("POST", "/api/codes/reorder-in-scope", {
+              target: "#text-panel",
+              swap: "outerHTML",
+              values: {
+                code_ids: JSON.stringify(ids),
+                parent_id: newParentId,
+                current_index: window.__aceCurrentIndex,
+              },
+            });
+          } else {
+            // Cross-scope move — defer ordering to /parent which renumbers
+            // siblings in the destination scope. Same response shape.
+            htmx.ajax("PUT", "/api/codes/" + codeId + "/parent", {
+              target: "#text-panel",
+              swap: "outerHTML",
+              values: {
+                parent_id: newParentId,
+                current_index: window.__aceCurrentIndex,
+              },
             });
           }
-
-          _persistCodeOrder();
         },
       });
       _sortableInstances.push(instance);
     });
-
-    // Group-level Sortable: drag group headers to reorder entire groups
-    const tree = document.getElementById("code-tree");
-    if (tree) {
-      const groupSortable = new Sortable(tree, {
-        animation: 150,
-        delay: 200,
-        delayOnTouchOnly: true,
-        draggable: ".ace-code-group-header",
-        ghostClass: "ace-code-row--ghost",
-        filter: '[role="group"], .ace-code-row, .ace-sidebar-empty, .ace-create-prompt',
-        onStart: function (evt) {
-          _isDragging = true;
-          // Stash the associated group div so we can move it in onEnd
-          const groupDiv = evt.item.nextElementSibling;
-          if (groupDiv && groupDiv.getAttribute("role") === "group") {
-            evt.item._groupDiv = groupDiv;
-            groupDiv.style.display = "none"; // hide during drag to avoid visual clutter
-          }
-        },
-        onEnd: function (evt) {
-          _isDragging = false;
-          const header = evt.item;
-          const groupDiv = header._groupDiv;
-          delete header._groupDiv;
-
-          // Move the group div to follow the header in its new position
-          if (groupDiv) {
-            groupDiv.style.display = "";
-            header.parentNode.insertBefore(groupDiv, header.nextSibling);
-          }
-
-          // Persist the new code order (group positions changed)
-          _persistCodeOrder();
-
-          _updateKeycaps();
-        },
-      });
-      _sortableInstances.push(groupSortable);
-    }
   }
 
   /* ================================================================
-   * 14. Code menu dropdown (right-click context menu)
+   * 14. Right-click context menu (Task 12)
+   * ----------------------------------------------------------------
+   * Mouse-discovery surface for the keyboard codebook gestures. Three
+   * menu shapes:
+   *   - code row: Move to folder \u25b8, Move to root, Cut, Paste here,
+   *     Rename, Change colour\u2026, View coded text, Delete
+   *   - folder row: Rename, Paste here, Delete folder
+   *   - empty area of #code-tree: New folder, Paste here
+   *
+   * Submenus (Move to folder \u25b8) render in-place: clicking the parent
+   * item REPLACES the menu's contents with the submenu items, prefixed
+   * by a "\u2190 Back" item that returns to the parent menu. No hover-open,
+   * no nested floating panel \u2014 keeps positioning logic trivial.
+   *
+   * Each menu item delegates to existing helpers (`_startInlineRename`,
+   * `_setCut`, `_openColourPopover`, `_executeDelete`, etc.) so behaviour
+   * matches the keyboard gestures exactly: same API endpoints, same
+   * undo entries.
    * ================================================================ */
 
   let _activeCodeMenu = null;
@@ -1879,109 +1960,10 @@
       _menuOpen = false;
     }
     document.removeEventListener("click", _onMenuOutsideClick);
-    document.removeEventListener("keydown", _onMenuEscape);
-  }
-
-  function _openCodeMenu(x, y, codeId) {
-    _closeAllPopovers();
-    _lastSelectedCodeId = codeId;
-    _menuOpen = true;
-
-    const menu = document.createElement("div");
-    menu.className = "ace-code-menu";
-
-    const targetRow = document.querySelector(`.ace-code-row[data-code-id="${codeId}"]`);
-    const hasChord = targetRow && targetRow.dataset.chord;
-
-    const items = [
-      { label: "Rename", hint: "F2", action: function () { _closeCodeMenu(); _startInlineRename(codeId); } },
-      { label: "Colour", hint: "", action: function () { _closeCodeMenu(); _openColourPopover(codeId); } },
-      { label: "View coded text", hint: "V", action: function () {
-          _closeCodeMenu();
-          window.location.href = `/code/${codeId}/view`;
-        }
-      },
-      { label: "Move Up", hint: "Alt+Shift+\u2191", action: function () { _closeCodeMenu(); _moveCode(codeId, -1); } },
-      { label: "Move Down", hint: "Alt+Shift+\u2193", action: function () { _closeCodeMenu(); _moveCode(codeId, 1); } },
-      { label: "Delete", hint: "\u232b", danger: true, action: function () { _closeCodeMenu(); _executeDelete(codeId); } },
-    ];
-
-    if (hasChord) {
-      items.push({ label: "Set chord\u2026", hint: "", action: function () { _closeCodeMenu(); _beginChordEdit(codeId); } });
-    }
-
-    // Add "Move to Group" submenu
-    const groups = _getGroupNames();
-    const moveItem = document.createElement("div");
-    moveItem.className = "ace-code-menu-item ace-code-menu-sub";
-    moveItem.textContent = "Move to Group \u25b8";
-    const moveHint = document.createElement("span");
-    moveHint.className = "ace-code-menu-hint";
-    moveHint.textContent = "Alt+\u2192";
-    moveItem.appendChild(moveHint);
-    const sub = document.createElement("div");
-    sub.className = "ace-code-submenu";
-
-    const ungrouped = document.createElement("button");
-    ungrouped.className = "ace-code-menu-item";
-    ungrouped.textContent = "Ungrouped";
-    ungrouped.addEventListener("click", function () { _closeCodeMenu(); _moveToGroup(codeId, ""); });
-    sub.appendChild(ungrouped);
-
-    groups.forEach(function (gn) {
-      const btn = document.createElement("button");
-      btn.className = "ace-code-menu-item";
-      btn.textContent = gn;
-      btn.addEventListener("click", function () { _closeCodeMenu(); _moveToGroup(codeId, gn); });
-      sub.appendChild(btn);
-    });
-
-    // "New Group..." option
-    const sep = document.createElement("div");
-    sep.className = "ace-code-menu-sep";
-    sub.appendChild(sep);
-    const newGroupBtn = document.createElement("button");
-    newGroupBtn.className = "ace-code-menu-item";
-    newGroupBtn.textContent = "New Group\u2026";
-    newGroupBtn.addEventListener("click", function () {
-      _closeCodeMenu();
-      let name = prompt("Group name:");
-      if (!name || !name.trim()) return;
-      _moveToGroup(codeId, name.trim());
-    });
-    sub.appendChild(newGroupBtn);
-
-    moveItem.appendChild(sub);
-    // Insert after Colour, before Move Up
-    items.splice(2, 0, { element: moveItem });
-
-    items.forEach(function (item) {
-      if (item.element) { menu.appendChild(item.element); return; }
-      let el = document.createElement("button");
-      el.className = "ace-code-menu-item";
-      if (item.danger) el.classList.add("ace-code-menu-item--danger");
-      el.textContent = item.label;
-      if (item.hint) {
-        const hintEl = document.createElement("span");
-        hintEl.className = "ace-code-menu-hint";
-        hintEl.textContent = item.hint;
-        el.appendChild(hintEl);
-      }
-      el.addEventListener("click", item.action);
-      menu.appendChild(el);
-    });
-
-    document.body.appendChild(menu);
-    _activeCodeMenu = menu;
-
-    const mw = menu.offsetWidth, mh = menu.offsetHeight;
-    menu.style.top = `${y + mh > window.innerHeight ? Math.max(0, y - mh) : y}px`;
-    menu.style.left = `${x + mw > window.innerWidth ? Math.max(0, x - mw) : x}px`;
-
-    setTimeout(function () {
-      document.addEventListener("click", _onMenuOutsideClick);
-      document.addEventListener("keydown", _onMenuEscape);
-    }, 0);
+    // Capture flag MUST match the addEventListener call below (line ~2230)
+    // — without it, removeEventListener silently does nothing and we leak one
+    // listener per menu open.
+    document.removeEventListener("keydown", _onMenuEscape, true);
   }
 
   function _onMenuOutsideClick(e) {
@@ -1989,25 +1971,313 @@
   }
 
   function _onMenuEscape(e) {
-    if (e.key === "Escape") _closeCodeMenu();
+    if (e.key === "Escape") {
+      e.stopPropagation();
+      e.preventDefault();
+      _closeCodeMenu();
+    }
   }
 
-  function _getGroupNames() {
-    const result = [];
-    document.querySelectorAll("#code-tree .ace-code-group-header[data-group]").forEach(function (h) {
-      let name = h.getAttribute("data-group");
-      if (name) result.push(name);
+  // --- Helpers for menu actions (Task 12) ---
+
+  /** Move a code into the named folder via PUT /api/codes/{id}/parent. */
+  function _moveCodeToFolder(codeId, folderId) {
+    if (!codeId || !folderId) return;
+    htmx.ajax("PUT", `/api/codes/${codeId}/parent`, {
+      target: "#text-panel",
+      swap: "outerHTML",
+      values: { parent_id: folderId, current_index: window.__aceCurrentIndex || 0 },
     });
-    return result;
   }
 
-  // Right-click context menu delegation
+  /** Move a code back to root (empty parent_id). */
+  function _moveCodeToRoot(codeId) {
+    if (!codeId) return;
+    htmx.ajax("PUT", `/api/codes/${codeId}/parent`, {
+      target: "#text-panel",
+      swap: "outerHTML",
+      values: { parent_id: "", current_index: window.__aceCurrentIndex || 0 },
+    });
+  }
+
+  /** Paste the cut code onto a code row (target_id is a code id). */
+  function _pasteCodeInto(targetId) {
+    if (!_cutCode || !targetId || targetId === _cutCode) return;
+    const cutId = _cutCode;
+    htmx.ajax("POST", "/api/codes/cut-paste", {
+      target: "#text-panel",
+      swap: "outerHTML",
+      values: {
+        code_id: cutId,
+        target_id: targetId,
+        current_index: window.__aceCurrentIndex || 0,
+      },
+    }).then(function () {
+      _setCut(null);
+      window._setStatus("", "ok");
+    });
+  }
+
+  /** Paste the cut code into a folder (target_id is a folder id; "" = root). */
+  function _pasteCodeIntoFolder(folderId) {
+    if (!_cutCode) return;
+    const cutId = _cutCode;
+    htmx.ajax("POST", "/api/codes/cut-paste", {
+      target: "#text-panel",
+      swap: "outerHTML",
+      values: {
+        code_id: cutId,
+        target_id: folderId || "",
+        current_index: window.__aceCurrentIndex || 0,
+      },
+    }).then(function () {
+      _setCut(null);
+      window._setStatus("", "ok");
+    });
+  }
+
+  /** Focus the filter input and prompt the user to create a folder.
+   *  Simpler than chaining "create + auto-move" \u2014 user types the name and
+   *  hits Shift+Enter (existing handler in section 15). If `forCodeId` is
+   *  set we just hint that the next step (cut/paste) is on them. */
+  function _promptNewFolder(forCodeId) {
+    const input = document.getElementById("code-search-input");
+    if (!input) return;
+    input.focus();
+    input.value = "";
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    if (forCodeId) {
+      _announce("Type folder name + Shift+Enter, then \u2318X / \u2318V to move the code in.");
+      window._setStatus("Type name + Shift+Enter to create folder", "ok");
+    } else {
+      _announce("Type folder name + Shift+Enter to create.");
+      window._setStatus("Type name + Shift+Enter to create folder", "ok");
+    }
+  }
+
+  // --- Menu builders ---
+
+  function _buildCodeRowMenu(row) {
+    const codeId = row.getAttribute("data-code-id");
+    const inFolder = !!row.closest('[role="group"]');
+    const folders = Array.from(document.querySelectorAll(".ace-code-folder-row"))
+      .map(function (f) {
+        const labelEl = f.querySelector(".ace-folder-label");
+        return {
+          id: f.getAttribute("data-folder-id"),
+          name: labelEl ? labelEl.textContent : "(folder)",
+        };
+      })
+      .filter(function (f) { return f.id; });
+
+    const items = [];
+
+    if (folders.length > 0) {
+      items.push({
+        label: "Move to folder",
+        submenu: folders.map(function (f) {
+          return {
+            label: f.name,
+            handler: function () { _moveCodeToFolder(codeId, f.id); },
+          };
+        }).concat([
+          { sep: true },
+          { label: "New folder\u2026", handler: function () { _promptNewFolder(codeId); } },
+        ]),
+      });
+    } else {
+      items.push({
+        label: "Move to new folder\u2026",
+        handler: function () { _promptNewFolder(codeId); },
+      });
+    }
+
+    if (inFolder) {
+      items.push({
+        label: "Move to root",
+        shortcut: "\u2325\u2190",
+        handler: function () { _moveCodeToRoot(codeId); },
+      });
+    }
+    items.push({ sep: true });
+    items.push({
+      label: "Cut",
+      shortcut: "\u2318X",
+      handler: function () {
+        _setCut(codeId);
+        const nameEl = row.querySelector(".ace-code-name");
+        const name = nameEl ? nameEl.textContent : "code";
+        _announce(`Cut ${name}.`);
+        window._setStatus(`Cut: ${name} \u00b7 \u2318V to paste \u00b7 Esc to cancel`, "ok-sticky");
+      },
+    });
+    items.push({
+      label: "Paste here",
+      shortcut: "\u2318V",
+      disabled: !_cutCode || _cutCode === codeId,
+      handler: function () { _pasteCodeInto(codeId); },
+    });
+    items.push({ sep: true });
+    items.push({
+      label: "Rename",
+      shortcut: "F2",
+      handler: function () { _startInlineRename(row); },
+    });
+    items.push({
+      label: "Change colour\u2026",
+      handler: function () { _openColourPopover(codeId); },
+    });
+    items.push({
+      label: "View coded text",
+      shortcut: "V",
+      handler: function () { window.location.href = `/code/${codeId}/view`; },
+    });
+    if (row.dataset && row.dataset.chord) {
+      items.push({
+        label: "Set chord\u2026",
+        handler: function () { _beginChordEdit(codeId); },
+      });
+    }
+    items.push({
+      label: "Delete",
+      shortcut: "\u232b",
+      handler: function () { _executeDelete(codeId); },
+    });
+    return items;
+  }
+
+  function _buildFolderRowMenu(folderRow) {
+    const folderId = folderRow.getAttribute("data-folder-id");
+    return [
+      {
+        label: "Rename folder",
+        shortcut: "F2",
+        handler: function () { _startInlineRename(folderRow, { isFolder: true }); },
+      },
+      {
+        label: "Paste here",
+        shortcut: "\u2318V",
+        disabled: !_cutCode,
+        handler: function () { _pasteCodeIntoFolder(folderId); },
+      },
+      { sep: true },
+      {
+        label: "Delete folder",
+        shortcut: "\u232b",
+        handler: function () { _executeDelete(folderId); },
+      },
+    ];
+  }
+
+  function _buildEmptyAreaMenu() {
+    return [
+      {
+        label: "New folder",
+        shortcut: "\u21e7Enter",
+        handler: function () { _promptNewFolder(null); },
+      },
+      {
+        label: "Paste here",
+        shortcut: "\u2318V",
+        disabled: !_cutCode,
+        handler: function () { _pasteCodeIntoFolder(""); },
+      },
+    ];
+  }
+
+  /** Replace the active context menu's items in-place. Used by submenu
+   *  navigation so the menu position stays put and there's no nested
+   *  floating panel to track. */
+  function _populateContextMenu(menu, items) {
+    while (menu.firstChild) menu.removeChild(menu.firstChild);
+    items.forEach(function (it) {
+      if (it.sep) {
+        const sep = document.createElement("div");
+        sep.className = "ace-context-menu-sep";
+        menu.appendChild(sep);
+        return;
+      }
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "ace-context-menu-item";
+      if (it.submenu) btn.classList.add("ace-context-menu-submenu");
+      btn.textContent = it.label;
+      if (it.shortcut) {
+        const k = document.createElement("span");
+        k.className = "ace-context-menu-shortcut";
+        k.textContent = it.shortcut;
+        btn.appendChild(k);
+      }
+      if (it.disabled) btn.disabled = true;
+      btn.addEventListener("click", function (ev) {
+        if (it.disabled) return;
+        if (it.submenu) {
+          ev.preventDefault();
+          ev.stopPropagation();
+          // In-place submenu: replace items, prefix with a Back row that
+          // restores the parent menu. Back has keepOpen so it doesn't fall
+          // through to _closeCodeMenu after running its handler.
+          const backed = [{
+            label: "\u2190 Back",
+            keepOpen: true,
+            handler: function () { _populateContextMenu(menu, items); },
+          }, { sep: true }].concat(it.submenu);
+          _populateContextMenu(menu, backed);
+          return;
+        }
+        if (it.handler) it.handler();
+        if (it.keepOpen) return;
+        _closeCodeMenu();
+      });
+      menu.appendChild(btn);
+    });
+  }
+
+  function _renderContextMenu(items, x, y) {
+    _closeAllPopovers();
+    _menuOpen = true;
+    const menu = document.createElement("div");
+    menu.className = "ace-context-menu";
+    menu.setAttribute("role", "menu");
+    document.body.appendChild(menu);
+    _activeCodeMenu = menu;
+
+    _populateContextMenu(menu, items);
+
+    // Position: prefer requested x/y, but flip if it would overflow the
+    // viewport. offsetWidth/Height require the element be in the DOM,
+    // so we appended first.
+    const mw = menu.offsetWidth, mh = menu.offsetHeight;
+    const left = x + mw > window.innerWidth ? Math.max(0, x - mw) : x;
+    const top = y + mh > window.innerHeight ? Math.max(0, y - mh) : y;
+    menu.style.left = left + "px";
+    menu.style.top = top + "px";
+
+    setTimeout(function () {
+      document.addEventListener("click", _onMenuOutsideClick);
+      document.addEventListener("keydown", _onMenuEscape, true);
+    }, 0);
+  }
+
+  // Single contextmenu dispatcher for the codebook sidebar. Replaces the
+  // previous two listeners (colour popover + old code menu).
   document.addEventListener("contextmenu", function (e) {
-    let row = e.target.closest(".ace-code-row");
-    if (!row) return;
+    if (!e.target.closest || !e.target.closest("#code-sidebar")) return;
+    let items;
+    const codeRow = e.target.closest(".ace-code-row");
+    const folderRow = e.target.closest(".ace-code-folder-row");
+    if (codeRow) {
+      items = _buildCodeRowMenu(codeRow);
+    } else if (folderRow) {
+      items = _buildFolderRowMenu(folderRow);
+    } else if (e.target.closest("#code-tree")) {
+      items = _buildEmptyAreaMenu();
+    } else {
+      return;
+    }
     e.preventDefault();
-    let codeId = row.getAttribute("data-code-id");
-    if (codeId) _openCodeMenu(e.clientX, e.clientY, codeId);
+    e.stopPropagation();
+    _renderContextMenu(items, e.clientX, e.clientY);
   });
 
   /** Unified apply helper used by keycap click, search Enter, and tree Enter. */
@@ -2117,7 +2387,9 @@
           nameEl.textContent = nameEl.textContent; // strip prior highlight
         }
       });
-      tree.querySelectorAll(".ace-code-group-header, [role='group']").forEach(function (el) {
+      // Hide folder rows + their children containers + the root divider so
+      // matching code rows render flat at the top of the visible flow.
+      tree.querySelectorAll(".ace-code-folder-row, [role='group'], .ace-root-divider").forEach(function (el) {
         el.style.display = "none";
         el.setAttribute("aria-hidden", "true");
       });
@@ -2171,37 +2443,10 @@
         target.classList.add("ace-code-row--search-target");
         target.setAttribute("aria-current", "true");
       }
-    } else if (query && query.startsWith("/")) {
-      // Group creation mode
-      _sortableInstances.forEach(function (s) { s.option("disabled", true); });
-      let groupName = query.substring(1).trim();
-      // Hide all codes, show group creation prompt
-      tree.querySelectorAll(".ace-code-row").forEach(function (r) { r.style.display = "none"; r.setAttribute("aria-hidden", "true"); });
-      tree.querySelectorAll(".ace-code-group-header").forEach(function (h) { h.style.display = "none"; h.setAttribute("aria-hidden", "true"); });
-      tree.querySelectorAll('[role="group"]').forEach(function (g) { g.style.display = "none"; g.setAttribute("aria-hidden", "true"); });
-
-      if (groupName) {
-        let exists = false;
-        tree.querySelectorAll(".ace-code-group-header").forEach(function (h) {
-          if (h.getAttribute("data-group") === groupName) exists = true;
-        });
-
-        let prompt = document.createElement("div");
-        if (exists) {
-          prompt.className = "ace-create-prompt";
-          prompt.innerHTML = `Group "<strong>${_escapeHtml(groupName)}</strong>" already exists`;
-        } else {
-          prompt.className = "ace-create-prompt ace-create-prompt--group";
-          prompt.innerHTML = `<span>\u25b8</span> Create group "<strong>${_escapeHtml(groupName)}</strong>"`;
-          prompt.setAttribute("data-action", "create-group");
-          prompt.addEventListener("click", function () {
-            _createGroupFromSearch();
-          });
-        }
-        tree.appendChild(prompt);
-      }
     } else {
-      // Empty: restore all rows + groups, undo any score-order moves.
+      // Empty: restore all rows + folders, undo any score-order moves.
+      // (The legacy "/foo" group-creation mode was removed \u2014 folders are
+      // now created via Task 9 wrap-into-folder shortcut, not via search.)
       _sortableInstances.forEach(function (s) { s.option("disabled", false); });
 
       // Put rows back where they were before search mode. Skip any row whose
@@ -2224,7 +2469,7 @@
           nameEl.textContent = nameEl.textContent; // Strip HTML
         }
       });
-      tree.querySelectorAll(".ace-code-group-header").forEach(function (h) { h.style.display = ""; h.removeAttribute("aria-hidden"); });
+      tree.querySelectorAll(".ace-code-folder-row, .ace-root-divider").forEach(function (el) { el.style.display = ""; el.removeAttribute("aria-hidden"); });
       tree.querySelectorAll('[role="group"]').forEach(function (g) { g.style.display = ""; g.removeAttribute("aria-hidden"); });
       _restoreCollapseState();
       const prevTarget = tree.querySelector(".ace-code-row--search-target");
@@ -2252,41 +2497,192 @@
     _announce(`Code '${name}' created`);
   }
 
-  function _createGroupFromSearch() {
-    const input = document.getElementById("code-search-input");
-    if (!input) return;
-    let groupName = input.value.trim().substring(1).trim(); // remove / prefix
-    if (!groupName) return;
+  // _createGroupFromSearch and _makeGroupElements were removed: client-side
+  // folder creation has no server endpoint to back it (folders are created
+  // via Task 9 wrap-into-folder shortcut against POST /api/codes/folder).
 
-    const tree = document.getElementById("code-tree");
-    if (!tree) return;
+  // Esc-to-source: when focus is anywhere inside the codebook sidebar that is
+  // NOT already handled by the search input / tree keydown handlers (e.g. on
+  // the help button, codebook dropdown trigger, or a sidebar-hosted button),
+  // Esc returns focus to #text-panel. Bound at capture phase so it runs
+  // before the (bubbling-phase) generic Esc cascade in the global keydown
+  // handler — but explicitly defers to:
+  //   * `#code-search-input` — its own Esc handler clears the filter first
+  //   * treeitems — the tree keydown handler at the bottom of this IIFE
+  //   * any contentEditable / input / textarea element — inline rename
+  //     and chord-edit need Esc to revert their local state.
+  document.addEventListener("keydown", function (e) {
+    if (e.key !== "Escape") return;
+    const t = e.target;
+    if (!t || !t.closest) return;
+    if (!t.closest("#code-sidebar")) return;
+    // Cut state takes priority over the focus-shift: if a code is flagged
+    // for paste (⌘X), Esc clears it without moving focus. Runs before the
+    // treeitem / input / contentEditable bail-outs so the cancellation works
+    // from any sidebar element.
+    if (_cutCode) {
+      _setCut(null);
+      _announce("Cut cleared.");
+      window._setStatus("", "ok");
+      e.stopPropagation();
+      e.preventDefault();
+      return;
+    }
+    if (t.id === "code-search-input") return;
+    if (t.getAttribute && t.getAttribute("role") === "treeitem") return;
+    if (t.isContentEditable) return;
+    const tag = (t.tagName || "").toLowerCase();
+    if (tag === "input" || tag === "textarea") return;
+    // stopPropagation so this Esc doesn't ALSO fire the bubble-phase
+    // Esc cascade (which would close any open dialog / clear text
+    // selection / step out of note-drawer edit mode after focus lands
+    // on text-panel).
+    e.stopPropagation();
+    e.preventDefault();
+    const tp = document.getElementById("text-panel");
+    if (tp) tp.focus();
+  }, true);
 
-    // Remove create prompt if present
-    const ref = tree.querySelector(".ace-create-prompt");
-    if (ref) ref.remove();
+  // ⌘X / Ctrl+X — cut a focused code row; ⌘V / Ctrl+V — paste it onto the
+  // focused folder/code row. Bound at document level so it fires regardless
+  // of which sidebar element holds focus, but early-returns if focus is
+  // inside an input / textarea / contenteditable so native cut/paste keeps
+  // working in the filter input and inline-rename caret.
+  document.addEventListener("keydown", function (e) {
+    if (!(e.metaKey || e.ctrlKey)) return;
+    const key = e.key.toLowerCase();
+    if (key !== "x" && key !== "v") return;
 
-    const els = _makeGroupElements(groupName);
-    const header = els.header;
-    const groupDiv = els.groupDiv;
-
-    const emptyMsg = tree.querySelector(".ace-sidebar-empty");
-    if (emptyMsg) {
-      tree.insertBefore(header, emptyMsg);
-      tree.insertBefore(groupDiv, emptyMsg);
-      emptyMsg.remove();
-    } else {
-      tree.appendChild(header);
-      tree.appendChild(groupDiv);
+    // Skip if focus is in any editable text — covers inline rename
+    // (contenteditable), the filter <input>, and any textarea.
+    const ae = document.activeElement;
+    if (ae && (ae.isContentEditable || ae.tagName === "INPUT" || ae.tagName === "TEXTAREA")) {
+      return;
     }
 
-    input.value = "";
-    input.dispatchEvent(new Event("input", { bubbles: true }));
-    _initSortable();
-    _announce(`Group '${groupName}' created`);
-  }
+    if (key === "x") {
+      // Skip if the user has a text selection (default cut behaviour wins).
+      const sel = window.getSelection();
+      if (sel && sel.toString().length > 0) return;
+      if (!(e.target.closest && e.target.closest("#code-sidebar"))) return;
+      e.preventDefault();
+      const row = e.target.closest(".ace-code-row");
+      if (!row) {
+        if (e.target.closest(".ace-code-folder-row")) {
+          _announce("Folders cannot be cut.");
+          window._setStatus("Folders cannot be cut", "err");
+        }
+        return;
+      }
+      const codeId = row.getAttribute("data-code-id");
+      const nameEl = row.querySelector(".ace-code-name");
+      const name = nameEl ? nameEl.textContent : "code";
+      _setCut(codeId);
+      _announce(`Cut ${name}.`);
+      // Sticky status bar mirror so sighted users see the cut state even
+      // when they scroll away from the ghosted row. "ok-sticky" is a kind
+      // _setStatus does NOT auto-clear (only "ok" fades).
+      window._setStatus(`Cut: ${name} · ⌘V to paste · Esc to cancel`, "ok-sticky");
+      return;
+    }
+
+    // key === "v"
+    if (!_cutCode) return;
+    if (!(e.target.closest && e.target.closest("#code-sidebar"))) return;
+    e.preventDefault();
+    // Paste while focus is in the filter input is already filtered above by
+    // the INPUT guard, but if some other non-row sidebar element has focus
+    // we still want a useful announcement.
+    if (e.target.id === "code-search-input") {
+      _announce("Focus a code or folder row first.");
+      window._setStatus("Focus a code or folder row first", "err");
+      return;
+    }
+    const targetRow = e.target.closest(".ace-code-row, .ace-code-folder-row");
+    let targetId = null;
+    if (targetRow) {
+      targetId = targetRow.getAttribute("data-code-id")
+              || targetRow.getAttribute("data-folder-id");
+    }
+    if (!targetId) {
+      _announce("Focus a code or folder row first.");
+      window._setStatus("Focus a code or folder row first", "err");
+      return;
+    }
+    if (targetId === _cutCode) {
+      _announce("Already there — press Esc to clear cut.");
+      return;
+    }
+    const cutId = _cutCode;
+    htmx.ajax("POST", "/api/codes/cut-paste", {
+      target: "#text-panel",
+      swap: "outerHTML",
+      values: {
+        code_id: cutId,
+        target_id: targetId,
+        current_index: window.__aceCurrentIndex,
+      },
+    }).then(function () {
+      _setCut(null);
+      window._setStatus("", "ok");
+    });
+  });
 
   document.addEventListener("keydown", function (e) {
     if (e.target.id !== "code-search-input") return;
+    const input = e.target;
+
+    // Shift+Enter — create a new folder named after the current filter text.
+    // Server enforces NOCASE uniqueness via add_folder, but the duplicate
+    // path returns an OOB-only status fragment with no `HX-Reswap: none`
+    // header — pairing that with `swap: outerHTML` would wipe #text-panel.
+    // So we do a client-side NOCASE check FIRST against the rendered tree
+    // and short-circuit duplicates without hitting the server.
+    if (e.key === "Enter" && e.shiftKey) {
+      e.preventDefault();
+      const name = input.value.trim();
+      if (!name) return;
+      const existingFolders = document.querySelectorAll(".ace-code-folder-row");
+      let dupRow = null;
+      for (const f of existingFolders) {
+        const label = f.querySelector(".ace-folder-label");
+        if (label && label.textContent.toLowerCase() === name.toLowerCase()) {
+          dupRow = f;
+          break;
+        }
+      }
+      if (dupRow) {
+        // Clear the filter first so the target folder isn't display:none
+        // when we try to .focus() it.
+        _clearSearchFilter();
+        window._setStatus(`Folder '${name}' already exists — focused`, "ok");
+        _focusTreeItem(dupRow);
+        return;
+      }
+      htmx.ajax("POST", "/api/codes/folder", {
+        target: "#text-panel",
+        swap: "outerHTML",
+        values: { name: name, current_index: window.__aceCurrentIndex },
+      }).then(function () {
+        // Clear via _clearSearchFilter so the rendered tree shows everything
+        // — the OOB swap re-renders the sidebar but preserves the filter
+        // input value, leaving newly-created rows hidden.
+        _clearSearchFilter();
+        setTimeout(function () {
+          const all = document.querySelectorAll(".ace-code-folder-row");
+          for (const f of all) {
+            const label = f.querySelector(".ace-folder-label");
+            if (label && label.textContent === name) {
+              _focusTreeItem(f);
+              _startInlineRename(f, { isFolder: true });
+              window._setStatus(`Folder ${name} created`, "ok");
+              break;
+            }
+          }
+        }, 30);
+      });
+      return;
+    }
 
     if (e.key === "Escape") {
       e.preventDefault();
@@ -2294,9 +2690,8 @@
       if (e.target.value) {
         e.target.value = "";
         e.target.dispatchEvent(new Event("input", { bubbles: true }));
-      } else {
-        _focusTextPanel();
       }
+      _focusTextPanel();
       return;
     }
 
@@ -2311,29 +2706,25 @@
     if (!val) return;
     e.preventDefault();
 
-    if (val.startsWith("/")) {
-      _createGroupFromSearch();
+    // Only create if no visible code rows; otherwise apply the first match.
+    const tree = document.getElementById("code-tree");
+    let count = 0;
+    if (tree) {
+      tree.querySelectorAll(".ace-code-row").forEach(function (r) {
+        if (r.style.display !== "none") count++;
+      });
+    }
+    if (count === 0) {
+      _createCodeFromSearch();
     } else {
-      // Only create if no visible code rows
-      const tree = document.getElementById("code-tree");
-      let count = 0;
-      if (tree) {
-        tree.querySelectorAll(".ace-code-row").forEach(function (r) {
-          if (r.style.display !== "none") count++;
-        });
-      }
-      if (count === 0) {
-        _createCodeFromSearch();
-      } else {
-        // Has matches — find first visible match, clear search, apply
-        const firstMatch = tree
-          ? Array.from(tree.querySelectorAll(".ace-code-row")).find(function (r) { return r.style.display !== "none"; })
-          : null;
-        _clearSearchFilter();
-        if (firstMatch) {
-          let codeId = firstMatch.getAttribute("data-code-id");
-          if (codeId) _applyCode(codeId);
-        }
+      // Has matches — find first visible match, clear search, apply
+      const firstMatch = tree
+        ? Array.from(tree.querySelectorAll(".ace-code-row")).find(function (r) { return r.style.display !== "none"; })
+        : null;
+      _clearSearchFilter();
+      if (firstMatch) {
+        let codeId = firstMatch.getAttribute("data-code-id");
+        if (codeId) _applyCode(codeId);
       }
     }
   });
@@ -2350,30 +2741,43 @@
       `code_ids=${encodeURIComponent(JSON.stringify(ids))}&current_index=${window.__aceCurrentIndex}`);
   }
 
-  /** Create a group header + group container pair for the ARIA tree. */
-  function _makeGroupElements(name) {
-    const header = document.createElement("div");
-    header.setAttribute("role", "treeitem");
-    header.setAttribute("aria-expanded", "true");
-    header.setAttribute("aria-level", "1");
-    header.className = "ace-code-group-header";
-    header.setAttribute("data-group", name);
-    header.setAttribute("tabindex", "-1");
-    const toggle = document.createElement("span");
-    toggle.className = "ace-group-toggle";
-    toggle.innerHTML = _chevronDown;
-    const label = document.createElement("span");
-    label.className = "ace-group-label";
-    label.textContent = name;
-    header.appendChild(toggle);
-    header.append(" ");
-    header.appendChild(label);
-
-    const groupDiv = document.createElement("div");
-    groupDiv.setAttribute("role", "group");
-
-    return { header: header, groupDiv: groupDiv };
+  /** Walk the tree top-to-bottom and persist a unified flat order of folder + code ids.
+   *  Used by the keyboard folder-reorder gesture. The /codes/reorder endpoint only
+   *  rewrites kind='code' rows; folder reorders need this tree-aware sibling. */
+  function _persistTreeOrder() {
+    const tree = document.getElementById("code-tree");
+    if (!tree) return;
+    const ids = [];
+    Array.from(tree.children).forEach(function (node) {
+      // Folder row → push folder id, then walk its [role="group"] children.
+      if (node.classList && node.classList.contains("ace-code-folder-row")) {
+        const fid = node.getAttribute("data-folder-id");
+        if (fid) ids.push(fid);
+        return;
+      }
+      if (node.getAttribute && node.getAttribute("role") === "group") {
+        Array.from(node.children).forEach(function (child) {
+          const cid = child.getAttribute && child.getAttribute("data-code-id");
+          if (cid) ids.push(cid);
+        });
+        return;
+      }
+      // Root-level code row.
+      const cid = node.getAttribute && node.getAttribute("data-code-id");
+      if (cid) ids.push(cid);
+    });
+    htmx.ajax("POST", "/api/codes/reorder-tree", {
+      target: "#text-panel",
+      swap: "outerHTML",
+      values: {
+        tree_ids: JSON.stringify(ids),
+        current_index: window.__aceCurrentIndex || 0,
+      },
+    });
   }
+
+  // _makeGroupElements was removed: only consumers were the deleted
+  // _createGroupFromSearch and _promptNewGroupForCode helpers.
 
   /* ================================================================
    * 16. SVG overlay — annotation rendering
@@ -2898,12 +3302,16 @@
 
     if (sbEl) {
       sbEl.textContent = text || "";
-      sbEl.classList.remove("ace-statusbar-event--ok", "ace-statusbar-event--err");
+      sbEl.classList.remove("ace-statusbar-event--ok", "ace-statusbar-event--ok-sticky", "ace-statusbar-event--err");
       if (text) sbEl.classList.add("ace-statusbar-event--" + kind);
     }
     if (pillEl) {
       pillEl.textContent = text || "";
-      pillEl.classList.remove("ace-text-event-pill--ok", "ace-text-event-pill--err");
+      pillEl.classList.remove(
+        "ace-text-event-pill--ok",
+        "ace-text-event-pill--ok-sticky",
+        "ace-text-event-pill--err",
+      );
       if (text) pillEl.classList.add("ace-text-event-pill--" + kind);
     }
 
@@ -3043,55 +3451,77 @@
     return tree ? tree.querySelector('[role="treeitem"][tabindex="0"]') : null;
   }
 
-  /** Check if a treeitem is a group header. */
-  function _isGroupHeader(item) {
-    return item && item.classList.contains("ace-code-group-header");
+  /** Check if a treeitem is a folder row. */
+  function _isFolderRow(item) {
+    return item && item.classList.contains("ace-code-folder-row");
   }
 
-  /** Move a group (header + group div) up or down by one position. */
-  function _moveGroupInDirection(header, direction) {
-    const groupDiv = header.nextElementSibling;
-    if (!groupDiv || groupDiv.getAttribute("role") !== "group") return;
+  /** Move a folder (folder row + its children container) up or down by one
+   *  position relative to its sibling folders. */
+  function _moveFolderInDirection(folderRow, direction) {
+    const childrenDiv = folderRow.nextElementSibling;
+    if (!childrenDiv || childrenDiv.getAttribute("role") !== "group") return;
     const tree = document.getElementById("code-tree");
     if (!tree) return;
 
     if (direction === -1) {
-      // Move up: find the previous group's header.
-      // The element immediately before `header` is either a role="group" div
-      // (from the previous group) or directly a group header (empty group).
-      const prevSibling = header.previousElementSibling;
+      // Move up: find the previous folder row (sibling pair: row, role=group).
+      const prevSibling = folderRow.previousElementSibling;
       if (!prevSibling) return;
-      let prevHeader;
+      let prevFolder;
       if (prevSibling.getAttribute("role") === "group") {
-        prevHeader = prevSibling.previousElementSibling;
-      } else if (_isGroupHeader(prevSibling)) {
-        prevHeader = prevSibling;
+        prevFolder = prevSibling.previousElementSibling;
+      } else if (_isFolderRow(prevSibling)) {
+        prevFolder = prevSibling;
       } else {
         return;
       }
-      if (!prevHeader || !_isGroupHeader(prevHeader)) return;
-      // Current order: prevHeader, prevGroupDiv, header, groupDiv
-      // Target order:  header, groupDiv, prevHeader, prevGroupDiv
-      tree.insertBefore(header, prevHeader);
-      tree.insertBefore(groupDiv, prevHeader);
+      if (!prevFolder || !_isFolderRow(prevFolder)) return;
+      tree.insertBefore(folderRow, prevFolder);
+      tree.insertBefore(childrenDiv, prevFolder);
     } else {
-      // Move down: find the next group header + its group div.
-      const nextHeader = groupDiv.nextElementSibling;
-      if (!nextHeader || !_isGroupHeader(nextHeader)) return;
-      const nextGroupDiv = nextHeader.nextElementSibling;
-      if (!nextGroupDiv || nextGroupDiv.getAttribute("role") !== "group") return;
-      // Current order: header, groupDiv, nextHeader, nextGroupDiv
-      // Target order:  nextHeader, nextGroupDiv, header, groupDiv
-      const ref = nextGroupDiv.nextElementSibling; // null → append at end
-      tree.insertBefore(header, ref);
-      tree.insertBefore(groupDiv, ref);
+      // Move down: find the next folder row + its children container.
+      const nextFolder = childrenDiv.nextElementSibling;
+      if (!nextFolder || !_isFolderRow(nextFolder)) return;
+      const nextChildrenDiv = nextFolder.nextElementSibling;
+      if (!nextChildrenDiv || nextChildrenDiv.getAttribute("role") !== "group") return;
+      const ref = nextChildrenDiv.nextElementSibling; // null → append at end
+      tree.insertBefore(folderRow, ref);
+      tree.insertBefore(childrenDiv, ref);
     }
 
-    // Persist the new code order via the reorder endpoint.
-    _persistCodeOrder();
+    // Persist via the tree-aware endpoint — _persistCodeOrder filters
+    // [data-code-id] only and would silently drop the folder reorder, so
+    // the next OOB swap would snap the folder back to its prior slot.
+    _persistTreeOrder();
 
     _updateKeycaps();
     _initSortable();
+  }
+
+  // --- Indent/outdent helpers (Alt-arrow gestures) ---
+
+  /** Move `row` (a code row) into the scope of `folderRow` via PUT /api/codes/{id}/parent. */
+  function _doMoveToFolderAbove(row, folderRow) {
+    const codeId = row.getAttribute("data-code-id");
+    const parentId = folderRow.getAttribute("data-folder-id");
+    if (!codeId || !parentId) return;
+    htmx.ajax("PUT", `/api/codes/${codeId}/parent`, {
+      target: "#text-panel",
+      swap: "outerHTML",
+      values: { parent_id: parentId, current_index: window.__aceCurrentIndex || 0 },
+    });
+  }
+
+  /** Move `row` (a code row inside a folder) back to root scope. */
+  function _doMoveOutOfFolder(row) {
+    const codeId = row.getAttribute("data-code-id");
+    if (!codeId) return;
+    htmx.ajax("PUT", `/api/codes/${codeId}/parent`, {
+      target: "#text-panel",
+      swap: "outerHTML",
+      values: { parent_id: "", current_index: window.__aceCurrentIndex || 0 },
+    });
   }
 
   // --- Tree keydown handler ---
@@ -3108,110 +3538,208 @@
     const alt = e.altKey;
     const shift = e.shiftKey;
 
-    // Alt+Shift+↑ — Move code up (or group up if focused on group header)
+    // Alt+Shift+↑ — Move code up (or folder up if focused on a folder row)
     if (key === "ArrowUp" && alt && shift) {
       e.preventDefault();
-      if (!_isGroupHeader(active)) {
+      if (!_isFolderRow(active)) {
         active.classList.add("ace-code-row--reordering");
         _moveCode(active.getAttribute("data-code-id"), -1);
         setTimeout(function () { active.classList.remove("ace-code-row--reordering"); }, 300);
       } else {
-        _moveGroupInDirection(active, -1);
-        _announce(`Group '${active.getAttribute("data-group") || "Ungrouped"}' moved up`);
+        const labelEl = active.querySelector(".ace-folder-label");
+        const name = labelEl ? labelEl.textContent.trim() : "folder";
+        _moveFolderInDirection(active, -1);
+        _announce(`${name} moved up`);
       }
       return;
     }
 
-    // Alt+Shift+↓ — Move code down (or group down if focused on group header)
+    // Alt+Shift+↓ — Move code down (or folder down if focused on a folder row)
     if (key === "ArrowDown" && alt && shift) {
       e.preventDefault();
-      if (!_isGroupHeader(active)) {
+      if (!_isFolderRow(active)) {
         active.classList.add("ace-code-row--reordering");
         _moveCode(active.getAttribute("data-code-id"), 1);
         setTimeout(function () { active.classList.remove("ace-code-row--reordering"); }, 300);
       } else {
-        _moveGroupInDirection(active, 1);
-        _announce(`Group '${active.getAttribute("data-group") || "Ungrouped"}' moved down`);
+        const labelEl = active.querySelector(".ace-folder-label");
+        const name = labelEl ? labelEl.textContent.trim() : "folder";
+        _moveFolderInDirection(active, 1);
+        _announce(`${name} moved down`);
       }
       return;
     }
 
-    // Alt+→ — Indent: move code into nearest group above
+    // ⌥⇧→ — Wrap focused root code + the root code above into a NEW folder.
+    // Composite: creates folder + moves both codes in one transaction. After
+    // the swap settles, focus moves to the new folder header and inline
+    // rename starts immediately.
+    if (key === "ArrowRight" && alt && shift) {
+      e.preventDefault();
+      if (_isFolderRow(active)) {
+        _announce("Folders are always at root.");
+        return;
+      }
+      // Codes already in a folder are a no-op — Shift modifier is about
+      // wrapping two siblings into a NEW folder, not reversing direction.
+      // Mirror the bare ⌥→ announcement so behaviour is consistent regardless
+      // of Shift state. Folders cannot be nested.
+      if (active.closest('[role="group"]')) {
+        const folderHeader = active.closest('[role="group"]').previousElementSibling;
+        const folderName = (folderHeader && folderHeader.querySelector(".ace-folder-label"))
+          ? folderHeader.querySelector(".ace-folder-label").textContent.trim()
+          : "this folder";
+        _announce(`Already in ${folderName}. Folders cannot contain folders.`);
+        return;
+      }
+      const codeId = active.getAttribute("data-code-id");
+      const allRows = Array.from(document.querySelectorAll(
+        "#code-tree .ace-code-row, #code-tree .ace-code-folder-row"
+      ));
+      const idx = allRows.indexOf(active);
+      if (idx <= 0) {
+        _announce("No row above. Need two root codes to make a folder.");
+        window._setStatus("Need a row above to wrap into a folder", "err");
+        return;
+      }
+      const above = allRows[idx - 1];
+      // If the row above is a folder header or a code already inside a
+      // folder, this isn't a valid wrap (would either nest a folder or pull
+      // a child out of its existing folder). Fall through to the bare ⌥→
+      // behaviour so existing folders still receive the move.
+      if (_isFolderRow(above)) {
+        _doMoveToFolderAbove(active, above);
+        return;
+      }
+      const aboveGroup = above.closest('[role="group"]');
+      if (aboveGroup) {
+        const folderHeader = aboveGroup.previousElementSibling;
+        if (folderHeader && _isFolderRow(folderHeader)) {
+          _doMoveToFolderAbove(active, folderHeader);
+          return;
+        }
+      }
+      const aboveCodeId = above.getAttribute("data-code-id");
+      htmx.ajax("POST", `/api/codes/${codeId}/indent-promote`, {
+        target: "#text-panel",
+        swap: "outerHTML",
+        values: {
+          above_code_id: aboveCodeId,
+          folder_name: "New folder",
+          current_index: window.__aceCurrentIndex || 0,
+        },
+      }).then(function () {
+        // After OOB swap, the moved code lives inside a new folder. Locate
+        // the folder header (sibling above the [role="group"] container that
+        // wraps the code) and start inline rename on it. Defer past
+        // htmx:afterSettle (which can re-bind focus via _syncSidebarAfterSwap)
+        // by using a slightly longer timeout — the focus call inside
+        // `_startInlineRename` would otherwise race with sidebar re-init.
+        setTimeout(function () {
+          const moved = document.querySelector(
+            `.ace-code-row[data-code-id="${codeId}"]`
+          );
+          if (!moved) return;
+          const groupDiv = moved.closest('[role="group"]');
+          if (!groupDiv) return;
+          const folderRow = groupDiv.previousElementSibling;
+          if (folderRow && _isFolderRow(folderRow)) {
+            _focusTreeItem(folderRow);
+            _startInlineRename(folderRow, { isFolder: true });
+          }
+        }, 100);
+      });
+      return;
+    }
+
+    // ⌥→ (no shift) — Move focused code into the folder above. Never
+    // creates a folder on its own — the spec mandates the surprise be
+    // explicit (⌥⇧→ for that). On a code already inside a folder, announce
+    // the nesting rule. On a folder row, announce that folders live at root.
     if (key === "ArrowRight" && alt && !shift) {
       e.preventDefault();
-      if (_isGroupHeader(active)) return;
-      let codeId = active.getAttribute("data-code-id");
-      if (!codeId) return;
-
-      // Check if already in a group
-      const groupDiv = active.closest('[role="group"]');
-      if (groupDiv) return; // Already in a group — one level only
-
-      // Find nearest group header above
-      let el = active;
-      let targetGroup = null;
-      while (el) {
-        el = el.previousElementSibling;
-        if (el && el.getAttribute("role") === "group") {
-          const hdr = el.previousElementSibling;
-          if (hdr && _isGroupHeader(hdr)) {
-            targetGroup = hdr.getAttribute("data-group");
-            break;
-          }
-        }
-        if (el && _isGroupHeader(el)) {
-          targetGroup = el.getAttribute("data-group");
-          break;
+      if (_isFolderRow(active)) {
+        _announce("Folders are always at root.");
+        return;
+      }
+      // Code already inside a folder → nothing to do.
+      if (active.closest('[role="group"]')) {
+        const folderHeader = active.closest('[role="group"]').previousElementSibling;
+        const folderName = (folderHeader && folderHeader.querySelector(".ace-folder-label"))
+          ? folderHeader.querySelector(".ace-folder-label").textContent.trim()
+          : "this folder";
+        _announce(`Already in ${folderName}. Folders cannot contain folders.`);
+        return;
+      }
+      const allRows = Array.from(document.querySelectorAll(
+        "#code-tree .ace-code-row, #code-tree .ace-code-folder-row"
+      ));
+      const idx = allRows.indexOf(active);
+      if (idx <= 0) {
+        _announce("No row above to move into.");
+        return;
+      }
+      const above = allRows[idx - 1];
+      if (_isFolderRow(above)) {
+        _doMoveToFolderAbove(active, above);
+        return;
+      }
+      // Above is a code already inside a folder → join that same folder.
+      // The folder header is the row immediately preceding the [role="group"]
+      // wrapper. This makes ⌥→ "join the visually-adjacent folder" — the
+      // intuitive behaviour when the user can SEE a folder right above them.
+      const aboveGroup = above.closest('[role="group"]');
+      if (aboveGroup) {
+        const folderHeader = aboveGroup.previousElementSibling;
+        if (folderHeader && _isFolderRow(folderHeader)) {
+          _doMoveToFolderAbove(active, folderHeader);
+          return;
         }
       }
-
-      if (targetGroup !== null) {
-        _moveToGroup(codeId, targetGroup);
-        _announce(`'${(active.querySelector(".ace-code-name") || {}).textContent}' moved into ${targetGroup || "Ungrouped"}`);
-      } else {
-        // No group above — prompt for new group name
-        _promptNewGroupForCode(active);
-      }
+      // Above is another root code → tell the user about the explicit gesture.
+      _announce("Press Alt-Shift-Right to create a folder around both codes.");
+      window._setStatus("⌥⇧→ to wrap into a new folder", "ok");
       return;
     }
 
-    // Alt+← — Outdent: move code out of group (ungrouped)
+    // ⌥← — Move focused code out of its folder, back to root.
     if (key === "ArrowLeft" && alt && !shift) {
       e.preventDefault();
-      if (_isGroupHeader(active)) return;
-      const codeId2 = active.getAttribute("data-code-id");
-      if (!codeId2) return;
-
-      const groupDiv2 = active.closest('[role="group"]');
-      if (!groupDiv2) return; // Already ungrouped
-
-      _moveToGroup(codeId2, "");
-      _announce(`'${(active.querySelector(".ace-code-name") || {}).textContent}' moved to ungrouped`);
+      if (_isFolderRow(active)) {
+        _announce("Folders are always at root.");
+        return;
+      }
+      if (!active.closest('[role="group"]')) {
+        _announce("Already at root.");
+        return;
+      }
+      _doMoveOutOfFolder(active);
       return;
     }
 
     // Enter — Apply focused code to current sentence, return focus to text panel
     if (key === "Enter" && !alt && !shift) {
       e.preventDefault();
-      if (!_isGroupHeader(active)) {
+      if (!_isFolderRow(active)) {
         const codeId3 = active.getAttribute("data-code-id");
         if (codeId3) {
           _clearSearchFilter();
           _applyCode(codeId3);
         }
       } else {
-        // On group header: toggle expand/collapse
-        _toggleGroupCollapse(active);
+        // On a folder row: toggle expand/collapse
+        _toggleFolderCollapse(active);
       }
       return;
     }
 
-    // F2 — Inline rename
+    // F2 — Inline rename. Works on both code rows and folder headers.
+    // Folders share the PUT /api/codes/{id} endpoint with codes (the row's
+    // `kind='folder'` is preserved by the model layer).
     if (key === "F2" && !alt && !shift) {
       e.preventDefault();
-      if (_isGroupHeader(active)) {
-        const groupName = active.getAttribute("data-group");
-        if (groupName !== "") _startGroupRename(active);
+      if (_isFolderRow(active)) {
+        _startInlineRename(active, { isFolder: true });
       } else {
         const codeId4 = active.getAttribute("data-code-id");
         if (codeId4) _startInlineRename(codeId4);
@@ -3220,10 +3748,16 @@
     }
 
     // Delete / Backspace — Soft-delete (acts immediately; status bar shows
-    // an inline [Z] undo keycap that's clickable for ~7 s).
+    // an inline [Z] undo keycap that's clickable for ~7 s). On a folder row
+    // this cascades to descendants in one transaction (children lifted to
+    // root by the undo handler). No confirm dialog per spec §8 — undo is
+    // the safety net.
     if ((key === "Delete" || key === "Backspace") && !alt && !shift) {
       e.preventDefault();
-      if (!_isGroupHeader(active)) {
+      if (_isFolderRow(active)) {
+        const folderId = active.getAttribute("data-folder-id");
+        if (folderId) _executeDelete(folderId);
+      } else {
         const codeId5 = active.getAttribute("data-code-id");
         if (codeId5) _executeDelete(codeId5);
       }
@@ -3247,16 +3781,16 @@
       return;
     }
 
-    // → — Expand group or move to first child
+    // → — Expand folder or move to first child
     if (key === "ArrowRight" && !alt && !shift) {
       e.preventDefault();
-      if (_isGroupHeader(active)) {
+      if (_isFolderRow(active)) {
         if (active.getAttribute("aria-expanded") === "false") {
-          _expandGroup(active);
+          _expandFolder(active);
         } else {
-          const groupDiv3 = active.nextElementSibling;
-          if (groupDiv3 && groupDiv3.getAttribute("role") === "group") {
-            const firstChild = groupDiv3.querySelector('[role="treeitem"]');
+          const childrenDiv = active.nextElementSibling;
+          if (childrenDiv && childrenDiv.getAttribute("role") === "group") {
+            const firstChild = childrenDiv.querySelector('[role="treeitem"]');
             if (firstChild) _focusTreeItem(firstChild);
           }
         }
@@ -3264,18 +3798,18 @@
       return;
     }
 
-    // ← — Collapse group or move to parent header
+    // ← — Collapse folder or move to parent folder
     if (key === "ArrowLeft" && !alt && !shift) {
       e.preventDefault();
-      if (_isGroupHeader(active)) {
+      if (_isFolderRow(active)) {
         if (active.getAttribute("aria-expanded") === "true") {
-          _collapseGroup(active);
+          _collapseFolder(active);
         }
       } else {
         const groupEl = active.closest('[role="group"]');
         if (groupEl) {
-          const header2 = groupEl.previousElementSibling;
-          if (header2 && _isGroupHeader(header2)) _focusTreeItem(header2);
+          const folderRow = groupEl.previousElementSibling;
+          if (folderRow && _isFolderRow(folderRow)) _focusTreeItem(folderRow);
         }
       }
       return;
@@ -3295,9 +3829,15 @@
       return;
     }
 
-    // Escape — Return to text panel
+    // Escape — Cancel pending cut state first; otherwise return to text panel.
     if (key === "Escape" && !alt && !shift) {
       e.preventDefault();
+      if (_cutCode) {
+        _setCut(null);
+        _announce("Cut cleared.");
+        window._setStatus("", "ok");
+        return;
+      }
       _clearSearchFilter();
       _focusTextPanel();
       return;
@@ -3328,75 +3868,24 @@
     window.location.href = `/code/${codeId}/view`;
   });
 
-  // --- Group expand / collapse ---
+  // --- Folder expand / collapse ---
+  //
+  // Folder rows are <div class="ace-code-folder-row" aria-expanded="\u2026"
+  // data-folder-id="\u2026">. CSS rotates the chevron and hides the sibling
+  // [role="group"] children container based on aria-expanded, so JS only
+  // needs to flip the attribute. _collapsedFolders mirrors the state in
+  // memory so it survives sidebar OOB swaps within a session.
 
-  function _promptNewGroupForCode(codeRow) {
-    const input = document.createElement("input");
-    input.type = "text";
-    input.placeholder = "Group name\u2026";
-    input.className = "ace-sidebar-search";
-    input.style.margin = "2px 10px";
-    input.style.padding = "3px 8px";
-    input.style.borderColor = "var(--ace-focus)";
-
-    codeRow.parentNode.insertBefore(input, codeRow);
-    input.focus();
-
-    function cleanup() {
-      if (input.parentNode) input.remove();
-      _focusTreeItem(codeRow);
-    }
-
-    input.addEventListener("keydown", function (ev) {
-      if (ev.key === "Enter") {
-        ev.preventDefault();
-        let name = input.value.trim();
-        if (name) {
-          let codeId = codeRow.getAttribute("data-code-id");
-          const els = _makeGroupElements(name);
-          const header = els.header;
-          const groupDiv = els.groupDiv;
-
-          input.remove();
-          codeRow.parentNode.insertBefore(header, codeRow);
-          codeRow.parentNode.insertBefore(groupDiv, codeRow);
-          groupDiv.appendChild(codeRow);
-
-          _moveToGroup(codeId, name);
-          _initSortable();
-          _announce(`Group '${name}' created with code inside`);
-        } else {
-          cleanup();
-        }
-      }
-      if (ev.key === "Escape") {
-        ev.preventDefault();
-        cleanup();
-      }
-    });
-
-    input.addEventListener("blur", function () {
-      setTimeout(cleanup, 100);
-    });
+  function _expandFolder(folderRow) {
+    folderRow.setAttribute("aria-expanded", "true");
+    const id = folderRow.getAttribute("data-folder-id");
+    if (id) _collapsedFolders[id] = false;
   }
 
-  const _chevronDown = '<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5l4 4 4-4"/></svg>';
-  const _chevronRight = '<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3l4 4-4 4"/></svg>';
-
-  function _expandGroup(header) {
-    header.setAttribute("aria-expanded", "true");
-    const toggle = header.querySelector(".ace-group-toggle");
-    if (toggle) toggle.innerHTML = _chevronDown;
-    const groupName = header.getAttribute("data-group");
-    _collapsedGroups[groupName] = false;
-  }
-
-  function _collapseGroup(header) {
-    header.setAttribute("aria-expanded", "false");
-    const toggle = header.querySelector(".ace-group-toggle");
-    if (toggle) toggle.innerHTML = _chevronRight;
-    const groupName = header.getAttribute("data-group");
-    _collapsedGroups[groupName] = true;
+  function _collapseFolder(folderRow) {
+    folderRow.setAttribute("aria-expanded", "false");
+    const id = folderRow.getAttribute("data-folder-id");
+    if (id) _collapsedFolders[id] = true;
   }
 
   /* ================================================================

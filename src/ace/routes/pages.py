@@ -19,7 +19,7 @@ from ace.models.annotation import (
     get_code_view_data,
 )
 from ace.models.assignment import add_assignment, get_assignments_for_coder
-from ace.models.codebook import list_codes
+from ace.models.codebook import list_codes, list_codes_with_tree
 from ace.models.project import get_project
 from ace.models.source import get_source_content, list_sources
 from ace.models.source_note import get_note, source_ids_with_notes
@@ -134,19 +134,8 @@ def _coding_context(
     sentence_units = split_into_units(source_text)
     sentence_html = render_sentence_text(sentence_units, annotations_list, codes_by_id)
 
-    # --- Grouped codes for sidebar ---
-    group_dict: dict[str, list[dict]] = {}
-    ungrouped_codes: list[dict] = []
-    for code in codes_list:
-        gn = code.get("group_name")
-        if gn:
-            group_dict.setdefault(gn, []).append(code)
-        else:
-            ungrouped_codes.append(code)
-    grouped_codes = sorted(
-        group_dict.items(),
-        key=lambda x: min(c.get("sort_order", 0) for c in x[1]),
-    )
+    # --- Tree-shaped codebook for sidebar ---
+    tree_codes = list_codes_with_tree(conn)
 
     # Deduplicated codes applied to this source (for bottom code bar)
     seen_codes: set[str] = set()
@@ -217,8 +206,7 @@ def _coding_context(
         "assignments": [dict(a) for a in assignments],
         "sources_json": sources_json,
         "sentence_html": sentence_html,
-        "grouped_codes": grouped_codes,
-        "ungrouped_codes": ungrouped_codes,
+        "tree_codes": tree_codes,
         "code_counts_by_id": code_counts_by_id,
         "margin_codes": margin_codes,
         "annotation_highlights_json": annotation_highlights_json,
@@ -298,23 +286,10 @@ async def code_view_page(request: Request, code_id: str):
         if data is None:
             raise HtmxRedirect("/code")
         codes_list = [dict(c) for c in list_codes(conn)]
+        tree_codes = list_codes_with_tree(conn)
         code_counts_by_id = get_annotation_counts_by_code(conn, coder_id)
     finally:
         db_gen.close()
-
-    # Group codes for the shared sidebar partial (same shape as _coding_context).
-    group_dict: dict[str, list[dict]] = {}
-    ungrouped_codes: list[dict] = []
-    for code in codes_list:
-        gn = code.get("group_name")
-        if gn:
-            group_dict.setdefault(gn, []).append(code)
-        else:
-            ungrouped_codes.append(code)
-    grouped_codes = sorted(
-        group_dict.items(),
-        key=lambda x: min(c.get("sort_order", 0) for c in x[1]),
-    )
 
     project_file_stem = Path(project_path).stem
 
@@ -325,8 +300,7 @@ async def code_view_page(request: Request, code_id: str):
         {
             "code_view_data": data,
             "codes": codes_list,
-            "grouped_codes": grouped_codes,
-            "ungrouped_codes": ungrouped_codes,
+            "tree_codes": tree_codes,
             "code_counts_by_id": code_counts_by_id,
             "project_file_stem": project_file_stem,
             "version": __version__,
