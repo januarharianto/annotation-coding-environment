@@ -1846,3 +1846,202 @@ def test_reorder_in_scope_invalid_json_returns_oob_status(client_with_codes):
     )
     assert r.status_code == 200
     assert "Invalid code_ids format" in r.text
+
+
+# ---------------------------------------------------------------------------
+# PR review fixes — F2 / F4 / F5 / F7
+# ---------------------------------------------------------------------------
+
+
+def test_create_code_palette_unaffected_by_folder_count(client_with_codes):
+    """F2 — `create_code` palette index counts only code rows, not folders.
+
+    Two scenarios with the same code-count must yield the same colour even
+    when the second one has extra folders sitting between them.
+    """
+    from ace.db.connection import open_project
+    from ace.models.codebook import COLOUR_PALETTE
+
+    client, _coder, _a, _b, db_path = client_with_codes
+
+    # Baseline: two codes already exist (Theme A, Theme B). Next palette
+    # slot for a freshly-created code should be index 2.
+    expected_colour = COLOUR_PALETTE[2][0]
+
+    r = client.post("/api/codes", data={"name": "Charlie", "current_index": 0})
+    assert r.status_code == 200
+
+    conn = open_project(db_path)
+    try:
+        row = conn.execute(
+            "SELECT colour FROM codebook_code WHERE name = ?", ("Charlie",)
+        ).fetchone()
+    finally:
+        conn.close()
+    assert row["colour"].upper() == expected_colour.upper()
+
+    # Create a folder, then a fourth code. With folders included in the
+    # palette index (the bug), the colour would shift by one. The fix
+    # filters `kind = 'code'`, so the next colour stays at palette[3].
+    r = client.post("/api/codes/folder", data={"name": "Themes", "current_index": 0})
+    assert r.status_code == 200
+
+    expected_after_folder = COLOUR_PALETTE[3][0]
+    r = client.post("/api/codes", data={"name": "Delta", "current_index": 0})
+    assert r.status_code == 200
+
+    conn = open_project(db_path)
+    try:
+        row = conn.execute(
+            "SELECT colour FROM codebook_code WHERE name = ?", ("Delta",)
+        ).fetchone()
+    finally:
+        conn.close()
+    assert row["colour"].upper() == expected_after_folder.upper()
+
+
+def test_delete_code_404_on_unknown_id(client_with_codes):
+    """F4 — DELETE /api/codes/{id} returns 404 for a missing id, no undo entry."""
+    client, *_ = client_with_codes
+    r = client.delete("/api/codes/this-id-does-not-exist", params={"current_index": 0})
+    assert r.status_code == 404
+
+    # The 404 should NOT have pushed an undo entry.
+    r = client.post("/api/undo", data={"current_index": 0})
+    assert r.status_code == 200
+    assert "Nothing to undo" in r.text
+
+
+def test_cut_paste_to_root_with_empty_target(client_with_codes):
+    """F5 — POST /api/codes/cut-paste accepts target_id="" as 'paste to root'."""
+    from ace.db.connection import open_project
+    from ace.models.codebook import add_folder, move_code_to_parent
+
+    client, _coder, code_a, _b, db_path = client_with_codes
+
+    # Move Theme A into a folder so we have something to "cut back to root".
+    conn = open_project(db_path)
+    try:
+        fid = add_folder(conn, "Themes")
+        move_code_to_parent(conn, code_a, fid)
+    finally:
+        conn.close()
+
+    r = client.post(
+        "/api/codes/cut-paste",
+        data={"code_id": code_a, "target_id": "", "current_index": 0},
+    )
+    assert r.status_code == 200, r.text
+
+    conn = open_project(db_path)
+    try:
+        parent = conn.execute(
+            "SELECT parent_id FROM codebook_code WHERE id = ?", (code_a,)
+        ).fetchone()["parent_id"]
+    finally:
+        conn.close()
+    assert parent is None, "code should be back at root scope"
+
+
+def test_cut_paste_404_on_unknown_target(client_with_codes):
+    """F5 sibling — non-empty target_id that doesn't exist still 404s."""
+    client, _coder, code_a, _b, _db = client_with_codes
+    r = client.post(
+        "/api/codes/cut-paste",
+        data={"code_id": code_a, "target_id": "no-such-id", "current_index": 0},
+    )
+    assert r.status_code == 404
+
+
+def test_reorder_in_scope_skips_folder_rows(client_with_codes):
+    """F3 — UPDATE in /api/codes/reorder-in-scope is restricted to kind='code'.
+
+    Sending a folder id alongside legitimate code ids must NOT rewrite the
+    folder's sort_order (defence in depth against a stale client).
+    """
+    from ace.db.connection import open_project
+    from ace.models.codebook import add_folder
+
+    client, _coder, code_a, code_b, db_path = client_with_codes
+
+    conn = open_project(db_path)
+    try:
+        fid = add_folder(conn, "Themes")
+        before = conn.execute(
+            "SELECT sort_order FROM codebook_code WHERE id = ?", (fid,)
+        ).fetchone()["sort_order"]
+    finally:
+        conn.close()
+
+    # Send the folder id at index 0 — if the route honoured it, the folder
+    # would inherit sort_order=0.
+    r = client.post(
+        "/api/codes/reorder-in-scope",
+        data={
+            "code_ids": json.dumps([fid, code_a, code_b]),
+            "parent_id": "",
+            "current_index": 0,
+        },
+    )
+    assert r.status_code == 200
+
+    conn = open_project(db_path)
+    try:
+        after = conn.execute(
+            "SELECT sort_order FROM codebook_code WHERE id = ?", (fid,)
+        ).fetchone()["sort_order"]
+    finally:
+        conn.close()
+    assert after == before, "folder sort_order must not be touched by reorder-in-scope"
+
+
+def test_reorder_tree_persists_folder_order(client_with_codes):
+    """F7 — POST /api/codes/reorder-tree rewrites sort_order across kinds."""
+    from ace.db.connection import open_project
+    from ace.models.codebook import add_folder
+
+    client, _coder, code_a, code_b, db_path = client_with_codes
+
+    conn = open_project(db_path)
+    try:
+        f1 = add_folder(conn, "Themes")
+        f2 = add_folder(conn, "Methods")
+    finally:
+        conn.close()
+
+    # Place Methods (f2) BEFORE Themes (f1), then the two root codes.
+    new_order = [f2, f1, code_a, code_b]
+    r = client.post(
+        "/api/codes/reorder-tree",
+        data={"tree_ids": json.dumps(new_order), "current_index": 0},
+    )
+    assert r.status_code == 200, r.text
+
+    conn = open_project(db_path)
+    try:
+        rows = conn.execute(
+            "SELECT id, sort_order FROM codebook_code "
+            "WHERE deleted_at IS NULL ORDER BY sort_order"
+        ).fetchall()
+    finally:
+        conn.close()
+    ordered_ids = [r["id"] for r in rows]
+    assert ordered_ids == new_order
+
+
+def test_reorder_tree_rejects_malformed_payload(client_with_codes):
+    """F7 sibling — bad shape returns OOB status, not a 500."""
+    client, *_ = client_with_codes
+    r = client.post(
+        "/api/codes/reorder-tree",
+        data={"tree_ids": "not-json", "current_index": 0},
+    )
+    assert r.status_code == 200
+    assert "Invalid tree_ids format" in r.text
+
+    r = client.post(
+        "/api/codes/reorder-tree",
+        data={"tree_ids": json.dumps([1, 2, 3]), "current_index": 0},
+    )
+    assert r.status_code == 200
+    assert "Invalid tree_ids format" in r.text

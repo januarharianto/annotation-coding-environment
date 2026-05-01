@@ -584,3 +584,67 @@ def test_round_trip_export_then_import_is_idempotent(tmp_path):
     assert _resolve_group_name(conn, by_name["Identity"]["id"]) == "Themes"
     assert _resolve_group_name(conn, by_name["Trust"]["id"]) is None
     conn.close()
+
+
+# ---------------------------------------------------------------------------
+# F6 — sort_order collision in CSV import
+# ---------------------------------------------------------------------------
+
+
+def test_import_selected_codes_no_sort_order_collision_when_folders_created(tmp_db):
+    """Mid-loop folder creation must not collide with later code sort_orders.
+
+    Bug: pre-fix the loop precomputed `max_order` once and used
+    `max_order + i + 1` for codes, while `_ensure_folder` stamped the
+    folder with `MAX(sort_order) + 1`. After the first folder insert the
+    folder grabbed the same slot the next code was about to take.
+    """
+    conn = create_project(tmp_db, "Test")
+    add_code(conn, "Existing", "#999999")  # baseline sort_order=1
+    codes = [
+        {"name": "Happy", "colour": "#FF0000", "group_name": "Emotions"},
+        {"name": "Sad", "colour": "#00FF00", "group_name": "Emotions"},  # reuses folder
+        {"name": "Identity", "colour": "#0000FF", "group_name": "Themes"},  # NEW folder mid-loop
+        {"name": "Trust", "colour": "#FFFF00", "group_name": "Themes"},
+    ]
+    import_selected_codes(conn, codes)
+
+    rows = conn.execute(
+        "SELECT name, sort_order FROM codebook_code "
+        "WHERE deleted_at IS NULL ORDER BY sort_order"
+    ).fetchall()
+    sort_orders = [r["sort_order"] for r in rows]
+    # All sort_orders must be unique — collision would put two rows on
+    # the same slot and the visible order would depend on insertion order
+    # / id rather than the user-intended sequence.
+    assert len(sort_orders) == len(set(sort_orders)), (
+        f"duplicate sort_order in {[(r['name'], r['sort_order']) for r in rows]}"
+    )
+
+
+def test_import_codebook_from_csv_no_sort_order_collision(tmp_path):
+    """Same collision check for the CSV file path."""
+    db = tmp_path / "rt.ace"
+    conn = create_project(db, "Test")
+    add_code(conn, "Existing", "#999999")
+
+    csv_path = tmp_path / "in.csv"
+    csv_path.write_text(
+        "name,colour,group\n"
+        "Happy,#FF0000,Emotions\n"
+        "Sad,#00FF00,Emotions\n"
+        "Identity,#0000FF,Themes\n"
+        "Trust,#FFFF00,Themes\n",
+        encoding="utf-8",
+    )
+    import_codebook_from_csv(conn, csv_path)
+
+    rows = conn.execute(
+        "SELECT name, sort_order FROM codebook_code "
+        "WHERE deleted_at IS NULL ORDER BY sort_order"
+    ).fetchall()
+    sort_orders = [r["sort_order"] for r in rows]
+    assert len(sort_orders) == len(set(sort_orders)), (
+        f"duplicate sort_order in {[(r['name'], r['sort_order']) for r in rows]}"
+    )
+    conn.close()

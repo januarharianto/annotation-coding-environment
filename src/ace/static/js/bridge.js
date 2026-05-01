@@ -1518,6 +1518,12 @@
 
   // ace-navigate event from HX-Trigger header
   document.addEventListener("ace-navigate", function (e) {
+    // Spec §3.5.3 — cut state is per-source. When the user navigates
+    // between sources (Shift+←/→ etc.) the pending cut is dropped so
+    // a stale ⌘V on a different source can't move the wrong code.
+    if (typeof _setCut === "function") {
+      _setCut(null);
+    }
     const detail = e.detail || {};
     if (detail.index !== undefined) {
       window.__aceCurrentIndex = parseInt(detail.index, 10);
@@ -2735,6 +2741,41 @@
       `code_ids=${encodeURIComponent(JSON.stringify(ids))}&current_index=${window.__aceCurrentIndex}`);
   }
 
+  /** Walk the tree top-to-bottom and persist a unified flat order of folder + code ids.
+   *  Used by the keyboard folder-reorder gesture. The /codes/reorder endpoint only
+   *  rewrites kind='code' rows; folder reorders need this tree-aware sibling. */
+  function _persistTreeOrder() {
+    const tree = document.getElementById("code-tree");
+    if (!tree) return;
+    const ids = [];
+    Array.from(tree.children).forEach(function (node) {
+      // Folder row → push folder id, then walk its [role="group"] children.
+      if (node.classList && node.classList.contains("ace-code-folder-row")) {
+        const fid = node.getAttribute("data-folder-id");
+        if (fid) ids.push(fid);
+        return;
+      }
+      if (node.getAttribute && node.getAttribute("role") === "group") {
+        Array.from(node.children).forEach(function (child) {
+          const cid = child.getAttribute && child.getAttribute("data-code-id");
+          if (cid) ids.push(cid);
+        });
+        return;
+      }
+      // Root-level code row.
+      const cid = node.getAttribute && node.getAttribute("data-code-id");
+      if (cid) ids.push(cid);
+    });
+    htmx.ajax("POST", "/api/codes/reorder-tree", {
+      target: "#text-panel",
+      swap: "outerHTML",
+      values: {
+        tree_ids: JSON.stringify(ids),
+        current_index: window.__aceCurrentIndex || 0,
+      },
+    });
+  }
+
   // _makeGroupElements was removed: only consumers were the deleted
   // _createGroupFromSearch and _promptNewGroupForCode helpers.
 
@@ -3266,7 +3307,11 @@
     }
     if (pillEl) {
       pillEl.textContent = text || "";
-      pillEl.classList.remove("ace-text-event-pill--ok", "ace-text-event-pill--err");
+      pillEl.classList.remove(
+        "ace-text-event-pill--ok",
+        "ace-text-event-pill--ok-sticky",
+        "ace-text-event-pill--err",
+      );
       if (text) pillEl.classList.add("ace-text-event-pill--" + kind);
     }
 
@@ -3445,8 +3490,10 @@
       tree.insertBefore(childrenDiv, ref);
     }
 
-    // Persist the new order via the reorder endpoint.
-    _persistCodeOrder();
+    // Persist via the tree-aware endpoint — _persistCodeOrder filters
+    // [data-code-id] only and would silently drop the folder reorder, so
+    // the next OOB swap would snap the folder back to its prior slot.
+    _persistTreeOrder();
 
     _updateKeycaps();
     _initSortable();

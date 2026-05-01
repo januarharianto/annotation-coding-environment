@@ -263,6 +263,24 @@ def reorder_codes(conn: sqlite3.Connection, code_ids: list[str]) -> None:
     conn.commit()
 
 
+def reorder_tree(conn: sqlite3.Connection, ids: list[str]) -> None:
+    """Reorder a flat list of mixed code+folder ids by sort_order.
+
+    Used by the keyboard folder-reorder gesture (⌥⇧↑/↓), which moves
+    folder rows AND any sibling root codes — the existing `reorder_codes`
+    write is restricted to `kind = 'code'` and would silently drop folder
+    ids. This variant updates regardless of `kind` so a unified visual
+    order survives subsequent OOB sidebar swaps.
+    """
+    for i, item_id in enumerate(ids):
+        conn.execute(
+            "UPDATE codebook_code SET sort_order = ? "
+            "WHERE id = ? AND deleted_at IS NULL",
+            (i, item_id),
+        )
+    conn.commit()
+
+
 def _move_code_to_parent_no_commit(
     conn: sqlite3.Connection,
     code_id: str,
@@ -493,6 +511,35 @@ def _ensure_folder(conn: sqlite3.Connection, name: str) -> str:
     return _add_folder_no_commit(conn, name)
 
 
+def _ensure_folder_at(
+    conn: sqlite3.Connection, name: str, sort_order: int
+) -> tuple[str, bool]:
+    """Cursor variant of `_ensure_folder` for CSV import loops.
+
+    Returns ``(folder_id, created)``. When ``created`` is True the caller
+    should advance its sort_order cursor; ``_add_folder_no_commit`` would
+    pick its own sort_order from `MAX(sort_order)+1`, which collides with
+    the cursor's next slot once the loop's first code insert runs.
+    """
+    row = conn.execute(
+        "SELECT id FROM codebook_code "
+        "WHERE name = ? COLLATE NOCASE "
+        "AND kind = 'folder' AND deleted_at IS NULL",
+        (name,),
+    ).fetchone()
+    if row:
+        return row["id"], False
+    now = datetime.now(timezone.utc).isoformat()
+    folder_id = uuid.uuid4().hex
+    conn.execute(
+        "INSERT INTO codebook_code "
+        "(id, name, colour, sort_order, kind, parent_id, chord, created_at) "
+        "VALUES (?, ?, '', ?, 'folder', NULL, NULL, ?)",
+        (folder_id, name, sort_order, now),
+    )
+    return folder_id, True
+
+
 def import_selected_codes(conn: sqlite3.Connection, codes: list[dict]) -> list[str]:
     """Import a pre-filtered list of codes into the codebook.
 
@@ -523,19 +570,27 @@ def import_selected_codes(conn: sqlite3.Connection, codes: list[dict]) -> list[s
 
     inserted_ids: list[str] = []
     try:
-        for i, code in enumerate(to_insert):
+        # Single monotonically-increasing cursor — every inserted row
+        # (folder OR code) takes one slot. Advancing only on code inserts
+        # would let a freshly-created folder claim the next code's slot
+        # via _add_folder_no_commit's MAX+1 lookup.
+        next_sort = max_order + 1
+        for code in to_insert:
             parent_id = None
             gn = code.get("group_name")
             if gn:
-                parent_id = _ensure_folder(conn, gn)
+                parent_id, created = _ensure_folder_at(conn, gn, next_sort)
+                if created:
+                    next_sort += 1
             code_id = uuid.uuid4().hex
             conn.execute(
                 "INSERT INTO codebook_code "
                 "(id, name, colour, sort_order, kind, parent_id, chord, created_at) "
                 "VALUES (?, ?, ?, ?, 'code', ?, NULL, ?)",
-                (code_id, code["name"], code["colour"], max_order + i + 1,
+                (code_id, code["name"], code["colour"], next_sort,
                  parent_id, now),
             )
+            next_sort += 1
             inserted_ids.append(code_id)
         backfill_chords(conn)
         conn.commit()
@@ -553,19 +608,26 @@ def import_codebook_from_csv(conn: sqlite3.Connection, path: str | Path) -> int:
     ).fetchone()[0]
     now = datetime.now(timezone.utc).isoformat()
     try:
-        for i, row in enumerate(rows_to_insert):
+        # See `import_selected_codes` for the cursor rationale: folders
+        # created mid-loop must take a slot from the same counter or
+        # they collide with the next code's sort_order.
+        next_sort = max_order + 1
+        for row in rows_to_insert:
             parent_id = None
             gn = row.get("group_name")
             if gn:
-                parent_id = _ensure_folder(conn, gn)
+                parent_id, created = _ensure_folder_at(conn, gn, next_sort)
+                if created:
+                    next_sort += 1
             code_id = uuid.uuid4().hex
             conn.execute(
                 "INSERT INTO codebook_code "
                 "(id, name, colour, sort_order, kind, parent_id, chord, created_at) "
                 "VALUES (?, ?, ?, ?, 'code', ?, NULL, ?)",
-                (code_id, row["name"], row["colour"], max_order + i + 1,
+                (code_id, row["name"], row["colour"], next_sort,
                  parent_id, now),
             )
+            next_sort += 1
         backfill_chords(conn)
         conn.commit()
     except Exception:

@@ -250,6 +250,12 @@
   background: var(--ace-warning);
 }
 
+/* Sticky success variant — matches the statusbar `--ok-sticky` colour
+   and stays visible until cleared (cut/paste prompt). */
+.ace-text-event-pill--ok-sticky {
+  color: #2f6b3f;
+}
+
 /* Soft-delete pill: keep the muted dot, the inline keycap carries the colour. */
 .ace-text-event-pill--undo::before {
   background: var(--ace-border);
