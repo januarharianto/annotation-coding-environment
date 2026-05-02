@@ -1407,6 +1407,12 @@
     // hover-pause + 7 s auto-clear timer. Idempotent.
     _initUndoAffordance();
 
+    // Server-emitted "ok" pills (e.g. /api/undo's "Nothing to undo")
+    // arrive as plain OOB swaps and don't run the client-side fade
+    // timer that _setStatus sets up. Mirror the same 2 s fade so they
+    // don't sit forever waiting for the next user action.
+    _maybeFadeOkStatus();
+
     const target = (evt.detail || {}).target;
     if (!target) return;
 
@@ -3332,6 +3338,33 @@
 
   window._setStatus = _setStatus;
   window._setAmbient = _setAmbient;
+
+  /**
+   * Schedule the same 2 s fade for "ok" status content delivered by a
+   * server OOB swap (e.g. /api/undo's "Nothing to undo"). Plain HTMX
+   * swaps replace the pill element directly, bypassing _setStatus()'s
+   * timer — without this helper, server-emitted "ok" pills sit forever
+   * until the next user action. "err" / "ok-sticky" / "undo" variants
+   * are intentionally sticky and skipped.
+   */
+  function _maybeFadeOkStatus() {
+    const sb = document.querySelector(".ace-statusbar-event");
+    const pill = document.getElementById("ace-text-event-pill");
+    const sbOk = sb && sb.classList.contains("ace-statusbar-event--ok") && sb.textContent.trim();
+    const pillOk = pill && pill.classList.contains("ace-text-event-pill--ok") && pill.textContent.trim();
+    if (!sbOk && !pillOk) return;
+    if (_statusEventClearTimer) clearTimeout(_statusEventClearTimer);
+    _statusEventClearTimer = setTimeout(function () {
+      if (sb && sb.classList.contains("ace-statusbar-event--ok")) {
+        sb.textContent = "";
+        sb.classList.remove("ace-statusbar-event--ok");
+      }
+      if (pill && pill.classList.contains("ace-text-event-pill--ok")) {
+        pill.textContent = "";
+        pill.classList.remove("ace-text-event-pill--ok");
+      }
+    }, 2000);
+  }
 
   /**
    * Briefly swap a control's label to a confirmation, then revert.
