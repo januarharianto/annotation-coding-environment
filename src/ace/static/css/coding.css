@@ -1517,24 +1517,32 @@ html[data-ace-grid-collapsed="1"] .ace-sidebar-grid {
 /* Selected-row treatment: high-contrast slate-on-white inversion.
    Loudest signal in the sidebar — never lose your place during arrow
    navigation. Gates on active-zone so it doesn't compete with the
-   source panel's own focus marker when zone is "source". */
-body[data-active-zone="codebook"] .ace-code-row[tabindex="0"] {
+   source panel's own focus marker when zone is "source".
+
+   `:has(#text-panel)` scopes the inversion to the coding page only.
+   The audit page (/code/{id}/view) shares the codebook sidebar template
+   and bridge.js still flips `data-active-zone="codebook"` on focusin
+   there, but the audit page has its own .ace-code-row--current rule
+   whose `#code-sidebar` ID specificity wins for the row bg — leaving
+   white name text from the inversion on top of a grey row bg. The
+   audit page has no #text-panel, so this scope keeps the inversion off. */
+body[data-active-zone="codebook"]:has(#text-panel) .ace-code-row[tabindex="0"] {
   background: #1a1d27;
   color: #fff;
   box-shadow: none;
 }
-body[data-active-zone="codebook"] .ace-code-row[tabindex="0"] .ace-code-name {
+body[data-active-zone="codebook"]:has(#text-panel) .ace-code-row[tabindex="0"] .ace-code-name {
   font-weight: 600;
   color: #fff;
 }
-body[data-active-zone="codebook"] .ace-code-row[tabindex="0"] .ace-code-count {
+body[data-active-zone="codebook"]:has(#text-panel) .ace-code-row[tabindex="0"] .ace-code-count {
   color: rgba(255, 255, 255, 0.7);
 }
-body[data-active-zone="codebook"] .ace-code-row[tabindex="0"] .ace-code-chip {
+body[data-active-zone="codebook"]:has(#text-panel) .ace-code-row[tabindex="0"] .ace-code-chip {
   background: rgba(255, 255, 255, 0.16);
   color: rgba(255, 255, 255, 0.9);
 }
-body[data-active-zone="codebook"] .ace-code-row[tabindex="0"] .ace-code-chip--chord::before {
+body[data-active-zone="codebook"]:has(#text-panel) .ace-code-row[tabindex="0"] .ace-code-chip--chord::before {
   color: rgba(255, 255, 255, 0.5);
 }
 
@@ -1608,7 +1616,7 @@ body[data-active-zone="codebook"] .ace-sentence--focused {
   color: var(--ace-text);
 }
 
-body[data-active-zone="codebook"] .ace-code-folder-row[tabindex="0"] {
+body[data-active-zone="codebook"]:has(#text-panel) .ace-code-folder-row[tabindex="0"] {
   background: rgba(84, 110, 122, 0.08);
   box-shadow: inset 0 0 0 2px var(--ace-focus);
 }
