@@ -274,22 +274,40 @@
 }
 
 .ace-code-row {
+  --indent: 0px;  /* Set to 10px for folder children — see Task 4. */
+  position: relative;
   display: grid;
-  grid-template-columns: 1fr auto 32px;
-  gap: 6px;
+  grid-template-columns: 1fr 28px 32px;
+  column-gap: 8px;
   align-items: center;
-  height: 22px;
-  padding: 0 8px;
-  border-left: 2px solid transparent;
+  height: 24px;
+  /* padding-left = stripe-left (8) + stripe-width (2) + 12px gutter = 22, plus indent. */
+  padding: 0 14px 0 calc(22px + var(--indent));
   font-size: var(--ace-font-size-2xs);
   color: var(--ace-text);
   cursor: pointer;
   transition: background var(--ace-transition);
-  position: relative;
+}
+
+/* Pill stripe — shorter than the row so adjacent stripes read as discrete pills. */
+.ace-code-row::before {
+  content: "";
+  position: absolute;
+  left: calc(8px + var(--indent));
+  top: 5px;
+  bottom: 5px;
+  width: 2px;
+  background: var(--row-colour, transparent);
+  border-radius: 1px;
+  transition: width 120ms;
 }
 
 .ace-code-row:hover {
   background: var(--ace-bg-muted);
+}
+
+.ace-code-row:hover::before {
+  width: 3px;
 }
 
 .ace-code-row.ace-code-row--flash {
@@ -331,18 +349,18 @@
    (matches the .ace-hint precedent — visual hierarchy via uppercase /
    monospace / right-align, not colour). */
 .ace-code-count {
+  grid-column: 2;
   font-family: var(--ace-font-mono);
   font-size: 11px;
   color: var(--ace-text-muted);
-  min-width: 18px;
   text-align: right;
   user-select: none;
+  font-variant-numeric: tabular-nums;
 }
 
-/* Postfix "×" reads as a tally marker ("12×" = "twelve of these"). Postfix
-   over prefix avoids the multiplication-operator misread that "× 12" can
-   trigger for technical readers. */
-.ace-code-count::after {
+/* Only render the × suffix when the cell has content. Empty cells (count == 0)
+   stay in the grid track at column 2 — chip in column 3 stays aligned. */
+.ace-code-count:not(:empty)::after {
   content: "×";
   margin-left: 1px;
   opacity: 0.5;
@@ -356,100 +374,91 @@
   padding: 0 2px;
 }
 
-/* #f6f3eb is an intentional warm off-white tint for the keycap face. */
-.ace-keycap {
+/* ============================================================
+   Code chips — single class, two modifiers (chord, key).
+   Same surface for both modifiers; chord chips get a ; prefix
+   via ::before so they read distinctly at rest.
+   ============================================================ */
+
+.ace-code-chip {
+  grid-column: 3;
+  justify-self: end;
+  height: 16px;
+  min-width: 22px;
+  padding: 1px 6px;
+  background: #f4f4f0;
+  border-radius: var(--ace-radius);
   font-family: var(--ace-font-mono);
   font-size: 11px;
-  height: 18px;
-  min-width: 24px;
-  padding: 0 4px;
-  border: 1px solid var(--ace-border);
-  border-bottom-width: 2px;
-  border-radius: var(--ace-radius);
-  background: linear-gradient(var(--ace-bg), #f6f3eb);
-  color: var(--ace-text);
+  color: var(--ace-text-muted);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  line-height: 1;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  line-height: 1;
   user-select: none;
   cursor: pointer;
-  transition: transform 60ms, border-color var(--ace-transition);
+  transition: background var(--ace-transition), color var(--ace-transition);
 }
 
-.ace-keycap:hover {
-  border-color: var(--ace-text);
+.ace-code-chip--chord::before {
+  content: ";";
+  opacity: 0.4;
+  font-weight: 400;
+  margin-right: 1px;
 }
 
-.ace-keycap:active {
-  transform: translateY(1px);
-  border-bottom-width: 1px;
+/* Out-of-range positions: _updateKeycaps leaves the chip empty.
+   Collapse it out of layout so the row reads cleanly. */
+.ace-code-chip--key:empty {
+  display: none;
 }
 
-.ace-keycap:focus-visible {
-  outline: 2px solid var(--ace-focus);
-  outline-offset: 1px;
+.ace-code-row:hover .ace-code-chip {
+  background: #ecead7;
+  color: var(--ace-text);
+}
+.ace-code-row:hover .ace-code-chip--chord::before {
+  opacity: 0.55;
 }
 
-/* Chord cap variant — wider; renders ;<chord> with faded prefix. */
-.ace-keycap--chord {
-  min-width: 32px;
-  padding: 0 3px;
-  gap: 0;
-  font-size: 10px;
-}
-
-.ace-keycap--chord .ace-chord-lead {
-  opacity: 0.45;
-  font-weight: 500;
-}
-
-.ace-keycap--chord .ace-chord-tail {
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  margin-left: 1px;
-}
-
-.ace-keycap--editing {
+.ace-code-chip--editing {
   outline: 2px solid var(--ace-focus);
   outline-offset: 1px;
   cursor: text;
 }
 
-/* Chord mode active: dim single-key caps; vermillion glow on chord caps. */
-body[data-chord-mode] .ace-keycap:not(.ace-keycap--chord) {
+/* Chord-mode visuals (carried over from .ace-keycap--chord rules with
+   the selectors and the ;-prefix recolour added). */
+body[data-chord-mode] .ace-code-chip--chord {
+  background: linear-gradient(#fbede0, #fde2c7);
+  border: 1px solid #d55e00;
+  color: #d55e00;
+}
+body[data-chord-mode] .ace-code-chip--chord::before {
+  color: #d55e00;
+  opacity: 0.5;
+}
+body[data-chord-mode] .ace-code-chip--key {
   opacity: 0.22;
   filter: grayscale(1);
 }
-
-body[data-chord-mode] .ace-keycap--chord {
-  background: linear-gradient(#fbede0, #fde2c7);
-  border-color: #d55e00;
-}
-
-body[data-chord-mode] .ace-keycap--chord .ace-chord-lead {
-  color: #d55e00;
+body[data-chord-mode] .ace-code-row:not(:has(.ace-code-chip--chord)) {
   opacity: 0.5;
 }
-
-body[data-chord-mode] .ace-keycap--chord .ace-chord-tail {
-  color: #d55e00;
-}
-
-/* Partial-buffer state: revert non-matching chord caps to neutral styling
- * so they recede as a distinct visual category, not a dimmed-vermillion variant. */
-body[data-chord-buffer] .ace-keycap--chord:not(.ace-chord-match) {
+body[data-chord-buffer] .ace-code-chip--chord:not(.ace-chord-match) {
   opacity: 0.5;
-  background: linear-gradient(var(--ace-bg), #f6f3eb);
-  border-color: var(--ace-border);
+  background: #f4f4f0;
+  border-color: transparent;
+  color: var(--ace-text-muted);
 }
-body[data-chord-buffer] .ace-keycap--chord:not(.ace-chord-match) .ace-chord-lead,
-body[data-chord-buffer] .ace-keycap--chord:not(.ace-chord-match) .ace-chord-tail {
-  color: var(--ace-text);
+body[data-chord-buffer] .ace-code-chip--chord:not(.ace-chord-match)::before {
+  color: var(--ace-text-muted);
 }
 
 /* ---- Hotkey hints ---- */
-/* Smaller sibling of .ace-keycap. Always visible on search + sources header,
+/* Smaller sibling of .ace-code-chip. Always visible on search + sources header,
  * hover/focus-revealed on flag/note buttons. */
 .ace-hint {
   display: inline-flex;
@@ -679,7 +688,7 @@ rect.ace-flash {
   user-select: none;
 }
 
-.ace-code-chip {
+.ace-code-bar .ace-code-chip {
   padding: 1px 6px;
   border-radius: 3px;
   font-size: var(--ace-font-size-xs);
@@ -687,7 +696,7 @@ rect.ace-flash {
   transition: background 0.15s;
 }
 
-.ace-code-chip:hover {
+.ace-code-bar .ace-code-chip:hover {
   background: rgba(0, 0, 0, 0.06);
 }
 
@@ -911,21 +920,6 @@ dialog::backdrop {
   background: var(--ace-bg-muted);
   color: var(--ace-text);
   border-radius: 0;
-}
-
-/* Absolute keycap on the right edge of the search input. Height matches
-   .ace-keycap (22px) so the sidebar's vertical rhythm is consistent;
-   min-width is intentionally narrower (24px) since the `/` glyph is thin. */
-.ace-sidebar-search-hint {
-  position: absolute;
-  right: 6px;
-  top: 50%;
-  transform: translateY(-50%);
-  pointer-events: none;
-  font-size: var(--ace-font-size-2xs);
-  min-width: 24px;
-  height: 22px;
-  padding: 0;
 }
 
 .ace-sidebar-search:focus {
@@ -1487,10 +1481,45 @@ html[data-ace-grid-collapsed="1"] .ace-sidebar-grid {
    2 px ring (not 1.5 px) because the audit found 1.5 px is borderline
    for low-vision users; 2 px clears WCAG AA non-text at the slate hue. */
 
+/* Selected-row treatment: high-contrast slate-on-white inversion.
+   Loudest signal in the sidebar — never lose your place during arrow
+   navigation. Gates on active-zone so it doesn't compete with the
+   source panel's own focus marker when zone is "source". */
 body[data-active-zone="codebook"] .ace-code-row[tabindex="0"] {
-  background: rgba(84, 110, 122, 0.08);
-  box-shadow: inset 0 0 0 2px var(--ace-focus);
+  background: #1a1d27;
+  color: #fff;
+  box-shadow: none;
 }
+body[data-active-zone="codebook"] .ace-code-row[tabindex="0"] .ace-code-name {
+  font-weight: 600;
+  color: #fff;
+}
+body[data-active-zone="codebook"] .ace-code-row[tabindex="0"] .ace-code-count {
+  color: rgba(255, 255, 255, 0.7);
+}
+body[data-active-zone="codebook"] .ace-code-row[tabindex="0"] .ace-code-chip {
+  background: rgba(255, 255, 255, 0.16);
+  color: rgba(255, 255, 255, 0.9);
+}
+body[data-active-zone="codebook"] .ace-code-row[tabindex="0"] .ace-code-chip--chord::before {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+/* When a row is both focused (inverted) and ghosted (cut), ghost wins —
+   explicitly reset the inversion so a cut+focused row reads as faded
+   transparent, not faded slate-inverted. Cascade order > specificity:
+   these rules come after the inverted treatment above. */
+.ace-code-row--ghost {
+  background: transparent;
+  color: var(--ace-text);
+}
+.ace-code-row--ghost .ace-code-name { color: var(--ace-text); }
+.ace-code-row--ghost .ace-code-count { color: var(--ace-text-muted); }
+.ace-code-row--ghost .ace-code-chip {
+  background: #f4f4f0;
+  color: var(--ace-text-muted);
+}
+.ace-code-row--ghost .ace-code-chip--chord::before { color: var(--ace-text-muted); }
 
 /* Dimmed sentence underline — 50 % alpha at 1.5 px. Original draft used
    35 % @ 1 px which the audit flagged as below WCAG AA (1.4 : 1). */
@@ -1546,27 +1575,15 @@ body[data-active-zone="codebook"] .ace-sentence--focused {
   color: var(--ace-text);
 }
 
-.ace-code-folder-row .ace-folder-count {
-  /* font-size respects CLAUDE.md's 13 px floor on the coding page (--ace-font-size-2xs).
-     The original draft used 10 px which violates the rule. */
-  font-size: var(--ace-font-size-2xs);
-  color: var(--ace-text-muted);
-  font-variant-numeric: tabular-nums;
-  font-family: var(--ace-font-mono);
-  opacity: 0.6;
-}
-
 body[data-active-zone="codebook"] .ace-code-folder-row[tabindex="0"] {
   background: rgba(84, 110, 122, 0.08);
   box-shadow: inset 0 0 0 2px var(--ace-focus);
 }
 
-/* Code rows inside a folder get a left rail. Selector is scoped to
-   #code-tree so it doesn't match form fieldsets or grid header rows
-   elsewhere in the app that also use role="group". */
-#code-tree [role="group"] {
-  margin-left: 16px;
-  border-left: 1px solid var(--ace-border-light);
+/* Folder children: indent so stripes sit under the parent caret centre.
+   Drop the rail line — the colour pills themselves are the rail. */
+#code-tree [role="group"] .ace-code-row {
+  --indent: 10px;
 }
 
 /* ─── "Ungrouped" divider before the root code section ─────────────── */
@@ -1575,9 +1592,7 @@ body[data-active-zone="codebook"] .ace-code-folder-row[tabindex="0"] {
   display: flex;
   align-items: center;
   gap: var(--ace-space-2);
-  padding: 8px 8px 4px;
-  margin-top: 4px;
-  border-top: 1px dashed var(--ace-border-light);
+  padding: 14px 14px 6px;
 }
 
 .ace-root-divider-label {
@@ -1585,30 +1600,59 @@ body[data-active-zone="codebook"] .ace-code-folder-row[tabindex="0"] {
   text-transform: uppercase;
   letter-spacing: 1.2px;
   color: var(--ace-text-muted);
-  opacity: 0.6;
+  font-weight: 600;
 }
 
 /* ─── Sidebar legend (mirrors .ace-legend on the source side) ─────── */
 
 .ace-sidebar-legend {
-  padding: 4px var(--ace-space-3) 6px;
-  text-align: center;
-  font-family: var(--ace-font-mono);
-  font-size: var(--ace-font-size-2xs);
-  color: rgba(43, 48, 56, 0.40);
-  letter-spacing: 0.3px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  user-select: none;
-  border-top: 1px solid var(--ace-border-light);
-  background: var(--ace-bg);
   flex-shrink: 0;
+  border-top: 1px solid var(--ace-border-light);
+  padding: 8px 14px 10px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: 14px;
+  row-gap: 6px;
+  font-size: var(--ace-font-size-2xs);
+  color: var(--ace-text-muted);
+  user-select: none;
+  background: var(--ace-bg);
 }
-
-.ace-sidebar-legend .k {
-  color: rgba(43, 48, 56, 0.72);
+.ace-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+.ace-legend-key {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 18px;
+  min-width: 18px;
+  padding: 0 5px;
+  font-family: var(--ace-font-mono);
+  font-size: 10px;
   font-weight: 500;
+  line-height: 1;
+  color: var(--ace-text);
+  background: var(--ace-bg);
+  border: 1px solid var(--ace-border);
+  border-radius: var(--ace-radius);
+}
+.ace-legend-key svg {
+  width: 10px;
+  height: 10px;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.ace-legend-key-pair {
+  display: inline-flex;
+  gap: 2px;
 }
 
 /* ─── Long-name hover peek ─────────────────────────────────────────────

@@ -82,7 +82,7 @@
   font-weight: 600;
 }
 /* Keycap badges show the apply-code letter — not meaningful on this page */
-#code-sidebar .ace-keycap { display: none; }
+#code-sidebar .ace-code-chip { display: none; }
 /* Code rows use pointer cursor — clicking navigates */
 #code-sidebar .ace-code-row { cursor: pointer; }
 

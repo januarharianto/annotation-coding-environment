@@ -28,7 +28,6 @@
            id="code-search-input" autocomplete="off"
            aria-controls="code-tree" aria-label="Filter codes"
            aria-keyshortcuts="/">
-    <span class="ace-hint ace-sidebar-search-hint" aria-hidden="true">/</span>
   </div>
 </div>
 <div id="code-tree" role="tree" aria-label="Code list" class="ace-sidebar-codes">
@@ -49,7 +48,6 @@
           </svg>
         </span>
         <span class="ace-folder-label">{{ row.name }}</span>
-        <span class="ace-folder-count">{{ row.child_count }}</span>
       </div>
       <div role="group" data-folder-children="{{ row.id }}">
       {% set ns.in_folder = row.id %}
@@ -59,17 +57,16 @@
       <div role="treeitem" aria-level="2"
            class="ace-code-row" data-code-id="{{ row.id }}"
            {% if row.chord %}data-chord="{{ row.chord }}"{% endif %}
-           style="border-left-color: {{ row.colour }}"
+           style="--row-colour: {{ row.colour }}"
            tabindex="-1">
         <span class="ace-code-name">{{ row.name }}</span>
-        <span class="ace-code-count" title="{{ n }} annotation{{ 's' if n != 1 else '' }} in this source">{{ n }}</span>
+        {% if n > 0 %}<span class="ace-code-count" title="{{ n }} annotation{{ 's' if n != 1 else '' }} in this source">{{ n }}</span>{% else %}<span class="ace-code-count" aria-hidden="true"></span>{% endif %}
         {% if row.chord %}
-        <span class="ace-keycap ace-keycap--chord"
-              title="Press ; then {{ row.chord }} to apply">
-          <span class="ace-chord-lead">;</span><span class="ace-chord-tail">{{ row.chord }}</span>
-        </span>
+        <span class="ace-code-chip ace-code-chip--chord"
+              title="Press ; then {{ row.chord }} to apply">{{ row.chord }}</span>
         {% else %}
-        <span class="ace-keycap" title="Click to apply"></span>
+        <span class="ace-code-chip ace-code-chip--key"
+              title="Click or press the row key to apply"></span>
         {% endif %}
       </div>
     {% else %}
@@ -89,17 +86,16 @@
       <div role="treeitem" aria-level="1"
            class="ace-code-row" data-code-id="{{ row.id }}"
            {% if row.chord %}data-chord="{{ row.chord }}"{% endif %}
-           style="border-left-color: {{ row.colour }}"
+           style="--row-colour: {{ row.colour }}"
            tabindex="-1">
         <span class="ace-code-name">{{ row.name }}</span>
-        <span class="ace-code-count" title="{{ n }} annotation{{ 's' if n != 1 else '' }} in this source">{{ n }}</span>
+        {% if n > 0 %}<span class="ace-code-count" title="{{ n }} annotation{{ 's' if n != 1 else '' }} in this source">{{ n }}</span>{% else %}<span class="ace-code-count" aria-hidden="true"></span>{% endif %}
         {% if row.chord %}
-        <span class="ace-keycap ace-keycap--chord"
-              title="Press ; then {{ row.chord }} to apply">
-          <span class="ace-chord-lead">;</span><span class="ace-chord-tail">{{ row.chord }}</span>
-        </span>
+        <span class="ace-code-chip ace-code-chip--chord"
+              title="Press ; then {{ row.chord }} to apply">{{ row.chord }}</span>
         {% else %}
-        <span class="ace-keycap" title="Click to apply"></span>
+        <span class="ace-code-chip ace-code-chip--key"
+              title="Click or press the row key to apply"></span>
         {% endif %}
       </div>
     {% endif %}
@@ -118,10 +114,32 @@
   {% endif %}
 </div>
 <div class="ace-sidebar-legend" aria-hidden="true">
-  <span class="k">&uarr;&darr;</span> nav &middot;
-  <span class="k">&larr;&rarr;</span> collapse &middot;
-  <span class="k">&#8997;&rarr;&larr;</span> nest &middot;
-  <span class="k">F2</span> rename &middot;
-  <span class="k">&#9003;</span> del &middot;
-  <span class="k">Esc</span> back
+  <span class="ace-legend-item">
+    <span class="ace-legend-key-pair">
+      <span class="ace-legend-key" title="Up arrow">
+        <svg viewBox="0 0 12 12" aria-hidden="true"><path d="M6 10 L6 2 M3 5 L6 2 L9 5"/></svg>
+      </span>
+      <span class="ace-legend-key" title="Down arrow">
+        <svg viewBox="0 0 12 12" aria-hidden="true"><path d="M6 2 L6 10 M3 7 L6 10 L9 7"/></svg>
+      </span>
+    </span>
+    navigate
+  </span>
+  <span class="ace-legend-item">
+    <span class="ace-legend-key-pair">
+      <span class="ace-legend-key" title="Option / Alt">alt</span>
+      <span class="ace-legend-key" title="Right arrow">
+        <svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2 6 L10 6 M7 3 L10 6 L7 9"/></svg>
+      </span>
+    </span>
+    nest
+  </span>
+  <span class="ace-legend-item">
+    <span class="ace-legend-key" title="F2">F2</span>
+    rename
+  </span>
+  <span class="ace-legend-item">
+    <span class="ace-legend-key" title="Backspace / Delete">del</span>
+    delete
+  </span>
 </div>

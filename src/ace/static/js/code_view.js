@@ -631,9 +631,9 @@
     document.addEventListener("click", (evt) => {
       const row = evt.target.closest("#code-sidebar .ace-code-row[data-code-id]");
       if (!row) return;
-      // Ignore clicks inside the right-click menu or on the keycap (there
-      // shouldn't be any — keycaps are display:none here — but be defensive).
-      if (evt.target.closest(".ace-code-menu") || evt.target.closest(".ace-keycap")) return;
+      // Ignore clicks inside the right-click menu or on the code chip (there
+      // shouldn't be any — chips are display:none here — but be defensive).
+      if (evt.target.closest(".ace-code-menu") || evt.target.closest(".ace-code-chip")) return;
       const id = row.getAttribute("data-code-id");
       if (!id) return;
       evt.preventDefault();

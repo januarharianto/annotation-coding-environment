@@ -224,7 +224,7 @@
       _currentKeyMap.push(row.getAttribute("data-code-id"));
 
       const label = _keylabel(labelIdx);
-      const keycap = row.querySelector(".ace-keycap");
+      const keycap = row.querySelector(".ace-code-chip--key");
       if (keycap) keycap.textContent = label;
       row.setAttribute("aria-keyshortcuts", label);
       labelIdx++;
@@ -281,7 +281,7 @@
       document.body.dataset.chordBuffer = _chordBuffer;
       const tree = document.getElementById("code-tree");
       if (tree) {
-        tree.querySelectorAll(".ace-keycap--chord").forEach(function (cap) {
+        tree.querySelectorAll(".ace-code-chip--chord").forEach(function (cap) {
           const row = cap.closest(".ace-code-row");
           const chord = row && row.dataset.chord;
           cap.classList.toggle(
@@ -1731,14 +1731,15 @@
   function _beginChordEdit(codeId) {
     const row = document.querySelector(`.ace-code-row[data-code-id="${codeId}"]`);
     if (!row) return;
-    const cap = row.querySelector(".ace-keycap--chord");
+    const cap = row.querySelector(".ace-code-chip--chord");
     if (!cap) return;
 
     const original = row.dataset.chord;
 
-    // Replace nested spans with plain text so contenteditable works cleanly
+    // Chip is plain text + CSS ::before for the leading ;, so we can drive it
+    // with textContent directly while editing.
     cap.contentEditable = "true";
-    cap.classList.add("ace-keycap--editing");
+    cap.classList.add("ace-code-chip--editing");
     cap.textContent = original;
 
     const range = document.createRange();
@@ -1754,12 +1755,12 @@
       if (done) return;
       done = true;
       cap.contentEditable = "false";
-      cap.classList.remove("ace-keycap--editing");
+      cap.classList.remove("ace-code-chip--editing");
       const newChord = cap.textContent.trim().toLowerCase();
       // Always restore the original chord. On success the OOB sidebar swap will
       // render the new chord from server state; on error (409 conflict, etc.)
       // the UI correctly reflects what's actually persisted.
-      cap.innerHTML = '<span class="ace-chord-lead">;</span><span class="ace-chord-tail">' + original + '</span>';
+      cap.textContent = original;
 
       if (!save) {
         _focusTreeItem(row);
@@ -2307,12 +2308,12 @@
     }
   }
 
-  // Keycap badge click: apply code to focused sentence/selection
+  // Code-chip click: apply code to focused sentence/selection
   document.addEventListener("click", function (e) {
-    const keycap = e.target.closest(".ace-keycap");
-    if (!keycap) return;
+    const chip = e.target.closest(".ace-code-chip");
+    if (!chip) return;
     e.stopPropagation();
-    let row = keycap.closest(".ace-code-row");
+    let row = chip.closest(".ace-code-row");
     if (!row) return;
     if (row.querySelector('[contenteditable="true"]')) return;
     let codeId = row.getAttribute("data-code-id");
@@ -2321,11 +2322,11 @@
     _applyCode(codeId);
   });
 
-  // Click on code row (not keycap): focus/select for management
+  // Click on code row (not chip): focus/select for management
   document.addEventListener("click", function (e) {
     let row = e.target.closest(".ace-code-row");
     if (!row) return;
-    if (e.target.closest(".ace-keycap")) return;
+    if (e.target.closest(".ace-code-chip")) return;
     if (e.target.closest(".ace-code-menu") || _isDragging) return;
     if (e.target.isContentEditable) return;
     _focusTreeItem(row);
@@ -4169,22 +4170,17 @@
     const parts = [];
     let stripe = "";
 
-    if (isFolder) {
-      const cnt = row.querySelector(".ace-folder-count");
-      if (cnt && cnt.textContent.trim()) {
-        parts.push(`<span><strong>${_escapeHtml(cnt.textContent.trim())}</strong> codes</span>`);
-      }
-    } else {
-      stripe = row.style.borderLeftColor || "";
+    if (!isFolder) {
+      stripe = row.style.getPropertyValue("--row-colour").trim() || "";
       const cnt = row.querySelector(".ace-code-count");
       if (cnt && cnt.textContent.trim()) {
         parts.push(`<span><strong>${_escapeHtml(cnt.textContent.trim())}</strong>&times;</span>`);
       }
-      const keycap = row.querySelector(".ace-keycap");
-      if (keycap) {
-        const txt = keycap.textContent.trim();
+      const chip = row.querySelector(".ace-code-chip");
+      if (chip) {
+        const txt = chip.textContent.trim();
         if (txt) {
-          const isChord = keycap.classList.contains("ace-keycap--chord");
+          const isChord = chip.classList.contains("ace-code-chip--chord");
           parts.push(`<span>${isChord ? "chord" : "key"} <strong>${_escapeHtml(txt)}</strong></span>`);
         }
       }

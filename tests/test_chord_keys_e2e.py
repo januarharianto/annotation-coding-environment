@@ -103,13 +103,13 @@ def test_single_key_still_applies(server):
         page.wait_for_selector(".ace-code-row")
 
         _focus_first_sentence(page)
-        before = page.locator(".ace-code-chip").count()
+        before = page.locator(".ace-code-bar .ace-code-chip").count()
         page.keyboard.press("1")
         page.wait_for_function(
-            "() => document.querySelectorAll('.ace-code-chip').length > 0",
+            "() => document.querySelectorAll('.ace-code-bar .ace-code-chip').length > 0",
             timeout=2000,
         )
-        after = page.locator(".ace-code-chip").count()
+        after = page.locator(".ace-code-bar .ace-code-chip").count()
 
         assert after > before, "expected at least one code chip to be added"
         browser.close()
@@ -136,7 +136,7 @@ def test_chord_mode_apply_pd(server):
         # Wait for the SPECIFIC chord we applied — earlier tests in the module
         # may have left an unrelated chip on the same source.
         page.wait_for_function(
-            "() => Array.from(document.querySelectorAll('.ace-code-chip'))"
+            "() => Array.from(document.querySelectorAll('.ace-code-bar .ace-code-chip'))"
             "      .some(el => el.textContent.includes('Privacy'))",
             timeout=2000,
         )
@@ -158,7 +158,7 @@ def test_chord_mode_escape_no_apply(server):
         page.wait_for_selector(".ace-code-row")
 
         _focus_first_sentence(page)
-        before = page.locator(".ace-code-chip").count()
+        before = page.locator(".ace-code-bar .ace-code-chip").count()
 
         page.keyboard.press("Semicolon")
         assert page.evaluate("() => document.body.dataset.chordMode") == "awaiting"
@@ -167,7 +167,7 @@ def test_chord_mode_escape_no_apply(server):
 
         mode_after = page.evaluate("() => document.body.dataset.chordMode")
         assert mode_after in (None, "", "default")
-        after = page.locator(".ace-code-chip").count()
+        after = page.locator(".ace-code-bar .ace-code-chip").count()
         assert before == after, "no chip should be added on Esc"
         browser.close()
 
