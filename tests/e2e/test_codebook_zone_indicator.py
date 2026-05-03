@@ -38,9 +38,9 @@ def test_active_zone_toggles_on_focus(ace_server, browser_name):
 
 @pytest.mark.parametrize("browser_name", browser_params())
 def test_focused_row_styles_change_with_zone(ace_server, browser_name):
-    """The focused code row wears the slate ring + tinted bg only while
-    the codebook zone is active. Switching focus to the source clears the
-    background (transparent)."""
+    """The focused code row wears the inverted slate-on-white treatment
+    only while the codebook zone is active. Switching focus to the source
+    clears the background (transparent)."""
     with sync_playwright() as p:
         browser = getattr(p, browser_name).launch()
         try:
@@ -54,12 +54,11 @@ def test_focused_row_styles_change_with_zone(ace_server, browser_name):
             assert page.evaluate("document.body.dataset.activeZone") == "codebook"
 
             # Background fades in via a CSS transition — poll until it
-            # resolves to the slate-tinted value (see coding.css L1494,
-            # rgba(84, 110, 122, 0.08)).
+            # resolves to the inverted slate value #1a1d27 (rgb(26, 29, 39)).
             page.wait_for_function(
                 "() => getComputedStyle(document.querySelector("
                 "  '.ace-code-row[tabindex=\"0\"]'"
-                ")).backgroundColor.includes('84, 110, 122')",
+                ")).backgroundColor === 'rgb(26, 29, 39)'",
                 timeout=2000,
             )
 

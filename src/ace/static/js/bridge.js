@@ -81,6 +81,17 @@
   // as soon as the user clicks/Tabs into a zone.
   _setActiveZone("source");
 
+  // Mark platform so CSS can swap modifier-key glyphs (⌘ on macOS, Ctrl
+  // elsewhere). Used by .ace-hint-meta in the search-input hint line.
+  // Detection via navigator.userAgentData.platform (modern) with a
+  // navigator.platform fallback for browsers that don't expose the new API.
+  (function () {
+    const p =
+      (navigator.userAgentData && navigator.userAgentData.platform) ||
+      navigator.platform || "";
+    document.body.dataset.platform = /mac/i.test(p) ? "mac" : "other";
+  })();
+
   /* ================================================================
    * 2. Sentence navigation
    * ================================================================ */
@@ -224,7 +235,7 @@
       _currentKeyMap.push(row.getAttribute("data-code-id"));
 
       const label = _keylabel(labelIdx);
-      const keycap = row.querySelector(".ace-keycap");
+      const keycap = row.querySelector(".ace-code-chip--key");
       if (keycap) keycap.textContent = label;
       row.setAttribute("aria-keyshortcuts", label);
       labelIdx++;
@@ -281,7 +292,7 @@
       document.body.dataset.chordBuffer = _chordBuffer;
       const tree = document.getElementById("code-tree");
       if (tree) {
-        tree.querySelectorAll(".ace-keycap--chord").forEach(function (cap) {
+        tree.querySelectorAll(".ace-code-chip--chord").forEach(function (cap) {
           const row = cap.closest(".ace-code-row");
           const chord = row && row.dataset.chord;
           cap.classList.toggle(
@@ -1731,14 +1742,15 @@
   function _beginChordEdit(codeId) {
     const row = document.querySelector(`.ace-code-row[data-code-id="${codeId}"]`);
     if (!row) return;
-    const cap = row.querySelector(".ace-keycap--chord");
+    const cap = row.querySelector(".ace-code-chip--chord");
     if (!cap) return;
 
     const original = row.dataset.chord;
 
-    // Replace nested spans with plain text so contenteditable works cleanly
+    // Chip is plain text + CSS ::before for the leading ;, so we can drive it
+    // with textContent directly while editing.
     cap.contentEditable = "true";
-    cap.classList.add("ace-keycap--editing");
+    cap.classList.add("ace-code-chip--editing");
     cap.textContent = original;
 
     const range = document.createRange();
@@ -1754,12 +1766,12 @@
       if (done) return;
       done = true;
       cap.contentEditable = "false";
-      cap.classList.remove("ace-keycap--editing");
+      cap.classList.remove("ace-code-chip--editing");
       const newChord = cap.textContent.trim().toLowerCase();
       // Always restore the original chord. On success the OOB sidebar swap will
       // render the new chord from server state; on error (409 conflict, etc.)
       // the UI correctly reflects what's actually persisted.
-      cap.innerHTML = '<span class="ace-chord-lead">;</span><span class="ace-chord-tail">' + original + '</span>';
+      cap.textContent = original;
 
       if (!save) {
         _focusTreeItem(row);
@@ -2307,12 +2319,12 @@
     }
   }
 
-  // Keycap badge click: apply code to focused sentence/selection
+  // Code-chip click: apply code to focused sentence/selection
   document.addEventListener("click", function (e) {
-    const keycap = e.target.closest(".ace-keycap");
-    if (!keycap) return;
+    const chip = e.target.closest(".ace-code-chip");
+    if (!chip) return;
     e.stopPropagation();
-    let row = keycap.closest(".ace-code-row");
+    let row = chip.closest(".ace-code-row");
     if (!row) return;
     if (row.querySelector('[contenteditable="true"]')) return;
     let codeId = row.getAttribute("data-code-id");
@@ -2321,11 +2333,11 @@
     _applyCode(codeId);
   });
 
-  // Click on code row (not keycap): focus/select for management
+  // Click on code row (not chip): focus/select for management
   document.addEventListener("click", function (e) {
     let row = e.target.closest(".ace-code-row");
     if (!row) return;
-    if (e.target.closest(".ace-keycap")) return;
+    if (e.target.closest(".ace-code-chip")) return;
     if (e.target.closest(".ace-code-menu") || _isDragging) return;
     if (e.target.isContentEditable) return;
     _focusTreeItem(row);
@@ -2346,13 +2358,36 @@
 
   document.addEventListener("input", function (e) {
     if (e.target.id !== "code-search-input") return;
-    const query = e.target.value.toLowerCase();
+    const rawValue = e.target.value;
+    const query = rawValue.toLowerCase();
     const tree = document.getElementById("code-tree");
     if (!tree) return;
+
+    // Slash command mode dispatch — when input starts with "/" we replace
+    // the tree with a command palette and short-circuit normal filter logic.
+    if (rawValue.startsWith("/")) {
+      _enterSlashMode();
+      _renderSlashSuggestions(rawValue);
+      return;
+    } else if (_slashState.active) {
+      // Leaving slash mode — restore class state and the saved tree HTML.
+      // Then fall through so the filter logic below repaints the tree with
+      // the (non-slash) query.
+      _slashState.active = false;
+      const inputEl = document.getElementById("code-search-input");
+      if (inputEl) inputEl.classList.remove("slash-active");
+      if (_slashState.savedTreeHTML !== null) {
+        tree.innerHTML = _slashState.savedTreeHTML;
+        _slashState.savedTreeHTML = null;
+      }
+    }
 
     // Remove any existing "create" prompt
     const oldPrompt = tree.querySelector(".ace-create-prompt");
     if (oldPrompt) oldPrompt.remove();
+    // Remove any existing zero-match create row (will be re-added if needed)
+    const oldCreateRow = tree.querySelector(".ace-create-row");
+    if (oldCreateRow) oldCreateRow.remove();
 
     if (query && !query.startsWith("/")) {
       // Filter + score-rank via fuzzysort. Matched rows are flattened to
@@ -2425,17 +2460,9 @@
         tree.appendChild(row);
       });
 
-      // No matches → "Create" prompt
-      if (results.total === 0) {
-        let prompt = document.createElement("div");
-        prompt.className = "ace-create-prompt ace-create-prompt--code";
-        prompt.innerHTML = `<span>+</span> Create "<strong>${_escapeHtml(e.target.value.trim())}</strong>"`;
-        prompt.setAttribute("data-action", "create-code");
-        prompt.addEventListener("click", function () {
-          _createCodeFromSearch();
-        });
-        tree.appendChild(prompt);
-      }
+      // No matches: zero-match create affordance is rendered by
+      // _renderZeroMatchCreateRow() at the tail of this handler — kept in
+      // one place so the chip-style ↵ row replaces the legacy plain prompt.
 
       // Mark the top-scoring row as the Enter target.
       const prevTarget = tree.querySelector(".ace-code-row--search-target");
@@ -2485,21 +2512,315 @@
     }
 
     _updateKeycaps();
+    _renderZeroMatchCreateRow(rawValue);
   });
 
-  function _createCodeFromSearch() {
+  function _createCodeFromSearchOrSlash(rawValue) {
     const input = document.getElementById("code-search-input");
     if (!input) return;
-    let name = input.value.trim();
-    if (!name || name.startsWith("/")) return;
+    let val = (rawValue !== undefined ? rawValue : input.value).trim();
+    if (!val) return;
 
+    // Slash command path
+    if (val.startsWith("/")) {
+      _commitSlashCommand(val);
+      return;
+    }
+
+    // Plain code creation
     htmx.ajax("POST", "/api/codes", {
-      values: { name: name, current_index: window.__aceCurrentIndex },
+      values: { name: val, current_index: window.__aceCurrentIndex },
       target: "#code-sidebar",
       swap: "outerHTML",
     });
     input.value = "";
-    _announce(`Code '${name}' created`);
+    _exitSlashMode();
+    _announce(`Code '${val}' created`);
+  }
+
+  // ============================================================
+  // Slash command palette
+  // ============================================================
+  //
+  // Two commands at v1: /code <name>, /folder <name>.
+  // Bare `/` shows both. Typing `/co` narrows to /code (prefix match).
+  // Command name is case-insensitive; argument is trimmed.
+  // Empty arg → noop with hint, Enter does NOT commit.
+  // Unknown command → "No matching command" in suggestion area.
+  // ============================================================
+
+  const _SLASH_COMMANDS = [
+    {
+      name: "code",
+      desc: "create code",
+      placeholder: "Name",
+      commit: function (arg) {
+        htmx.ajax("POST", "/api/codes", {
+          values: { name: arg, current_index: window.__aceCurrentIndex },
+          target: "#code-sidebar",
+          swap: "outerHTML",
+        });
+        _announce(`Code '${arg}' created`);
+      },
+    },
+    {
+      name: "folder",
+      desc: "create folder",
+      placeholder: "Name",
+      commit: function (arg) {
+        // Route via the shared safe-create helper so the client-side
+        // NOCASE dedupe runs FIRST. The server's duplicate response is
+        // OOB-only with no `HX-Reswap: none`, so a raw htmx.ajax with
+        // target #text-panel + swap outerHTML would wipe the coding view
+        // on collision (see CLAUDE.md gotcha for the Shift+Enter path).
+        _createFolderSafe(arg);
+      },
+    },
+  ];
+
+  let _slashState = { active: false, selectedIndex: 0, savedTreeHTML: null };
+
+  /** Create a folder with a client-side NOCASE dedupe guard.
+   *  Server enforces uniqueness too, but its duplicate response is OOB-only
+   *  with no `HX-Reswap: none` header — pairing that with our outerHTML swap
+   *  on #text-panel would wipe the coding view (CLAUDE.md gotcha).
+   *
+   *  opts.focusAndRename — if true, after the create succeeds, focus the new
+   *  folder row and open inline rename (the Shift+Enter behaviour). The
+   *  slash-command path leaves it false; the folder is just created. */
+  function _createFolderSafe(name, opts) {
+    opts = opts || {};
+    if (!name) return;
+    const existingFolders = document.querySelectorAll(".ace-code-folder-row");
+    let dupRow = null;
+    for (const f of existingFolders) {
+      const label = f.querySelector(".ace-folder-label");
+      if (label && label.textContent.toLowerCase() === name.toLowerCase()) {
+        dupRow = f;
+        break;
+      }
+    }
+    if (dupRow) {
+      _clearSearchFilter();
+      window._setStatus(`Folder '${name}' already exists — focused`, "ok");
+      _focusTreeItem(dupRow);
+      return;
+    }
+    const input = document.getElementById("code-search-input");
+    htmx.ajax("POST", "/api/codes/folder", {
+      target: "#text-panel",
+      swap: "outerHTML",
+      values: { name: name, current_index: window.__aceCurrentIndex },
+    }).then(function () {
+      // Clear filter input + state so the just-rendered new folder isn't
+      // hidden by a stale filter the user typed.
+      if (input) input.value = "";
+      _clearSearchFilter();
+      _announce(`Folder '${name}' created`);
+      if (opts.focusAndRename) {
+        setTimeout(function () {
+          const all = document.querySelectorAll(".ace-code-folder-row");
+          for (const f of all) {
+            const label = f.querySelector(".ace-folder-label");
+            if (label && label.textContent === name) {
+              _focusTreeItem(f);
+              _startInlineRename(f, { isFolder: true });
+              window._setStatus(`Folder ${name} created`, "ok");
+              break;
+            }
+          }
+        }, 30);
+      } else {
+        window._setStatus(`Folder ${name} created`, "ok");
+      }
+    });
+  }
+
+  function _parseSlash(value) {
+    // Returns { matches: [...], arg: string, fragment: string }
+    // fragment is what the user has typed after the / (used to filter commands).
+    const v = value.replace(/^\//, "");
+    const sp = v.indexOf(" ");
+    let cmdFragment, arg;
+    if (sp === -1) {
+      cmdFragment = v;
+      arg = "";
+    } else {
+      cmdFragment = v.slice(0, sp);
+      arg = v.slice(sp + 1).trim();
+    }
+    // Case-insensitive prefix match
+    const lower = cmdFragment.toLowerCase();
+    const matches = _SLASH_COMMANDS.filter(function (c) {
+      return c.name.startsWith(lower);
+    });
+    return {
+      matches: matches,
+      arg: arg,
+      fragment: cmdFragment,
+    };
+  }
+
+  function _enterSlashMode() {
+    if (_slashState.active) {
+      // Already active; just keep selection in range
+      return;
+    }
+    // If a search filter is active, restore the tree to its pre-filter
+    // state BEFORE snapshotting. Otherwise the snapshot would freeze the
+    // filter's flattened layout and `_origRowPositions` would still hold
+    // references to DOM nodes that the snapshot-restore is about to
+    // replace, leaving rows stuck out-of-place after slash mode exits.
+    _resetSearchFilterState();
+    _slashState.active = true;
+    _slashState.selectedIndex = 0;
+    // Snapshot the current tree HTML so we can restore it if the user exits
+    // slash mode without committing (slash-mode renders REPLACE the tree's
+    // innerHTML, so without this snapshot the original rows are lost).
+    const tree = document.getElementById("code-tree");
+    if (tree) _slashState.savedTreeHTML = tree.innerHTML;
+    const input = document.getElementById("code-search-input");
+    if (input) input.classList.add("slash-active");
+  }
+
+  /** Reset filter state without touching the input value or refiring events.
+   *  Mirrors the empty-query branch of the input handler — moves rows back
+   *  to their original parents, clears _origRowPositions, restores display
+   *  on hidden rows, drops the search-target marker. Safe to call when no
+   *  filter is active (it's a no-op in that case). */
+  function _resetSearchFilterState() {
+    const tree = document.getElementById("code-tree");
+    if (!tree) return;
+    if (_origRowPositions) {
+      _origRowPositions.forEach(function (pos, row) {
+        if (row.isConnected && pos.parent.isConnected) {
+          pos.parent.insertBefore(row, pos.nextSibling);
+        }
+      });
+      _origRowPositions = null;
+    }
+    tree.querySelectorAll(".ace-code-row").forEach(function (row) {
+      row.style.display = "";
+      row.removeAttribute("aria-hidden");
+      const nameEl = row.querySelector(".ace-code-name");
+      if (nameEl && nameEl.querySelector("mark")) {
+        nameEl.textContent = nameEl.textContent;  // strip mark HTML
+      }
+    });
+    tree.querySelectorAll(".ace-code-folder-row, .ace-root-divider").forEach(function (el) {
+      el.style.display = "";
+      el.removeAttribute("aria-hidden");
+    });
+    tree.querySelectorAll('[role="group"]').forEach(function (g) {
+      g.style.display = "";
+      g.removeAttribute("aria-hidden");
+    });
+    const prevTarget = tree.querySelector(".ace-code-row--search-target");
+    if (prevTarget) {
+      prevTarget.classList.remove("ace-code-row--search-target");
+      prevTarget.removeAttribute("aria-current");
+    }
+    if (typeof _restoreCollapseState === "function") _restoreCollapseState();
+  }
+
+  function _exitSlashMode() {
+    if (!_slashState.active) return;
+    _slashState.active = false;
+    const input = document.getElementById("code-search-input");
+    if (input) input.classList.remove("slash-active");
+    // Restore the saved tree HTML so the original rows come back.
+    const tree = document.getElementById("code-tree");
+    if (tree && _slashState.savedTreeHTML !== null) {
+      tree.innerHTML = _slashState.savedTreeHTML;
+    }
+    _slashState.savedTreeHTML = null;
+    _renderTreeAfterSlashExit();
+  }
+
+  function _renderSlashSuggestions(value) {
+    const tree = document.getElementById("code-tree");
+    if (!tree) return;
+    const parsed = _parseSlash(value);
+    // Clamp selection to valid range
+    if (_slashState.selectedIndex >= parsed.matches.length) {
+      _slashState.selectedIndex = Math.max(0, parsed.matches.length - 1);
+    }
+    let html = '<div class="ace-slash-mode">Commands</div>';
+    if (parsed.matches.length === 0) {
+      html += '<div class="ace-empty-zero">No matching command</div>';
+    } else {
+      parsed.matches.forEach(function (cmd, i) {
+        const selected = i === _slashState.selectedIndex;
+        const argDisplay = parsed.arg
+          ? '<span class="arg">' + _escapeHtml(parsed.arg) + '</span>'
+          : '<span class="arg">' + cmd.placeholder + '</span>';
+        const desc = parsed.arg
+          ? cmd.desc
+          : 'Type a name after /' + cmd.name;
+        const commitHint = parsed.arg
+          ? '<span class="commit-hint">↵</span>'
+          : '<span class="desc">' + _escapeHtml(desc) + '</span>';
+        html += '<div class="ace-slash-item" data-selected="' + selected + '" data-cmd-name="' + cmd.name + '">'
+              + '<span class="cmd">/' + cmd.name + ' ' + argDisplay + '</span>'
+              + commitHint
+              + '</div>';
+      });
+    }
+    tree.innerHTML = html;
+  }
+
+  function _commitSlashCommand(value) {
+    const parsed = _parseSlash(value);
+    if (parsed.matches.length === 0) return;
+    // Find the selected one (or first if state out of range)
+    const cmd = parsed.matches[Math.min(_slashState.selectedIndex, parsed.matches.length - 1)];
+    if (!cmd) return;
+    // Empty arg → noop (the suggestion description tells the user)
+    if (!parsed.arg) return;
+    // Exit slash mode FIRST so the tree is restored to its real codebook
+    // rows before the commit runs. Some commits (e.g. _createFolderSafe)
+    // need to query the live tree for dedupe — the slash suggestion list
+    // is what's currently in the DOM until _exitSlashMode restores it.
+    const input = document.getElementById("code-search-input");
+    if (input) input.value = "";
+    _exitSlashMode();
+    cmd.commit(parsed.arg);
+  }
+
+  function _renderTreeAfterSlashExit() {
+    // The tree is owned by the server-rendered template. Exiting slash mode
+    // just lets the next OOB swap re-populate it. If the user exits slash
+    // mode without committing, refire the input event so the filter loop
+    // re-evaluates and repopulates the tree from the existing DOM rows.
+    const input = document.getElementById("code-search-input");
+    if (input) input.dispatchEvent(new Event("input", { bubbles: true }));
+  }
+
+  function _renderZeroMatchCreateRow(query) {
+    const tree = document.getElementById("code-tree");
+    if (!tree) return;
+    if (!query.trim()) return;
+    // Don't add if there are visible matches OR we're in slash mode
+    if (_slashState.active) return;
+    let visibleCount = 0;
+    tree.querySelectorAll(".ace-code-row").forEach(function (r) {
+      if (r.style.display !== "none") visibleCount++;
+    });
+    if (visibleCount > 0) return;
+    // Render the inline create row at the top of the tree
+    const existing = tree.querySelector(".ace-create-row");
+    if (existing) existing.remove();
+    const escaped = _escapeHtml(query.trim());
+    const row = document.createElement("div");
+    row.className = "ace-create-row";
+    row.tabIndex = 0;
+    row.innerHTML = '<span class="plus">+</span>'
+                  + '<span class="label">Create code <em>\'' + escaped + '\'</em></span>'
+                  + '<span class="commit-hint">↵</span>';
+    row.addEventListener("click", function () {
+      _createCodeFromSearchOrSlash(query.trim());
+    });
+    tree.insertBefore(row, tree.firstChild);
   }
 
   // _createGroupFromSearch and _makeGroupElements were removed: client-side
@@ -2637,6 +2958,48 @@
     if (e.target.id !== "code-search-input") return;
     const input = e.target;
 
+    // ⌘+Enter (or Ctrl+Enter on non-mac) creates a code from the input text,
+    // regardless of filter state. Distinct from plain Enter, which still
+    // applies the first match (existing behaviour preserved).
+    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+      e.preventDefault();
+      _createCodeFromSearchOrSlash(input.value);
+      return;
+    }
+
+    // Slash command navigation — when the palette is active, ↑/↓ move the
+    // selection, Enter commits the highlighted suggestion, Esc exits.
+    if (_slashState.active) {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        const tree = document.getElementById("code-tree");
+        const items = tree ? tree.querySelectorAll(".ace-slash-item") : [];
+        if (items.length > 0) {
+          _slashState.selectedIndex = Math.min(_slashState.selectedIndex + 1, items.length - 1);
+          _renderSlashSuggestions(input.value);
+        }
+        return;
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        _slashState.selectedIndex = Math.max(_slashState.selectedIndex - 1, 0);
+        _renderSlashSuggestions(input.value);
+        return;
+      }
+      if (e.key === "Enter") {
+        e.preventDefault();
+        _commitSlashCommand(input.value);
+        return;
+      }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        input.value = "";
+        _exitSlashMode();
+        return;
+      }
+    }
+
     // Shift+Enter — create a new folder named after the current filter text.
     // Server enforces NOCASE uniqueness via add_folder, but the duplicate
     // path returns an OOB-only status fragment with no `HX-Reswap: none`
@@ -2647,45 +3010,7 @@
       e.preventDefault();
       const name = input.value.trim();
       if (!name) return;
-      const existingFolders = document.querySelectorAll(".ace-code-folder-row");
-      let dupRow = null;
-      for (const f of existingFolders) {
-        const label = f.querySelector(".ace-folder-label");
-        if (label && label.textContent.toLowerCase() === name.toLowerCase()) {
-          dupRow = f;
-          break;
-        }
-      }
-      if (dupRow) {
-        // Clear the filter first so the target folder isn't display:none
-        // when we try to .focus() it.
-        _clearSearchFilter();
-        window._setStatus(`Folder '${name}' already exists — focused`, "ok");
-        _focusTreeItem(dupRow);
-        return;
-      }
-      htmx.ajax("POST", "/api/codes/folder", {
-        target: "#text-panel",
-        swap: "outerHTML",
-        values: { name: name, current_index: window.__aceCurrentIndex },
-      }).then(function () {
-        // Clear via _clearSearchFilter so the rendered tree shows everything
-        // — the OOB swap re-renders the sidebar but preserves the filter
-        // input value, leaving newly-created rows hidden.
-        _clearSearchFilter();
-        setTimeout(function () {
-          const all = document.querySelectorAll(".ace-code-folder-row");
-          for (const f of all) {
-            const label = f.querySelector(".ace-folder-label");
-            if (label && label.textContent === name) {
-              _focusTreeItem(f);
-              _startInlineRename(f, { isFolder: true });
-              window._setStatus(`Folder ${name} created`, "ok");
-              break;
-            }
-          }
-        }, 30);
-      });
+      _createFolderSafe(name, { focusAndRename: true });
       return;
     }
 
@@ -2720,7 +3045,7 @@
       });
     }
     if (count === 0) {
-      _createCodeFromSearch();
+      _createCodeFromSearchOrSlash();
     } else {
       // Has matches — find first visible match, clear search, apply
       const firstMatch = tree
@@ -4169,22 +4494,17 @@
     const parts = [];
     let stripe = "";
 
-    if (isFolder) {
-      const cnt = row.querySelector(".ace-folder-count");
-      if (cnt && cnt.textContent.trim()) {
-        parts.push(`<span><strong>${_escapeHtml(cnt.textContent.trim())}</strong> codes</span>`);
-      }
-    } else {
-      stripe = row.style.borderLeftColor || "";
+    if (!isFolder) {
+      stripe = row.style.getPropertyValue("--row-colour").trim() || "";
       const cnt = row.querySelector(".ace-code-count");
       if (cnt && cnt.textContent.trim()) {
         parts.push(`<span><strong>${_escapeHtml(cnt.textContent.trim())}</strong>&times;</span>`);
       }
-      const keycap = row.querySelector(".ace-keycap");
-      if (keycap) {
-        const txt = keycap.textContent.trim();
+      const chip = row.querySelector(".ace-code-chip");
+      if (chip) {
+        const txt = chip.textContent.trim();
         if (txt) {
-          const isChord = keycap.classList.contains("ace-keycap--chord");
+          const isChord = chip.classList.contains("ace-code-chip--chord");
           parts.push(`<span>${isChord ? "chord" : "key"} <strong>${_escapeHtml(txt)}</strong></span>`);
         }
       }
