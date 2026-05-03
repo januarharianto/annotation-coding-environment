@@ -81,6 +81,17 @@
   // as soon as the user clicks/Tabs into a zone.
   _setActiveZone("source");
 
+  // Mark platform so CSS can swap modifier-key glyphs (⌘ on macOS, Ctrl
+  // elsewhere). Used by .ace-hint-meta in the search-input hint line.
+  // Detection via navigator.userAgentData.platform (modern) with a
+  // navigator.platform fallback for browsers that don't expose the new API.
+  (function () {
+    const p =
+      (navigator.userAgentData && navigator.userAgentData.platform) ||
+      navigator.platform || "";
+    document.body.dataset.platform = /mac/i.test(p) ? "mac" : "other";
+  })();
+
   /* ================================================================
    * 2. Sentence navigation
    * ================================================================ */
@@ -2449,17 +2460,9 @@
         tree.appendChild(row);
       });
 
-      // No matches → "Create" prompt
-      if (results.total === 0) {
-        let prompt = document.createElement("div");
-        prompt.className = "ace-create-prompt ace-create-prompt--code";
-        prompt.innerHTML = `<span>+</span> Create "<strong>${_escapeHtml(e.target.value.trim())}</strong>"`;
-        prompt.setAttribute("data-action", "create-code");
-        prompt.addEventListener("click", function () {
-          _createCodeFromSearchOrSlash();
-        });
-        tree.appendChild(prompt);
-      }
+      // No matches: zero-match create affordance is rendered by
+      // _renderZeroMatchCreateRow() at the tail of this handler — kept in
+      // one place so the chip-style ↵ row replaces the legacy plain prompt.
 
       // Mark the top-scoring row as the Enter target.
       const prevTarget = tree.querySelector(".ace-code-row--search-target");
@@ -2565,17 +2568,73 @@
       desc: "create folder",
       placeholder: "Name",
       commit: function (arg) {
-        htmx.ajax("POST", "/api/codes/folder", {
-          values: { name: arg, current_index: window.__aceCurrentIndex },
-          target: "#text-panel",
-          swap: "outerHTML",
-        });
-        _announce(`Folder '${arg}' created`);
+        // Route via the shared safe-create helper so the client-side
+        // NOCASE dedupe runs FIRST. The server's duplicate response is
+        // OOB-only with no `HX-Reswap: none`, so a raw htmx.ajax with
+        // target #text-panel + swap outerHTML would wipe the coding view
+        // on collision (see CLAUDE.md gotcha for the Shift+Enter path).
+        _createFolderSafe(arg);
       },
     },
   ];
 
   let _slashState = { active: false, selectedIndex: 0, savedTreeHTML: null };
+
+  /** Create a folder with a client-side NOCASE dedupe guard.
+   *  Server enforces uniqueness too, but its duplicate response is OOB-only
+   *  with no `HX-Reswap: none` header — pairing that with our outerHTML swap
+   *  on #text-panel would wipe the coding view (CLAUDE.md gotcha).
+   *
+   *  opts.focusAndRename — if true, after the create succeeds, focus the new
+   *  folder row and open inline rename (the Shift+Enter behaviour). The
+   *  slash-command path leaves it false; the folder is just created. */
+  function _createFolderSafe(name, opts) {
+    opts = opts || {};
+    if (!name) return;
+    const existingFolders = document.querySelectorAll(".ace-code-folder-row");
+    let dupRow = null;
+    for (const f of existingFolders) {
+      const label = f.querySelector(".ace-folder-label");
+      if (label && label.textContent.toLowerCase() === name.toLowerCase()) {
+        dupRow = f;
+        break;
+      }
+    }
+    if (dupRow) {
+      _clearSearchFilter();
+      window._setStatus(`Folder '${name}' already exists — focused`, "ok");
+      _focusTreeItem(dupRow);
+      return;
+    }
+    const input = document.getElementById("code-search-input");
+    htmx.ajax("POST", "/api/codes/folder", {
+      target: "#text-panel",
+      swap: "outerHTML",
+      values: { name: name, current_index: window.__aceCurrentIndex },
+    }).then(function () {
+      // Clear filter input + state so the just-rendered new folder isn't
+      // hidden by a stale filter the user typed.
+      if (input) input.value = "";
+      _clearSearchFilter();
+      _announce(`Folder '${name}' created`);
+      if (opts.focusAndRename) {
+        setTimeout(function () {
+          const all = document.querySelectorAll(".ace-code-folder-row");
+          for (const f of all) {
+            const label = f.querySelector(".ace-folder-label");
+            if (label && label.textContent === name) {
+              _focusTreeItem(f);
+              _startInlineRename(f, { isFolder: true });
+              window._setStatus(`Folder ${name} created`, "ok");
+              break;
+            }
+          }
+        }, 30);
+      } else {
+        window._setStatus(`Folder ${name} created`, "ok");
+      }
+    });
+  }
 
   function _parseSlash(value) {
     // Returns { matches: [...], arg: string, fragment: string }
@@ -2607,6 +2666,12 @@
       // Already active; just keep selection in range
       return;
     }
+    // If a search filter is active, restore the tree to its pre-filter
+    // state BEFORE snapshotting. Otherwise the snapshot would freeze the
+    // filter's flattened layout and `_origRowPositions` would still hold
+    // references to DOM nodes that the snapshot-restore is about to
+    // replace, leaving rows stuck out-of-place after slash mode exits.
+    _resetSearchFilterState();
     _slashState.active = true;
     _slashState.selectedIndex = 0;
     // Snapshot the current tree HTML so we can restore it if the user exits
@@ -2616,6 +2681,46 @@
     if (tree) _slashState.savedTreeHTML = tree.innerHTML;
     const input = document.getElementById("code-search-input");
     if (input) input.classList.add("slash-active");
+  }
+
+  /** Reset filter state without touching the input value or refiring events.
+   *  Mirrors the empty-query branch of the input handler — moves rows back
+   *  to their original parents, clears _origRowPositions, restores display
+   *  on hidden rows, drops the search-target marker. Safe to call when no
+   *  filter is active (it's a no-op in that case). */
+  function _resetSearchFilterState() {
+    const tree = document.getElementById("code-tree");
+    if (!tree) return;
+    if (_origRowPositions) {
+      _origRowPositions.forEach(function (pos, row) {
+        if (row.isConnected && pos.parent.isConnected) {
+          pos.parent.insertBefore(row, pos.nextSibling);
+        }
+      });
+      _origRowPositions = null;
+    }
+    tree.querySelectorAll(".ace-code-row").forEach(function (row) {
+      row.style.display = "";
+      row.removeAttribute("aria-hidden");
+      const nameEl = row.querySelector(".ace-code-name");
+      if (nameEl && nameEl.querySelector("mark")) {
+        nameEl.textContent = nameEl.textContent;  // strip mark HTML
+      }
+    });
+    tree.querySelectorAll(".ace-code-folder-row, .ace-root-divider").forEach(function (el) {
+      el.style.display = "";
+      el.removeAttribute("aria-hidden");
+    });
+    tree.querySelectorAll('[role="group"]').forEach(function (g) {
+      g.style.display = "";
+      g.removeAttribute("aria-hidden");
+    });
+    const prevTarget = tree.querySelector(".ace-code-row--search-target");
+    if (prevTarget) {
+      prevTarget.classList.remove("ace-code-row--search-target");
+      prevTarget.removeAttribute("aria-current");
+    }
+    if (typeof _restoreCollapseState === "function") _restoreCollapseState();
   }
 
   function _exitSlashMode() {
@@ -2672,10 +2777,14 @@
     if (!cmd) return;
     // Empty arg → noop (the suggestion description tells the user)
     if (!parsed.arg) return;
-    cmd.commit(parsed.arg);
+    // Exit slash mode FIRST so the tree is restored to its real codebook
+    // rows before the commit runs. Some commits (e.g. _createFolderSafe)
+    // need to query the live tree for dedupe — the slash suggestion list
+    // is what's currently in the DOM until _exitSlashMode restores it.
     const input = document.getElementById("code-search-input");
     if (input) input.value = "";
     _exitSlashMode();
+    cmd.commit(parsed.arg);
   }
 
   function _renderTreeAfterSlashExit() {
@@ -2901,45 +3010,7 @@
       e.preventDefault();
       const name = input.value.trim();
       if (!name) return;
-      const existingFolders = document.querySelectorAll(".ace-code-folder-row");
-      let dupRow = null;
-      for (const f of existingFolders) {
-        const label = f.querySelector(".ace-folder-label");
-        if (label && label.textContent.toLowerCase() === name.toLowerCase()) {
-          dupRow = f;
-          break;
-        }
-      }
-      if (dupRow) {
-        // Clear the filter first so the target folder isn't display:none
-        // when we try to .focus() it.
-        _clearSearchFilter();
-        window._setStatus(`Folder '${name}' already exists — focused`, "ok");
-        _focusTreeItem(dupRow);
-        return;
-      }
-      htmx.ajax("POST", "/api/codes/folder", {
-        target: "#text-panel",
-        swap: "outerHTML",
-        values: { name: name, current_index: window.__aceCurrentIndex },
-      }).then(function () {
-        // Clear via _clearSearchFilter so the rendered tree shows everything
-        // — the OOB swap re-renders the sidebar but preserves the filter
-        // input value, leaving newly-created rows hidden.
-        _clearSearchFilter();
-        setTimeout(function () {
-          const all = document.querySelectorAll(".ace-code-folder-row");
-          for (const f of all) {
-            const label = f.querySelector(".ace-folder-label");
-            if (label && label.textContent === name) {
-              _focusTreeItem(f);
-              _startInlineRename(f, { isFolder: true });
-              window._setStatus(`Folder ${name} created`, "ok");
-              break;
-            }
-          }
-        }, 30);
-      });
+      _createFolderSafe(name, { focusAndRename: true });
       return;
     }
 

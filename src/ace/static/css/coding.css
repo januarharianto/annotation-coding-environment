@@ -945,6 +945,14 @@ dialog::backdrop {
   height: 16px;
 }
 
+/* Platform-aware modifier glyph for the create-code hint. The handler
+   accepts both Cmd (⌘) on macOS and Ctrl on Windows/Linux; the glyph
+   shown to the user follows the same convention. body[data-platform]
+   is set in bridge.js at boot. Defaults to ⌘ if the attribute is
+   missing (Mac is the development platform; falls back gracefully). */
+.ace-hint-meta::before { content: "\2318"; }   /* ⌘ */
+body[data-platform="other"] .ace-hint-meta::before { content: "Ctrl"; }
+
 .ace-sidebar-search {
   width: 100%;
   padding: var(--ace-space-2) 30px var(--ace-space-2) var(--ace-space-2);

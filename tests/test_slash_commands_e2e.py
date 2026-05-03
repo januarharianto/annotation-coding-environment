@@ -217,3 +217,81 @@ def test_esc_exits_slash_mode(server):
         page.wait_for_function("document.getElementById('code-search-input').value === ''")
         assert page.locator(".ace-slash-mode").count() == 0
         browser.close()
+
+
+def test_zero_match_shows_single_create_row(server):
+    """Zero-match filter renders exactly one create affordance, not two."""
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as p:
+        browser = p.chromium.launch()
+        page = browser.new_page()
+        page.goto(f"{server}/code")
+        page.wait_for_selector("#code-search-input")
+        # Unique-enough string that no prior test has created.
+        page.fill("#code-search-input", "zzz_no_match_xyz")
+        page.wait_for_selector(".ace-create-row")
+        # Only one create affordance — the legacy .ace-create-prompt should be gone
+        assert page.locator(".ace-create-row").count() == 1
+        assert page.locator(".ace-create-prompt").count() == 0
+        browser.close()
+
+
+def test_filter_then_slash_then_empty_restores_tree(server):
+    """Active filter + entering slash mode + clearing input restores rows to original positions."""
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as p:
+        browser = p.chromium.launch()
+        page = browser.new_page()
+        page.goto(f"{server}/code")
+        page.wait_for_selector("#code-search-input")
+        # Type a filter that matches one code
+        page.fill("#code-search-input", "alpha")
+        # Wait for filter to apply (matched row stays visible)
+        page.wait_for_function(
+            "document.querySelectorAll('.ace-code-row:not([style*=\"display: none\"])').length === 1"
+        )
+        # Now enter slash mode by replacing input value with "/"
+        page.fill("#code-search-input", "/")
+        page.wait_for_selector(".ace-slash-mode")
+        # Now backspace to empty — slash mode exits, tree should restore cleanly
+        page.fill("#code-search-input", "")
+        page.wait_for_function(
+            "!document.querySelector('.ace-slash-mode')"
+        )
+        # All three seeded codes should be visible (no stuck filter state)
+        names = page.locator(".ace-code-name").all_text_contents()
+        for expected in ["alpha", "beta", "gamma"]:
+            assert expected in names, f"missing {expected} after slash mode exit"
+        browser.close()
+
+
+def test_slash_folder_duplicate_does_not_wipe_text_panel(server):
+    """Creating a folder twice with the same name leaves the coding view intact."""
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as p:
+        browser = p.chromium.launch()
+        page = browser.new_page()
+        page.goto(f"{server}/code")
+        page.wait_for_selector("#code-search-input")
+        # First /folder Themes — should succeed
+        page.fill("#code-search-input", "/folder Themes")
+        page.wait_for_selector(".ace-slash-item[data-selected='true']")
+        page.press("#code-search-input", "Enter")
+        page.wait_for_function(
+            "Array.from(document.querySelectorAll('.ace-folder-label')).some(l => l.textContent === 'Themes')"
+        )
+        # Second /folder Themes — should NOT wipe the text panel
+        page.fill("#code-search-input", "/folder Themes")
+        page.wait_for_selector(".ace-slash-item[data-selected='true']")
+        page.press("#code-search-input", "Enter")
+        # Text panel must still contain the source-rendering surface
+        # (`#text-panel` exists and still has its sentence content).
+        page.wait_for_timeout(500)  # let any failure manifest
+        assert page.locator("#text-panel").count() == 1
+        assert page.locator(".ace-sentence").count() > 0, (
+            "text panel was wiped — duplicate /folder ate the coding view"
+        )
+        browser.close()
